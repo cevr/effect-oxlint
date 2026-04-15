@@ -23,9 +23,13 @@ import (
 
 	"github.com/typescript-eslint/tsgolint/internal/rules/await_thenable"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_catch_unfailable"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_effect_in_void_success"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_floating_effect"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_in_failure"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_lazy_promise"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_missing_yield_star"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_return_in_gen"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_schema_sync"
 	"github.com/typescript-eslint/tsgolint/internal/rules/consistent_return"
 	"github.com/typescript-eslint/tsgolint/internal/rules/consistent_type_exports"
 	"github.com/typescript-eslint/tsgolint/internal/rules/dot_notation"
@@ -229,6 +233,10 @@ var allRules = []rule.Rule{
 	effect_missing_yield_star.MissingYieldStarRule,
 	effect_catch_unfailable.CatchUnfailableRule,
 	effect_return_in_gen.ReturnEffectInGenRule,
+	effect_schema_sync.SchemaSyncInEffectRule,
+	effect_lazy_promise.LazyPromiseInSyncRule,
+	effect_in_failure.EffectInFailureRule,
+	effect_effect_in_void_success.EffectInVoidSuccessRule,
 }
 
 var allRulesByName = make(map[string]rule.Rule, len(allRules))
