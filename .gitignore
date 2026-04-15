@@ -1,0 +1,29 @@
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Go binaries & generated
+packages/tsgolint-effect/tsgolint
+packages/tsgolint-effect/tsgolint-effect
+packages/tsgolint-effect/npm/*/tsgolint
+packages/tsgolint-effect/npm/*/tsgolint.exe
+packages/tsgolint-effect/internal/collections/
+packages/tsgolint-effect/typescript-go/
+
+# Upstream tsgolint files we don't need to track
+packages/tsgolint-effect/e2e/
+packages/tsgolint-effect/benchmarks/
+packages/tsgolint-effect/.github/
+packages/tsgolint-effect/pnpm-lock.yaml
+packages/tsgolint-effect/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,51 @@
+{
+  "name": "oxlint-plugin-effect",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "oxlint plugin with Effect-specific lint rules",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/cevr/effect-oxlint" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./plugin": "./src/plugin.ts",
+    "./presets/*": "./src/presets/*.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun run scripts/build.ts",
+    "typecheck": "tsgo --noEmit",
+    "lint": "concurrently -n ox,effect -c yellow,blue \"oxlint\" \"bun run lint:effect\"",
+    "lint:ox": "oxlint",
+    "lint:effect": "effect-language-service diagnostics --project tsconfig.json --lspconfig \"$(cat .effect-lsp.json)\"",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "test": "bun test",
+    "gate": "concurrently -n type,style,test -c blue,yellow,green \"bun run typecheck\" \"bun run lint\" \"bun run test\"",
+    "codegen": "bun run scripts/codegen.ts",
+    "add-rule": "bun run scripts/add-rule.ts",
+    "version": "changeset version",
+    "release": "changeset publish"
+  },
+  "dependencies": {
+    "@oxlint/plugins": "^1.60.0"
+  },
+  "peerDependencies": {
+    "effect": ">=4.0.0-beta.49"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/cli": "^2.30.0",
+    "@effect/language-service": "latest",
+    "@effect/vitest": "latest",
+    "@types/bun": "latest",
+    "@typescript/native-preview": "latest",
+    "concurrently": "latest",
+    "effect": "4.0.0-beta.49",
+    "lefthook": "latest",
+    "oxfmt": "latest",
+    "oxlint": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}

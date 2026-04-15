@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-plugin:
+    name: Check JS Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Typecheck
+        run: cd packages/oxlint-plugin-effect && bun run typecheck
+
+      - name: Lint
+        run: cd packages/oxlint-plugin-effect && bun run lint:ox
+
+      - name: Test
+        run: cd packages/oxlint-plugin-effect && bun test
+
+  build-tsgolint:
+    name: Build tsgolint-effect (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os: darwin-arm64
+            runner: macos-latest
+            goos: darwin
+            goarch: arm64
+          - os: darwin-x64
+            runner: macos-13
+            goos: darwin
+            goarch: amd64
+          - os: linux-arm64
+            runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - os: linux-x64
+            runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Init tsgolint
+        working-directory: packages/tsgolint-effect
+        run: |
+          cd typescript-go && for patch in ../patches/*.patch; do git am --3way --no-gpg-sign "$patch"; done && cd ..
+          mkdir -p internal/collections && find ./typescript-go/internal/collections -type f ! -name '*_test.go' -exec cp {} internal/collections/ \;
+
+      - name: Build
+        working-directory: packages/tsgolint-effect
+        run: |
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
+            go build -o npm/${{ matrix.os }}/tsgolint ./cmd/tsgolint
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsgolint-${{ matrix.os }}
+          path: packages/tsgolint-effect/npm/${{ matrix.os }}/tsgolint

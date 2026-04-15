@@ -1,0 +1,7 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: typecheck
+      run: cd packages/oxlint-plugin-effect && bunx tsgo --noEmit
+    - name: test
+      run: cd packages/oxlint-plugin-effect && bun test

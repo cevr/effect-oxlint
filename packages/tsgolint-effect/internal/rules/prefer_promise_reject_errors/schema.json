@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "prefer_promise_reject_errors_options": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": {
+            "$ref": "../shared_schemas.json#/definitions/typeOrValueSpecifier"
+          },
+          "default": [],
+          "description": "Type specifiers that can be used as Promise rejection reasons"
+        },
+        "allowEmptyReject": {
+          "type": "boolean",
+          "default": false
+        },
+        "allowThrowingAny": {
+          "type": "boolean",
+          "default": false
+        },
+        "allowThrowingUnknown": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    }
+  }
+}

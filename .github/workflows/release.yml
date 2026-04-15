@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "tsgolint-effect@*"
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  # JS plugin release via changesets (on main push)
+  release-plugin:
+    name: Release JS Plugin
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Update npm for OIDC support
+        run: sudo npm install -g npm@latest
+
+      - run: bun install
+
+      - name: Create Release Pull Request or Publish
+        uses: changesets/action@v1
+        with:
+          publish: cd packages/oxlint-plugin-effect && bun run release
+          version: cd packages/oxlint-plugin-effect && bun run version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ""
+
+  # Go binary — build for all platforms (on tag push)
+  build-binaries:
+    name: Build tsgolint (${{ matrix.os }})
+    if: startsWith(github.ref, 'refs/tags/tsgolint-effect@')
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os: darwin-arm64
+            runner: macos-latest
+            goos: darwin
+            goarch: arm64
+          - os: darwin-x64
+            runner: macos-13
+            goos: darwin
+            goarch: amd64
+          - os: linux-arm64
+            runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - os: linux-x64
+            runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Init tsgolint
+        working-directory: packages/tsgolint-effect
+        run: |
+          cd typescript-go && for patch in ../patches/*.patch; do git am --3way --no-gpg-sign "$patch"; done && cd ..
+          mkdir -p internal/collections && find ./typescript-go/internal/collections -type f ! -name '*_test.go' -exec cp {} internal/collections/ \;
+
+      - name: Build
+        working-directory: packages/tsgolint-effect
+        run: |
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
+            go build -o npm/${{ matrix.os }}/tsgolint ./cmd/tsgolint
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsgolint-${{ matrix.os }}
+          path: packages/tsgolint-effect/npm/${{ matrix.os }}/tsgolint
+
+  # Publish all npm packages (after binaries built)
+  release-tsgolint:
+    name: Publish tsgolint-effect
+    if: startsWith(github.ref, 'refs/tags/tsgolint-effect@')
+    needs: [build-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage binaries
+        run: |
+          for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
+            cp "artifacts/tsgolint-${platform}/tsgolint" \
+               "packages/tsgolint-effect/npm/${platform}/tsgolint"
+            chmod +x "packages/tsgolint-effect/npm/${platform}/tsgolint"
+          done
+
+      - name: Setup npm
+        run: |
+          sudo npm install -g npm@latest
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/tsgolint-effect@}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to npm
+        working-directory: packages/tsgolint-effect
+        run: VERSION=${{ steps.version.outputs.version }} ./scripts/publish-npm.sh
