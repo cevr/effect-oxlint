@@ -1,0 +1,20 @@
+
+[TestFloatingEffect/invalid-0 - 1]
+Diagnostic 1: floatingEffect (3:1 - 3:20)
+Message: Effect created but never yielded or run. This effect will do nothing.
+Help: Use `yield*` to execute the effect, or pipe it into a runner.
+   2 | import { Effect } from "effect"
+   3 | Effect.sync(() => 1)
+     | ~~~~~~~~~~~~~~~~~~~~
+   4 |             
+---
+
+[TestFloatingEffect/invalid-1 - 1]
+Diagnostic 1: floatingEffect (3:1 - 3:18)
+Message: Effect created but never yielded or run. This effect will do nothing.
+Help: Use `yield*` to execute the effect, or pipe it into a runner.
+   2 | import { Effect } from "effect"
+   3 | Effect.succeed(42)
+     | ~~~~~~~~~~~~~~~~~~
+   4 |             
+---

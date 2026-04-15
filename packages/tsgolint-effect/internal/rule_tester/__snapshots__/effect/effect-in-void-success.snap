@@ -1,0 +1,10 @@
+
+[TestEffectInVoidSuccess/invalid-0 - 1]
+Diagnostic 1: effectInVoidSuccess (5:3 - 5:21)
+Message: yield* produces an Effect value that is not being used. The inner Effect won't execute.
+Help: The success channel contains an Effect. You may need another yield* to execute it.
+   4 | const program = Effect.gen(function* () {
+   5 |   yield* makeEffect()
+     |   ~~~~~~~~~~~~~~~~~~~
+   6 | })
+---

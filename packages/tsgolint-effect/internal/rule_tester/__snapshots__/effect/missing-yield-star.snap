@@ -1,0 +1,10 @@
+
+[TestMissingYieldStar/invalid-0 - 1]
+Diagnostic 1: missingYieldStar (4:13 - 4:36)
+Message: Missing `*` in yield expression. Use `yield*` to execute the Effect.
+Help: Change `yield` to `yield*` to properly execute the Effect and get its result.
+   3 | const program = Effect.gen(function* () {
+   4 |   const x = yield Effect.succeed(42)
+     |             ~~~~~~~~~~~~~~~~~~~~~~~~
+   5 |   return x
+---

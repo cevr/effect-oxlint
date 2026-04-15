@@ -1,0 +1,10 @@
+
+[TestEffectInFailure/invalid-0 - 1]
+Diagnostic 1: effectInFailure (4:1 - 4:3)
+Message: Effect type found in the error channel. The error channel should contain error types, not Effects.
+Help: Check if you accidentally passed an Effect where an error type was expected.
+   3 | declare const bad: Effect.Effect<number, Effect.Effect<string>>
+   4 | bad
+     | ~~~
+   5 |             
+---

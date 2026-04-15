@@ -1,0 +1,10 @@
+
+[TestSchemaSyncInEffect/invalid-0 - 1]
+Diagnostic 1: schemaSyncInEffect (5:18 - 5:44)
+Message: Schema.decodeSync used inside Effect.gen/fn. Use Schema.decode instead.
+Help: Replace Schema.decodeSync with Schema.decode for proper error handling in Effect context.
+   4 | const program = Effect.gen(function* () {
+   5 |   const result = Schema.decodeSync(MySchema)({ name: "hello" })
+     |                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   6 |   return result
+---

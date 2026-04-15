@@ -1,0 +1,10 @@
+
+[TestCatchUnfailable/invalid-0 - 1]
+Diagnostic 1: catchUnfailable (4:16 - 4:76)
+Message: Catch handler on an infallible Effect (error channel is `never`). The handler will never run.
+Help: Remove the catch handler — this Effect cannot fail.
+   3 | const infallible = Effect.succeed(42)
+   4 | const caught = Effect.catchAll(infallible, () => Effect.succeed("fallback"))
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   5 |             
+---

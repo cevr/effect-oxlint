@@ -1,0 +1,10 @@
+
+[TestReturnEffectInGen/invalid-0 - 1]
+Diagnostic 1: returnEffectInGen (4:3 - 4:27)
+Message: Returning an Effect value from Effect.gen creates nested Effect<Effect<...>>.
+Help: Use `return yield* effect` to execute the effect and return its result.
+   3 | const program = Effect.gen(function* () {
+   4 |   return Effect.succeed(42)
+     |   ~~~~~~~~~~~~~~~~~~~~~~~~~
+   5 | })
+---

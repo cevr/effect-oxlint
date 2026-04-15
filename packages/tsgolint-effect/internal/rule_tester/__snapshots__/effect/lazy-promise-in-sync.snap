@@ -1,0 +1,10 @@
+
+[TestLazyPromiseInSync/invalid-0 - 1]
+Diagnostic 1: lazyPromiseInSync (4:17 - 4:46)
+Message: Effect.sync thunk returns a Promise. Use Effect.promise or Effect.tryPromise instead.
+Help: Effect.sync is for synchronous operations. Use Effect.promise(() => ...) for async operations.
+   3 | declare function fetchData(): Promise<string>
+   4 | const program = Effect.sync(() => fetchData())
+     |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   5 |             
+---

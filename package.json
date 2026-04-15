@@ -9,7 +9,9 @@
     "lint:ox": "oxlint",
     "test": "turbo run test",
     "build": "turbo run build",
-    "gate": "concurrently -n type,lint,test -c blue,yellow,green \"turbo run typecheck\" \"turbo run lint\" \"turbo run test\"",
+    "gate": "concurrently -n js,go -c blue,green \"bun run gate:js\" \"bun run gate:go\"",
+    "gate:js": "cd packages/oxlint-plugin-effect && bunx tsgo --noEmit && bun test",
+    "gate:go": "cd packages/tsgolint-effect && go build -o /dev/null ./cmd/tsgolint && go test ./internal/rules/effect_.../",
     "codegen": "bun run packages/oxlint-plugin-effect/scripts/codegen.ts",
     "prepare": "lefthook install"
   },
