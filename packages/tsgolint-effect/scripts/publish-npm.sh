@@ -35,7 +35,7 @@ jq --arg v "$VERSION" '.version = $v | .optionalDependencies |= with_entries(.va
 
 # Publish platform packages first
 for platform in "${platforms[@]}"; do
-  echo "Publishing @effect-oxlint/tsgolint-${platform}@${VERSION}"
+  echo "Publishing tsgolint-effect-${platform}@${VERSION}"
   (cd "npm/$platform" && npm publish --access public --provenance $DRY_RUN)
 done
 

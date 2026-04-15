@@ -1,5 +1,5 @@
 {
-  "name": "@effect-oxlint/tsgolint-darwin-x64",
+  "name": "tsgolint-effect-darwin-x64",
   "version": "0.0.0",
   "description": "tsgolint-effect binary for darwin-x64",
   "license": "MIT",

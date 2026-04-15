@@ -1,5 +1,5 @@
 {
-  "name": "@effect-oxlint/tsgolint-linux-x64",
+  "name": "tsgolint-effect-linux-x64",
   "version": "0.0.0",
   "description": "tsgolint-effect binary for linux-x64",
   "license": "MIT",

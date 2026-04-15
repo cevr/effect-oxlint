@@ -4,7 +4,7 @@ const process = require('node:process');
 const child_process = require('node:child_process');
 
 const exePath = require.resolve(
-  `@effect-oxlint/tsgolint-${process.platform}-${process.arch}/tsgolint${process.platform === 'win32' ? '.exe' : ''}`,
+  `tsgolint-effect-${process.platform}-${process.arch}/tsgolint${process.platform === 'win32' ? '.exe' : ''}`,
 );
 
 try {
