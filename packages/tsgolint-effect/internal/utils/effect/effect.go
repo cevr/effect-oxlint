@@ -41,10 +41,18 @@ func IsEffectPackageSymbol(program *compiler.Program, symbol *ast.Symbol) bool {
 // so we scan property names ending in the v3 identifier and verify the property
 // was declared inside the effect package.
 //
+// We also require the type to be a TypeReference (ObjectFlagsReference) so that
+// callers can safely unpack type arguments without hitting nil derefs in the
+// checker for non-reference types that happen to structurally expose a brand
+// property (e.g., objects containing Effect-typed fields).
+//
 // brandV4 — the v4 string key (e.g. "~effect/Effect").
 // brandV3 — the v3 identifier suffix (e.g. "EffectTypeId"), empty to skip v3.
 func hasEffectBrand(program *compiler.Program, ch *checker.Checker, t *checker.Type, brandV4, brandV3 string) bool {
 	if t == nil {
+		return false
+	}
+	if checker.Type_objectFlags(t)&checker.ObjectFlagsReference == 0 {
 		return false
 	}
 	if brandV4 != "" && checker.Checker_getPropertyOfType(ch, t, brandV4) != nil {
