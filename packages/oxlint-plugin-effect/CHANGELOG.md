@@ -1,5 +1,27 @@
 # oxlint-plugin-effect
 
+## 0.2.2
+
+### Patch Changes
+
+- [`6c0a55a`](https://github.com/cevr/effect-oxlint/commit/6c0a55a8b68c931fa2b7028f0af80a588484b0ab) Thanks [@cevr](https://github.com/cevr)! - `strict` preset: drop broken rule ref, v3-only rules, and `noAsyncFunction`. Same cleanup as `full`.
+
+  - **Removed `noReturnNull`** — that rule name doesn't exist in the plugin (only `noReturnNullish`, which is already in strict). Previously caused oxlint to fail to parse the config when consumers used `strict`.
+  - **Removed `noAsyncFunction`** — belongs in `effect-native`, not a version-agnostic strict baseline.
+  - **Removed `noCatchAllToMapError`, `noEffectGenAdapter`, `noRuntimeRunFork`** — v3-only. Layer the `v3` preset on top when linting v3 code.
+
+  Matches the cleanup applied to `full` in the previous release. `strict` is now a "full + style/functional + everything at error" preset with no version assumptions.
+
+- [`d4864a7`](https://github.com/cevr/effect-oxlint/commit/d4864a7aea60f5c88761f304e32bd1115ce8d3e4) Thanks [@cevr](https://github.com/cevr)! - Split `v3` into `v3` (warn) + `v3Strict` (error) for symmetry with `full` / `strict`.
+
+  `v3` now emits the three v3-only rules (`noCatchAllToMapError`, `noEffectGenAdapter`, `noRuntimeRunFork`) at `warn`. Pair with `core` or `full` for a gentle v3 layering. The new `v3Strict` preset fires the same rules at `error`. Pair with `strict` when you want zero tolerance:
+
+  ```ts
+  rules: { ...strict, ...v3Strict }
+  ```
+
+  Matches the `full` / `strict` severity split pattern already in the preset set.
+
 ## 0.2.1
 
 ### Patch Changes
