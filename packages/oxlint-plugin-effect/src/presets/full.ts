@@ -1,8 +1,8 @@
 /**
- * Full preset — all rules enabled.
+ * Full preset — all Effect-specific rules enabled.
  *
- * High-frequency agent mistakes promoted to "error" based on analysis
- * of 98 sessions across 6 projects (3.6GB of transcripts).
+ * Does NOT include generic JS rules (no-console, no-throw, etc.) —
+ * configure those via oxlint's built-in rules in .oxlintrc.json.
  */
 export const full = {
   // API bans
@@ -15,30 +15,9 @@ export const full = {
   "effect/noRuntimeRunFork": "error",
   "effect/noRunInEffect": "error",
 
-  // Global bans — promoted from warn to error (265+ agent violations)
-  "effect/noGlobalFetch": "error",
-  "effect/noGlobalConsole": "error",
-  "effect/noGlobalDate": "error",
-  "effect/noGlobalRandom": "error",
-  "effect/noGlobalTimers": "error",
-  "effect/noNewPromise": "error",
-  "effect/noNewError": "error",
-  "effect/noProcessEnv": "error",
-
-  // Import bans
-  "effect/noNodeBuiltinImport": "error",
-  "effect/noDynamicImport": "error",
-
-  // Statement bans
-  "effect/noThrowStatement": "error",
-  "effect/noTryCatch": "error",
-  "effect/noReturnNull": "warn",
-  "effect/noSwitchStatement": "warn",
-  "effect/noIfStatement": "off",
-  "effect/noTernary": "off",
-
-  // JSON — promoted (116 agent violations)
-  "effect/noJsonParse": "error",
+  // Global bans (everywhere, not just Effect context)
+  "effect/noAsyncFunction": "warn",
+  "effect/noNodeBuiltinImport": "warn",
 
   // AST pattern rules
   "effect/noNestedPipe": "error",
@@ -50,7 +29,6 @@ export const full = {
   "effect/noExtendsNativeError": "error",
   "effect/noEffectFnGenerator": "warn",
   "effect/noInstanceofSchema": "error",
-  "effect/noAsyncFunction": "error",
   "effect/noFlatmapLadder": "error",
   "effect/noNestedEffectCall": "error",
   "effect/noIifeWrapper": "warn",
@@ -66,10 +44,7 @@ export const full = {
   "effect/noManualEffectChannels": "warn",
   "effect/noMatchVoidBranch": "warn",
   "effect/noOptionBooleanNormalization": "warn",
-  "effect/noReturnInArrow": "off",
-  "effect/noStringSentinelConst": "off",
   "effect/noEffectSyncWrapper": "off",
-  "effect/noArrowLadder": "warn",
   "effect/noMatchEffectBranch": "warn",
   "effect/noCatchAllToMapError": "error",
   "effect/noUnnecessaryPipeChain": "error",
@@ -78,20 +53,18 @@ export const full = {
   "effect/noSchemaStructWithTag": "warn",
   "effect/noRedundantSchemaTagIdentifier": "warn",
   "effect/noEffectMapFlatten": "warn",
-  "effect/noGlobalErrorInEffectFailure": "error",
-  "effect/noGlobalErrorInEffectCatch": "error",
+  "effect/noGlobalErrorInFailure": "error",
+  "effect/noGlobalErrorInCatch": "error",
   "effect/noPositionalLogError": "error",
 
-  // Effect-context rules — promoted from warn to error
-  "effect/noThrowInEffectGen": "error",
-  "effect/noTryCatchInEffectGen": "error",
-  "effect/noConsoleInEffect": "error",
-  "effect/noFetchInEffect": "error",
-  "effect/noDateInEffect": "error",
-  "effect/noRandomInEffect": "error",
-  "effect/noTimersInEffect": "error",
-  "effect/noJsonInEffect": "error",
-  "effect/noProcessEnvInEffect": "error",
-  "effect/noPlatformGlobals": "error",
-  "effect/noInlineRuntimeProvide": "error",
+  // Effect-enforcing bans (prevent escaping Effect model)
+  "effect/noThrowStatement": "error",
+  "effect/noTryCatch": "error",
+  "effect/noNewPromise": "error",
+  "effect/noNewError": "error",
+  "effect/noReturnNullish": "warn",
+
+  // Effect-context rules (inside Effect.gen/fn)
+  "effect/noGlobals": "error",
+  "effect/noInlineProvide": "error",
 } as const

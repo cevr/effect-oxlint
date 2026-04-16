@@ -56,8 +56,8 @@ const bodyReturnsNativeError = (fn: ESTree.Node): boolean => {
   return arg != null && typeof arg === "object" && isNativeErrorNew(arg as ESTree.Node)
 }
 
-export const noGlobalErrorInEffectCatch = Rule.define({
-  name: "no-global-error-in-effect-catch",
+export const noGlobalErrorInCatch = Rule.define({
+  name: "no-global-error-in-catch",
   meta: Rule.meta({
     type: "suggestion",
     description:

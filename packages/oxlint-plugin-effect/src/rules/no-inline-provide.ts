@@ -12,8 +12,8 @@ import * as Ref from "effect/Ref"
 
 import { makeEffectContextTracker } from "./_effect-context.js"
 
-export const noInlineRuntimeProvide = Rule.define({
-  name: "no-inline-runtime-provide",
+export const noInlineProvide = Rule.define({
+  name: "no-inline-provide",
   meta: Rule.meta({
     type: "suggestion",
     description:

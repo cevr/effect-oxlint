@@ -1,43 +1,29 @@
 /**
  * Effect-native preset — for codebases fully committed to Effect.
- * Bans all globals and builtins in favor of Effect platform services.
+ * All Effect-context rules at error. Enforces Effect platform services
+ * and tagged errors inside generators.
  */
 export const effectNative = {
-  // Global bans (everywhere)
-  "effect/noGlobalFetch": "error",
-  "effect/noGlobalConsole": "error",
-  "effect/noGlobalDate": "error",
-  "effect/noGlobalRandom": "error",
-  "effect/noGlobalTimers": "error",
-  "effect/noNewPromise": "error",
-  "effect/noNewError": "error",
-  "effect/noProcessEnv": "error",
+  // Global bans (everywhere, not just Effect context)
+  "effect/noAsyncFunction": "error",
   "effect/noNodeBuiltinImport": "error",
+
+  // Effect-enforcing bans
   "effect/noThrowStatement": "error",
   "effect/noTryCatch": "error",
-  "effect/noReturnNull": "error",
-  "effect/noJsonParse": "error",
-  "effect/noExtendsNativeError": "error",
-  "effect/noAsyncFunction": "error",
-  "effect/noInstanceofSchema": "error",
-  "effect/noRuntimeRunFork": "error",
-  "effect/noDynamicImport": "error",
-  "effect/noSwitchStatement": "error",
+  "effect/noNewPromise": "error",
+  "effect/noNewError": "error",
+  "effect/noReturnNullish": "error",
 
-  // Effect-context (inside Effect.gen/fn)
-  "effect/noFetchInEffect": "error",
-  "effect/noDateInEffect": "error",
-  "effect/noRandomInEffect": "error",
-  "effect/noTimersInEffect": "error",
-  "effect/noJsonInEffect": "error",
-  "effect/noProcessEnvInEffect": "error",
-  "effect/noPlatformGlobals": "error",
+  // Effect-context
+  "effect/noGlobals": "error",
+  "effect/noInlineProvide": "error",
 
   // Error hygiene
-  "effect/noGlobalErrorInEffectFailure": "error",
-  "effect/noGlobalErrorInEffectCatch": "error",
-
-  // Logging hygiene
+  "effect/noGlobalErrorInFailure": "error",
+  "effect/noGlobalErrorInCatch": "error",
+  "effect/noExtendsNativeError": "error",
+  "effect/noInstanceofSchema": "error",
   "effect/noPositionalLogError": "error",
 
   // Type hygiene

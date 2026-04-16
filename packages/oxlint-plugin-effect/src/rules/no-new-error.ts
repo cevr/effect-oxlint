@@ -11,7 +11,7 @@ export const noNewError = Rule.banNewExpr(
   ["Error", "TypeError", "RangeError", "ReferenceError", "SyntaxError"],
   {
     message:
-      "Avoid native Error constructors. Use Schema.TaggedErrorClass or Data.TaggedError.",
+      "Avoid native Error constructors. Define: class MyError extends Schema.TaggedErrorClass<MyError>()('MyError', { message: Schema.String }) {}",
     meta: { type: "suggestion" },
   },
 )

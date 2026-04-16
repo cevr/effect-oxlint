@@ -1,8 +1,6 @@
 /**
  * Strict preset — every rule at error. No warnings, no off.
  * The nuclear option. Use when you want zero tolerance.
- *
- * Includes: core + full + effect-native + functional — all at "error".
  */
 export const strict = {
   // API bans
@@ -15,30 +13,18 @@ export const strict = {
   "effect/noRuntimeRunFork": "error",
   "effect/noRunInEffect": "error",
 
-  // Global bans
-  "effect/noGlobalFetch": "error",
-  "effect/noGlobalConsole": "error",
-  "effect/noGlobalDate": "error",
-  "effect/noGlobalRandom": "error",
-  "effect/noGlobalTimers": "error",
-  "effect/noNewPromise": "error",
-  "effect/noNewError": "error",
-  "effect/noProcessEnv": "error",
-
-  // Import bans
-  "effect/noNodeBuiltinImport": "error",
-  "effect/noDynamicImport": "error",
-
-  // Statement bans
-  "effect/noThrowStatement": "error",
-  "effect/noTryCatch": "error",
+  // Style / functional
   "effect/noReturnNull": "error",
   "effect/noSwitchStatement": "error",
   "effect/noIfStatement": "error",
   "effect/noTernary": "error",
+  "effect/noReturnInArrow": "error",
+  "effect/noStringSentinelConst": "error",
+  "effect/noArrowLadder": "error",
 
-  // JSON
-  "effect/noJsonParse": "error",
+  // Global bans (everywhere, not just Effect context)
+  "effect/noAsyncFunction": "error",
+  "effect/noNodeBuiltinImport": "error",
 
   // AST pattern rules
   "effect/noNestedPipe": "error",
@@ -50,7 +36,6 @@ export const strict = {
   "effect/noExtendsNativeError": "error",
   "effect/noEffectFnGenerator": "error",
   "effect/noInstanceofSchema": "error",
-  "effect/noAsyncFunction": "error",
   "effect/noFlatmapLadder": "error",
   "effect/noNestedEffectCall": "error",
   "effect/noIifeWrapper": "error",
@@ -66,10 +51,7 @@ export const strict = {
   "effect/noManualEffectChannels": "error",
   "effect/noMatchVoidBranch": "error",
   "effect/noOptionBooleanNormalization": "error",
-  "effect/noReturnInArrow": "error",
-  "effect/noStringSentinelConst": "error",
   "effect/noEffectSyncWrapper": "error",
-  "effect/noArrowLadder": "error",
   "effect/noMatchEffectBranch": "error",
   "effect/noCatchAllToMapError": "error",
   "effect/noUnnecessaryPipeChain": "error",
@@ -78,20 +60,18 @@ export const strict = {
   "effect/noSchemaStructWithTag": "error",
   "effect/noRedundantSchemaTagIdentifier": "error",
   "effect/noEffectMapFlatten": "error",
-  "effect/noGlobalErrorInEffectFailure": "error",
-  "effect/noGlobalErrorInEffectCatch": "error",
+  "effect/noGlobalErrorInFailure": "error",
+  "effect/noGlobalErrorInCatch": "error",
   "effect/noPositionalLogError": "error",
 
+  // Effect-enforcing bans
+  "effect/noThrowStatement": "error",
+  "effect/noTryCatch": "error",
+  "effect/noNewPromise": "error",
+  "effect/noNewError": "error",
+  "effect/noReturnNullish": "error",
+
   // Effect-context rules
-  "effect/noThrowInEffectGen": "error",
-  "effect/noTryCatchInEffectGen": "error",
-  "effect/noConsoleInEffect": "error",
-  "effect/noFetchInEffect": "error",
-  "effect/noDateInEffect": "error",
-  "effect/noRandomInEffect": "error",
-  "effect/noTimersInEffect": "error",
-  "effect/noJsonInEffect": "error",
-  "effect/noProcessEnvInEffect": "error",
-  "effect/noPlatformGlobals": "error",
-  "effect/noInlineRuntimeProvide": "error",
+  "effect/noGlobals": "error",
+  "effect/noInlineProvide": "error",
 } as const

@@ -26,8 +26,8 @@ const isNativeErrorNew = (node: ESTree.Node): boolean => {
   return callee.type === "Identifier" && "name" in callee && nativeErrors.has(callee.name as string)
 }
 
-export const noGlobalErrorInEffectFailure = Rule.define({
-  name: "no-global-error-in-effect-failure",
+export const noGlobalErrorInFailure = Rule.define({
+  name: "no-global-error-in-failure",
   meta: Rule.meta({
     type: "suggestion",
     description:

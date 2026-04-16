@@ -8,6 +8,6 @@
 import { Rule } from "../vendor/effect-oxlint/index.js"
 
 export const noThrowStatement = Rule.banStatement("ThrowStatement", {
-  message: "Avoid throw. Use Effect.fail with tagged errors.",
+  message: "Avoid throw. Use yield* Effect.fail(new MyError()) or yield* new MyError() (yieldable errors) inside generators. Outside generators, return Effect.fail.",
   meta: { type: "problem" },
 })

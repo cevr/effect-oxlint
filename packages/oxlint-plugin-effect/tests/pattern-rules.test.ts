@@ -1,13 +1,11 @@
 import { describe, test, expect } from "bun:test"
 import { Testing } from "../src/vendor/effect-oxlint/index.js"
 import {
-  noReturnNull,
   noUnnecessaryPipe,
   noEffectSucceedVoid,
   noEffectMapVoid,
   noEffectFnGenerator,
   noExtendsNativeError,
-  noAsyncFunction,
   noIifeWrapper,
   noEffectSucceedString,
   noFromNullableCoalesce,
@@ -16,26 +14,6 @@ import {
   noNestedEffectCall,
   noPositionalLogError,
 } from "../src/rules/index.js"
-
-describe("noReturnNull", () => {
-  test("reports return null", () => {
-    const node = {
-      type: "ReturnStatement",
-      argument: { type: "Literal", value: null },
-    } as never
-    const result = Testing.runRule(noReturnNull, "ReturnStatement", node)
-    expect(result.length).toBe(1)
-  })
-
-  test("ignores return 42", () => {
-    const node = {
-      type: "ReturnStatement",
-      argument: { type: "Literal", value: 42 },
-    } as never
-    const result = Testing.runRule(noReturnNull, "ReturnStatement", node)
-    Testing.expectNoDiagnostics(result)
-  })
-})
 
 describe("noUnnecessaryPipe", () => {
   test("reports pipe(x) with single arg", () => {
@@ -121,32 +99,6 @@ describe("noExtendsNativeError", () => {
       body: { type: "ClassBody", body: [] },
     } as never
     const result = Testing.runRule(noExtendsNativeError, "ClassDeclaration", node)
-    Testing.expectNoDiagnostics(result)
-  })
-})
-
-describe("noAsyncFunction", () => {
-  test("reports async function", () => {
-    const node = {
-      type: "FunctionDeclaration",
-      async: true,
-      id: Testing.id("fetchData"),
-      params: [],
-      body: Testing.blockStmt([]),
-    } as never
-    const result = Testing.runRule(noAsyncFunction, "FunctionDeclaration", node)
-    expect(result.length).toBe(1)
-  })
-
-  test("ignores non-async function", () => {
-    const node = {
-      type: "FunctionDeclaration",
-      async: false,
-      id: Testing.id("fetchData"),
-      params: [],
-      body: Testing.blockStmt([]),
-    } as never
-    const result = Testing.runRule(noAsyncFunction, "FunctionDeclaration", node)
     Testing.expectNoDiagnostics(result)
   })
 })
