@@ -10,6 +10,9 @@ packages/tsgolint-effect/npm/*/tsgolint
 packages/tsgolint-effect/npm/*/tsgolint.exe
 packages/tsgolint-effect/typescript-go/
 
+# CI artifacts (downloaded from matrix builds during release)
+artifacts/
+
 # Upstream tsgolint files we don't need to track
 packages/tsgolint-effect/e2e/
 packages/tsgolint-effect/benchmarks/
