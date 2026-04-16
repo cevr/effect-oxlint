@@ -10,11 +10,9 @@ export const strict = {
   "effect/noEffectAsync": "error",
   "effect/noEffectBind": "error",
   "effect/noOptionAs": "error",
-  "effect/noRuntimeRunFork": "error",
   "effect/noRunInEffectGen": "error",
 
   // Style / functional
-  "effect/noReturnNull": "error",
   "effect/noSwitchStatement": "error",
   "effect/noIfStatement": "error",
   "effect/noTernary": "error",
@@ -23,7 +21,6 @@ export const strict = {
   "effect/noArrowLadder": "error",
 
   // Global bans (everywhere, not just Effect context)
-  "effect/noAsyncFunction": "error",
   "effect/noNodeBuiltinImport": "error",
 
   // AST pattern rules
@@ -43,7 +40,6 @@ export const strict = {
   "effect/noEffectOrElseLadder": "error",
   "effect/noFromNullableCoalesce": "error",
   "effect/noUnnecessaryArrowBlock": "error",
-  "effect/noEffectGenAdapter": "error",
   "effect/noEffectSyncConsole": "error",
   "effect/noEffectTypeAlias": "error",
   "effect/noEffectWrapperAlias": "error",
@@ -53,7 +49,6 @@ export const strict = {
   "effect/noOptionBooleanNormalization": "error",
   "effect/noEffectSyncWrapper": "error",
   "effect/noMatchEffectBranch": "error",
-  "effect/noCatchAllToMapError": "error",
   "effect/noUnnecessaryPipeChain": "error",
   "effect/noMultipleEffectProvide": "error",
   "effect/noSchemaUnionOfLiterals": "error",
