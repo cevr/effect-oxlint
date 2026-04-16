@@ -38,6 +38,16 @@ jobs:
         with:
           go-version: "1.26"
 
+      - name: Init tsgolint
+        working-directory: packages/tsgolint-effect
+        run: |
+          git init typescript-go
+          cd typescript-go
+          git remote add origin https://github.com/microsoft/typescript-go.git
+          git fetch --depth 1 origin caf3ecdeceba81ab6bcd7419c99dab5f5dd66306
+          git checkout FETCH_HEAD
+          for patch in ../patches/*.patch; do git apply "$patch"; done
+
       - name: Build
         working-directory: packages/tsgolint-effect
         run: |
