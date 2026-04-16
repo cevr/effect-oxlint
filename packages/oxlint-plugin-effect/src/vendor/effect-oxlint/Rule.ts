@@ -396,195 +396,133 @@ export const banStatement = (
 // ---------------------------------------------------------------------------
 
 /**
- * Specification for `banMultiple`: which patterns to ban under one rule.
+ * A single ban specification. Each spec carries its own message so
+ * diagnostics are specific to the exact pattern matched.
  *
- * @since 0.2.0
+ * @since 0.3.0
  */
-export interface BanMultipleSpec {
-	/** Bare identifier calls to ban (e.g. `'fetch'` or `['useState', 'useEffect']`). */
-	readonly calls?: string | ReadonlyArray<string> | undefined;
-	/** `new` expressions to ban (e.g. `'Date'` or `['Error', 'TypeError']`). */
-	readonly newExprs?: string | ReadonlyArray<string> | undefined;
-	/** Member expressions to ban: `[object, property | properties]` tuples. */
-	readonly members?:
-		| ReadonlyArray<
-				readonly [obj: string, prop: string | ReadonlyArray<string>]
-		  >
-		| undefined;
-	/** Import sources to ban (string or predicate). */
-	readonly imports?:
-		| ReadonlyArray<string | ((source: string) => boolean)>
-		| undefined;
-	/** Statement node types to ban (e.g. `'ThrowStatement'`). */
-	readonly statements?: ReadonlyArray<string> | undefined;
-}
+export type BanSpec =
+	| { readonly type: 'member'; readonly object: string; readonly property: string | ReadonlyArray<string>; readonly message: string }
+	| { readonly type: 'call'; readonly name: string | ReadonlyArray<string>; readonly message: string }
+	| { readonly type: 'new'; readonly name: string | ReadonlyArray<string>; readonly message: string }
+	| { readonly type: 'import'; readonly source: string | ((source: string) => boolean); readonly message: string }
+	| { readonly type: 'statement'; readonly nodeType: string; readonly message: string };
 
 /**
- * Create a rule that bans multiple patterns with a shared message.
- *
- * Combines call bans, `new` expression bans, member bans, import bans,
- * and statement bans into a single rule with merged visitors.
+ * Create a rule that bans multiple patterns, each with its own message.
  *
  * @example
  * ```ts
- * // Ban 5 loop statement types
- * Rule.banMultiple(
- *   {
- *     statements: [
- *       'ForStatement', 'ForInStatement', 'ForOfStatement',
- *       'WhileStatement', 'DoWhileStatement'
- *     ]
- *   },
- *   { message: 'Use Arr.map / Effect.forEach instead' }
- * )
- *
- * // Combine import + member bans
- * Rule.banMultiple(
- *   {
- *     imports: ['node:fs'],
- *     members: [['fs', ['readFileSync', 'writeFileSync']]]
- *   },
- *   { message: 'Use Effect FileSystem service' }
- * )
- *
- * // Combine new expression + member bans
- * Rule.banMultiple(
- *   {
- *     newExprs: 'Date',
- *     members: [['Date', 'now']]
- *   },
- *   { message: 'Use Clock service' }
- * )
+ * Rule.banMultiple({
+ *   name: "no-global-date",
+ *   meta: { type: "suggestion" },
+ *   specs: [
+ *     { type: "new", name: "Date", message: "Avoid new Date(). Use Clock service." },
+ *     { type: "member", object: "Date", property: "now", message: "Avoid Date.now(). Use Clock service." },
+ *   ],
+ * })
  * ```
  *
- * @since 0.2.0
+ * @since 0.3.0
  */
-export const banMultiple = (
-	spec: BanMultipleSpec,
-	opts: {
-		readonly name?: string | undefined;
-		readonly message: string;
-		readonly meta?:
-			| { readonly type?: 'problem' | 'suggestion' }
-			| undefined;
-	}
-): CreateRule =>
-	define({
-		name: opts.name ?? 'ban-multiple',
+export const banMultiple = (config: {
+	readonly name: string;
+	readonly meta?: { readonly type?: 'problem' | 'suggestion' } | undefined;
+	readonly specs: ReadonlyArray<BanSpec>;
+}): CreateRule => {
+	const description = config.specs.map((s) => s.message).join(' ');
+	return define({
+		name: config.name,
 		meta: meta({
-			type: opts.meta?.type ?? 'suggestion',
-			description: opts.message
+			type: config.meta?.type ?? 'suggestion',
+			description
 		}),
 		create: function* () {
 			const ctx = yield* RuleContext;
-			const report = (node: ESTree.Node) =>
-				ctx.report(makeDiagnostic({ node, message: opts.message }));
 
-			// Statement bans
-			const stmtVisitors: ReadonlyArray<EffectVisitor> =
-				spec.statements !== undefined
-					? Arr.map(
-							spec.statements,
-							(nodeType): EffectVisitor => ({
-								[nodeType]: report
-							})
-						)
-					: [];
+			const visitors: Array<EffectVisitor> = [];
 
-			// Call bans
-			const callVisitors: ReadonlyArray<EffectVisitor> =
-				spec.calls !== undefined
-					? ((names: ReadonlyArray<string>) => [
-							{
-								CallExpression: (node: ESTree.Node) =>
-									pipe(
-										AST.narrow(node, 'CallExpression'),
-										Option.flatMap(AST.calleeName),
-										Option.filter((n) =>
-											Arr.contains(names, n)
-										),
-										Option.match({
-											onNone: () => Effect.void,
-											onSome: () => report(node)
-										})
-									)
-							} satisfies EffectVisitor
-						])(P.isString(spec.calls) ? [spec.calls] : spec.calls)
-					: [];
+			for (const spec of config.specs) {
+				switch (spec.type) {
+					case 'member': {
+						const report = (node: ESTree.Node) =>
+							ctx.report(makeDiagnostic({ node, message: spec.message }));
+						visitors.push({
+							MemberExpression: (node: ESTree.Node) =>
+								pipe(
+									AST.narrow(node, 'MemberExpression'),
+									Option.flatMap(AST.matchMember(spec.object, spec.property)),
+									Option.match({
+										onNone: () => Effect.void,
+										onSome: (matched) => report(matched)
+									})
+								)
+						});
+						break;
+					}
+					case 'call': {
+						const names = P.isString(spec.name) ? [spec.name] : spec.name;
+						const report = (node: ESTree.Node) =>
+							ctx.report(makeDiagnostic({ node, message: spec.message }));
+						visitors.push({
+							CallExpression: (node: ESTree.Node) =>
+								pipe(
+									AST.narrow(node, 'CallExpression'),
+									Option.flatMap(AST.calleeName),
+									Option.filter((n) => Arr.contains(names, n)),
+									Option.match({
+										onNone: () => Effect.void,
+										onSome: () => report(node)
+									})
+								)
+						});
+						break;
+					}
+					case 'new': {
+						const names = P.isString(spec.name) ? [spec.name] : spec.name;
+						const report = (node: ESTree.Node) =>
+							ctx.report(makeDiagnostic({ node, message: spec.message }));
+						visitors.push({
+							NewExpression: (node: ESTree.Node) =>
+								pipe(
+									AST.narrow(node, 'NewExpression'),
+									Option.flatMap((n) => newExprCalleeName(n.callee)),
+									Option.filter((n) => Arr.contains(names, n)),
+									Option.match({
+										onNone: () => Effect.void,
+										onSome: () => report(node)
+									})
+								)
+						});
+						break;
+					}
+					case 'import': {
+						const report = (node: ESTree.Node) =>
+							ctx.report(makeDiagnostic({ node, message: spec.message }));
+						visitors.push({
+							ImportDeclaration: (node: ESTree.Node) =>
+								pipe(
+									AST.narrow(node, 'ImportDeclaration'),
+									Option.flatMap(AST.matchImport(spec.source)),
+									Option.match({
+										onNone: () => Effect.void,
+										onSome: (matched) => report(matched)
+									})
+								)
+						});
+						break;
+					}
+					case 'statement': {
+						visitors.push({
+							[spec.nodeType]: (node: ESTree.Node) =>
+								ctx.report(makeDiagnostic({ node, message: spec.message }))
+						});
+						break;
+					}
+				}
+			}
 
-			// NewExpression bans
-			const newExprVisitors: ReadonlyArray<EffectVisitor> =
-				spec.newExprs !== undefined
-					? ((names: ReadonlyArray<string>) => [
-							{
-								NewExpression: (node: ESTree.Node) =>
-									pipe(
-										AST.narrow(node, 'NewExpression'),
-										Option.flatMap((n) =>
-											newExprCalleeName(n.callee)
-										),
-										Option.filter((n) =>
-											Arr.contains(names, n)
-										),
-										Option.match({
-											onNone: () => Effect.void,
-											onSome: () => report(node)
-										})
-									)
-							} satisfies EffectVisitor
-						])(
-							P.isString(spec.newExprs)
-								? [spec.newExprs]
-								: spec.newExprs
-						)
-					: [];
-
-			// Member bans
-			const memberVisitors: ReadonlyArray<EffectVisitor> =
-				spec.members !== undefined
-					? Arr.map(
-							spec.members,
-							([obj, prop]): EffectVisitor => ({
-								MemberExpression: (node: ESTree.Node) =>
-									pipe(
-										AST.narrow(node, 'MemberExpression'),
-										Option.flatMap(
-											AST.matchMember(obj, prop)
-										),
-										Option.match({
-											onNone: () => Effect.void,
-											onSome: (matched) => report(matched)
-										})
-									)
-							})
-						)
-					: [];
-
-			// Import bans
-			const importVisitors: ReadonlyArray<EffectVisitor> =
-				spec.imports !== undefined
-					? Arr.map(
-							spec.imports,
-							(source): EffectVisitor => ({
-								ImportDeclaration: (node: ESTree.Node) =>
-									pipe(
-										AST.narrow(node, 'ImportDeclaration'),
-										Option.flatMap(AST.matchImport(source)),
-										Option.match({
-											onNone: () => Effect.void,
-											onSome: (matched) => report(matched)
-										})
-									)
-							})
-						)
-					: [];
-
-			return mergeVisitors(
-				...stmtVisitors,
-				...callVisitors,
-				...newExprVisitors,
-				...memberVisitors,
-				...importVisitors
-			);
+			return mergeVisitors(...visitors);
 		}
 	});
+};

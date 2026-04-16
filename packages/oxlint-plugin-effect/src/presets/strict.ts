@@ -71,6 +71,15 @@ export const strict = {
   "effect/noEffectSyncWrapper": "error",
   "effect/noArrowLadder": "error",
   "effect/noMatchEffectBranch": "error",
+  "effect/noCatchAllToMapError": "error",
+  "effect/noUnnecessaryPipeChain": "error",
+  "effect/noMultipleEffectProvide": "error",
+  "effect/noSchemaUnionOfLiterals": "error",
+  "effect/noSchemaStructWithTag": "error",
+  "effect/noRedundantSchemaTagIdentifier": "error",
+  "effect/noEffectMapFlatten": "error",
+  "effect/noGlobalErrorInEffectFailure": "error",
+  "effect/noGlobalErrorInEffectCatch": "error",
 
   // Effect-context rules
   "effect/noThrowInEffectGen": "error",

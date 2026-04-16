@@ -33,6 +33,10 @@ export const effectNative = {
   "effect/noProcessEnvInEffect": "error",
   "effect/noPlatformGlobals": "error",
 
+  // Error hygiene
+  "effect/noGlobalErrorInEffectFailure": "error",
+  "effect/noGlobalErrorInEffectCatch": "error",
+
   // Type hygiene
   "effect/noEffectTypeAlias": "error",
   "effect/noManualEffectChannels": "error",

@@ -26,6 +26,13 @@ export const core = {
   "effect/noEffectGenAdapter": "warn",
   "effect/noEffectSyncConsole": "error",
   "effect/noArrowLadder": "warn",
+  "effect/noCatchAllToMapError": "warn",
+  "effect/noUnnecessaryPipeChain": "warn",
+  "effect/noMultipleEffectProvide": "warn",
+  "effect/noSchemaUnionOfLiterals": "warn",
+  "effect/noSchemaStructWithTag": "warn",
+  "effect/noRedundantSchemaTagIdentifier": "warn",
+  "effect/noEffectMapFlatten": "warn",
 
   // Effect-context rules
   "effect/noThrowInEffectGen": "error",

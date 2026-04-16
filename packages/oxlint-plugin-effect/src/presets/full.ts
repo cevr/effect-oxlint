@@ -68,6 +68,15 @@ export const full = {
   "effect/noEffectSyncWrapper": "off",
   "effect/noArrowLadder": "warn",
   "effect/noMatchEffectBranch": "warn",
+  "effect/noCatchAllToMapError": "warn",
+  "effect/noUnnecessaryPipeChain": "warn",
+  "effect/noMultipleEffectProvide": "warn",
+  "effect/noSchemaUnionOfLiterals": "warn",
+  "effect/noSchemaStructWithTag": "warn",
+  "effect/noRedundantSchemaTagIdentifier": "warn",
+  "effect/noEffectMapFlatten": "warn",
+  "effect/noGlobalErrorInEffectFailure": "warn",
+  "effect/noGlobalErrorInEffectCatch": "warn",
 
   // Effect-context rules
   "effect/noThrowInEffectGen": "error",
