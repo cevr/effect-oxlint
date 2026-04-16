@@ -1,0 +1,16 @@
+
+[TestLeakingRequirements/invalid-0 - 1]
+Diagnostic 1: leakingRequirements (4:1 - 7:1)
+Message: Service leaks implementation requirements: FileSystem. All methods require these services, indicating they should be provided internally.
+Help: Provide these services in the service's Layer instead of exposing them in the public API.
+   3 | interface FileSystem { readonly readFile: (path: string) => Effect.Effect<string> }
+   4 | interface LeakingService {
+     | ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   5 |   readonly writeCache: () => Effect.Effect<void, never, FileSystem>
+     | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   6 |   readonly readCache: () => Effect.Effect<string, never, FileSystem>
+     | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   7 | }
+     | ~
+   8 |             
+---

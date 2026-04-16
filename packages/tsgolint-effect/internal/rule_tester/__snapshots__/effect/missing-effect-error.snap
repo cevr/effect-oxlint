@@ -1,0 +1,20 @@
+
+[TestMissingEffectError/invalid-0 - 1]
+Diagnostic 1: missingEffectError (6:7 - 6:55)
+Message: Unhandled error types: ErrorA, ErrorB. These errors can occur but are not declared in the type.
+Help: Add the missing error types to the Effect's E type parameter, or handle them with .catch*().
+   5 | declare const effectWithErrors: Effect.Effect<number, ErrorA | ErrorB>
+   6 | const missing: Effect.Effect<number> = effectWithErrors
+     |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   7 |             
+---
+
+[TestMissingEffectError/invalid-1 - 1]
+Diagnostic 1: missingEffectError (7:7 - 7:72)
+Message: Unhandled error types: ErrorC. These errors can occur but are not declared in the expected type.
+Help: Add the missing error types to the Effect's E type parameter, or handle them with .catch*().
+   6 | declare const effectWithErrors: Effect.Effect<number, ErrorA | ErrorB | ErrorC>
+   7 | const missing: Effect.Effect<number, ErrorA | ErrorB> = effectWithErrors
+     |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   8 |             
+---

@@ -1,0 +1,20 @@
+
+[TestMissingEffectContext/invalid-0 - 1]
+Diagnostic 1: missingEffectContext (6:7 - 6:57)
+Message: Missing service requirements: ServiceA. These services are used but not declared in the type.
+Help: Add the missing services to the Effect's R type parameter, or provide them via Layer.
+   5 | declare const effectWithServices: Effect.Effect<number, never, ServiceA>
+   6 | const missing: Effect.Effect<number> = effectWithServices
+     |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   7 |             
+---
+
+[TestMissingEffectContext/invalid-1 - 1]
+Diagnostic 1: missingEffectContext (8:7 - 8:74)
+Message: Missing service requirements: ServiceB. These services are used but not declared in the expected type.
+Help: Add the missing services to the Effect's R type parameter, or provide them via Layer.
+   7 | declare const effectWithServices: Effect.Effect<number, never, ServiceA | ServiceB>
+   8 | const missing: Effect.Effect<number, never, ServiceA> = effectWithServices
+     |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   9 |             
+---

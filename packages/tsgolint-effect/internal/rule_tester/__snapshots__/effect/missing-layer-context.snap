@@ -1,0 +1,10 @@
+
+[TestMissingLayerContext/invalid-0 - 1]
+Diagnostic 1: missingLayerContext (8:7 - 8:52)
+Message: Missing layer dependencies: ServiceB. These services are required but not declared in the Layer's RIn type.
+Help: Add the missing dependencies to the Layer's RIn type parameter, or provide them when composing layers.
+   7 | declare const layerWithDeps: Layer.Layer<ServiceA, never, ServiceB>
+   8 | const missing: Layer.Layer<ServiceA> = layerWithDeps
+     |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   9 |             
+---
