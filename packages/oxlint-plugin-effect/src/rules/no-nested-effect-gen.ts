@@ -1,18 +1,21 @@
 /**
- * Ban nested `Effect.gen` calls that can be flattened.
+ * Ban directly-nested `Effect.gen` calls that can be flattened.
  *
- * Fires when one `Effect.gen` body directly contains another `Effect.gen` —
- * the inner gen can be yielded as a plain effect and flattened away.
+ * Fires only when an inner `Effect.gen` is `yield*`'d straight into the outer
+ * gen body — the inner gen can be inlined (its statements hoisted into the
+ * outer gen).
  *
- * Does NOT fire for method-style gens: an `Effect.gen` that is the body of
- * a function/arrow returned from the outer gen (service factory, object
- * literal method). Those close over yielded deps and can't be flattened.
- *
- * Example (flagged):
+ * Flagged:
  *   Effect.gen(function*() { yield* Effect.gen(function*() { ... }) })
  *
- * Example (allowed — method-style):
- *   const make = Effect.gen(function*() {
+ * Allowed — wrapped in another operator (not directly yielded):
+ *   Effect.gen(function*() {
+ *     yield* Effect.scoped(Effect.gen(function*() { ... }))
+ *     yield* Effect.forkDetach(Effect.gen(function*() { ... }))
+ *   })
+ *
+ * Allowed — method-style (closes over outer-yielded deps):
+ *   Effect.gen(function*() {
  *     const ref = yield* Ref.make(0)
  *     return { op: () => Effect.gen(function*() { yield* Ref.get(ref) }) }
  *   })
@@ -24,32 +27,42 @@ import { AST, Diagnostic, Rule, Visitor, RuleContext } from "../vendor/effect-ox
 import * as Effect from "effect/Effect"
 import * as Ref from "effect/Ref"
 
-// Walk up the parent chain from an inner Effect.gen call. If we pass through
-// a function/arrow that is NOT the direct argument of an Effect.gen / Effect.fn
-// call, the inner gen is a method-style body (closes over outer-yielded deps)
-// — don't flag. If we reach an enclosing Effect.gen generator body without
-// hitting such a function, the inner gen is directly nested — flag.
-const isMethodStyleGen = (node: ESTree.Node): boolean => {
-  let cur: ESTree.Node | null | undefined = (node as unknown as { parent?: ESTree.Node }).parent
-  while (cur != null) {
-    if (cur.type === "FunctionExpression" || cur.type === "ArrowFunctionExpression") {
-      // Is this function the callback of an Effect.gen / Effect.fn call?
-      const parent = (cur as unknown as { parent?: ESTree.Node }).parent
-      if (
-        parent != null &&
-        parent.type === "CallExpression" &&
-        (AST.isCallOf(parent as ESTree.CallExpression, "Effect", "gen") ||
-          AST.isCallOf(parent as ESTree.CallExpression, "Effect", "fn"))
-      ) {
-        // Reached the enclosing Effect.gen/fn body — truly nested
-        return false
-      }
-      // Intervening callback (object method, event handler, .on(...) arg, etc.)
-      return true
-    }
-    cur = (cur as unknown as { parent?: ESTree.Node }).parent
-  }
-  return false
+// An inner Effect.gen is "directly nested" only if its value is yielded
+// straight into the outer gen's body — i.e. the parent chain is:
+//
+//   CallExpression (inner Effect.gen)
+//     ← YieldExpression (delegate, i.e. yield*)
+//     ← ExpressionStatement
+//     ← BlockStatement
+//     ← FunctionExpression (outer Effect.gen/fn callback)
+//
+// Any other shape — wrapped in another call (`Effect.scoped(Effect.gen(...))`,
+// `Effect.forkDetach(Effect.gen(...))`), returned from a method, etc. — is an
+// inline gen and not an antipattern.
+const parentOf = (node: ESTree.Node): ESTree.Node | undefined =>
+  (node as unknown as { parent?: ESTree.Node }).parent
+
+const isDirectlyNestedGen = (node: ESTree.Node): boolean => {
+  const yieldExpr = parentOf(node)
+  if (yieldExpr?.type !== "YieldExpression") return false
+  // Must be `yield*` (delegate), not `yield`
+  if ((yieldExpr as unknown as { delegate?: boolean }).delegate !== true) return false
+
+  const stmt = parentOf(yieldExpr)
+  if (stmt?.type !== "ExpressionStatement") return false
+
+  const block = parentOf(stmt)
+  if (block?.type !== "BlockStatement") return false
+
+  const fn = parentOf(block)
+  if (fn?.type !== "FunctionExpression" && fn?.type !== "ArrowFunctionExpression") return false
+
+  const call = parentOf(fn)
+  if (call?.type !== "CallExpression") return false
+  return (
+    AST.isCallOf(call as ESTree.CallExpression, "Effect", "gen") ||
+    AST.isCallOf(call as ESTree.CallExpression, "Effect", "fn")
+  )
 }
 
 export const noNestedEffectGen = Rule.define({
@@ -70,7 +83,7 @@ export const noNestedEffectGen = Rule.define({
           Effect.flatMap(Ref.get(depth), (d) => {
             if (d <= 1) return Effect.void
             if (!AST.isCallOf(node as ESTree.CallExpression, "Effect", "gen")) return Effect.void
-            if (isMethodStyleGen(node as ESTree.Node)) return Effect.void
+            if (!isDirectlyNestedGen(node as ESTree.Node)) return Effect.void
             return ctx.report(
               Diagnostic.make({
                 node,
