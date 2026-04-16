@@ -206,6 +206,34 @@ describe("noNestedEffectCall", () => {
     const result = Testing.runRule(noNestedEffectCall, "CallExpression", node)
     Testing.expectNoDiagnostics(result)
   })
+
+  test("ignores Effect.ensuring(Effect.sync(...)) — not a pipeline combinator", () => {
+    const inner = Testing.callOfMember("Effect", "sync", [Testing.id("x")])
+    const outer = Testing.callOfMember("Effect", "ensuring", [inner])
+    const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
+    Testing.expectNoDiagnostics(result)
+  })
+
+  test("ignores Effect.scoped(Effect.gen(...))", () => {
+    const inner = Testing.callOfMember("Effect", "gen", [])
+    const outer = Testing.callOfMember("Effect", "scoped", [inner])
+    const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
+    Testing.expectNoDiagnostics(result)
+  })
+
+  test("ignores Effect.runPromise(Effect.gen(...)) — test boundary", () => {
+    const inner = Testing.callOfMember("Effect", "gen", [])
+    const outer = Testing.callOfMember("Effect", "runPromise", [inner])
+    const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
+    Testing.expectNoDiagnostics(result)
+  })
+
+  test("reports Effect.flatMap(Effect.tap(...))", () => {
+    const inner = Testing.callOfMember("Effect", "tap", [Testing.id("x")])
+    const outer = Testing.callOfMember("Effect", "flatMap", [inner])
+    const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
+    expect(result.length).toBe(1)
+  })
 })
 
 describe("noPositionalLogError", () => {
