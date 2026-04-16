@@ -194,11 +194,18 @@ describe("noNestedPipe", () => {
 })
 
 describe("noNestedEffectCall", () => {
-  test("reports Effect.map(Effect.flatMap(...))", () => {
-    const inner = Testing.callOfMember("Effect", "flatMap", [Testing.id("x")])
-    const outer = Testing.callOfMember("Effect", "map", [inner])
+  test("reports Effect.map(self, Effect.flatMap(...)) — data-first call tower", () => {
+    const inner = Testing.callOfMember("Effect", "flatMap", [Testing.id("x"), Testing.id("f")])
+    const outer = Testing.callOfMember("Effect", "map", [Testing.id("self"), inner])
     const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
     expect(result.length).toBe(1)
+  })
+
+  test("ignores data-last Effect.map(Effect.flatMap(...)) — pipeable inside .pipe()", () => {
+    const inner = Testing.callOfMember("Effect", "flatMap", [Testing.id("f")])
+    const outer = Testing.callOfMember("Effect", "map", [inner])
+    const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
+    Testing.expectNoDiagnostics(result)
   })
 
   test("ignores flat Effect.map(x)", () => {
@@ -228,11 +235,39 @@ describe("noNestedEffectCall", () => {
     Testing.expectNoDiagnostics(result)
   })
 
-  test("reports Effect.flatMap(Effect.tap(...))", () => {
-    const inner = Testing.callOfMember("Effect", "tap", [Testing.id("x")])
-    const outer = Testing.callOfMember("Effect", "flatMap", [inner])
+  test("reports Effect.flatMap(self, Effect.tap(...)) — data-first", () => {
+    const inner = Testing.callOfMember("Effect", "tap", [Testing.id("x"), Testing.id("f")])
+    const outer = Testing.callOfMember("Effect", "flatMap", [Testing.id("self"), inner])
     const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
     expect(result.length).toBe(1)
+  })
+
+  test("ignores pipeable Effect.andThen(Effect.failCause(cause)) — single-arg inside .pipe()", () => {
+    const inner = Testing.callOfMember("Effect", "failCause", [Testing.id("cause")])
+    const outer = Testing.callOfMember("Effect", "andThen", [inner])
+    const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
+    Testing.expectNoDiagnostics(result)
+  })
+
+  test("reports Effect.andThen(x, Effect.sync(...)) — effect-accepting + producer", () => {
+    const inner = Testing.callOfMember("Effect", "sync", [Testing.id("f")])
+    const outer = Testing.callOfMember("Effect", "andThen", [Testing.id("x"), inner])
+    const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
+    expect(result.length).toBe(1)
+  })
+
+  test("reports Effect.tap(x, Effect.sync(...))", () => {
+    const inner = Testing.callOfMember("Effect", "sync", [Testing.id("f")])
+    const outer = Testing.callOfMember("Effect", "tap", [Testing.id("x"), inner])
+    const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
+    expect(result.length).toBe(1)
+  })
+
+  test("ignores Effect.map(x, Effect.sync(...)) — map takes a fn, producer inner is a type error elsewhere", () => {
+    const inner = Testing.callOfMember("Effect", "sync", [Testing.id("f")])
+    const outer = Testing.callOfMember("Effect", "map", [Testing.id("x"), inner])
+    const result = Testing.runRule(noNestedEffectCall, "CallExpression", outer)
+    Testing.expectNoDiagnostics(result)
   })
 })
 

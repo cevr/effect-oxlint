@@ -14,8 +14,8 @@ import type { ESTree } from "@oxlint/plugins"
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 
-// Pipeline combinators — ones the user normally chains with .pipe(),
-// and which as a result are the antipattern targets when nested directly.
+// Pipeline combinators — the user normally chains with .pipe(). Required for
+// the OUTER call: only these form a "call tower" when nested.
 const pipelineCombinators = new Set([
   "flatMap",
   "map",
@@ -36,6 +36,33 @@ const pipelineCombinators = new Set([
   "catchCause",
   "catchTag",
   "catchTags",
+])
+
+// Combinators that accept an Effect (not a function) as their second arg.
+// For these, a bare Effect constructor as the second arg is legitimate code
+// and flattenable: `Effect.andThen(x, Effect.sync(...))` → `x.pipe(Effect.andThen(Effect.sync(...)))`.
+const effectAcceptingCombinators = new Set([
+  "andThen",
+  "tap",
+  "zipRight",
+  "zipLeft",
+])
+
+// Effect producers — constructors that return an Effect.
+const effectProducers = new Set([
+  "gen",
+  "fn",
+  "succeed",
+  "fail",
+  "failCause",
+  "sync",
+  "promise",
+  "tryPromise",
+  "try",
+  "async",
+  "void",
+  "die",
+  "dieMessage",
 ])
 
 const getEffectMethodName = (node: unknown): string | undefined => {
@@ -76,9 +103,25 @@ export const noNestedEffectCall = Rule.define({
         const ce = node as ESTree.CallExpression
         if (!("arguments" in ce) || !Array.isArray(ce.arguments)) return Effect.void
 
+        // Only the data-first form is flaggable: `Effect.flatMap(self, fn)`,
+        // `Effect.andThen(self, next)`. The data-last (pipeable) form takes a
+        // single argument that IS the "inner" — and it's called inside a
+        // `.pipe(...)` so there's no nesting to flatten. Require 2+ args.
+        if (ce.arguments.length < 2) return Effect.void
+
+        const outerTakesEffect = effectAcceptingCombinators.has(outerName)
+
         for (const arg of ce.arguments) {
           const innerName = getEffectMethodName(arg)
-          if (innerName !== undefined && pipelineCombinators.has(innerName)) {
+          if (innerName === undefined) continue
+
+          // Call tower: outer AND inner both pipeline combinators
+          // (e.g. Effect.map(x, Effect.flatMap(y, f))).
+          // Producer arg: outer accepts an effect and inner is an effect
+          // producer (e.g. Effect.andThen(x, Effect.sync(...))).
+          const isCallTower = pipelineCombinators.has(innerName)
+          const isProducerArg = outerTakesEffect && effectProducers.has(innerName)
+          if (isCallTower || isProducerArg) {
             return ctx.report(
               Diagnostic.make({
                 node,
