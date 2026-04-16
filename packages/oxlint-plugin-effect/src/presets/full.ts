@@ -1,5 +1,8 @@
 /**
  * Full preset — all rules enabled.
+ *
+ * High-frequency agent mistakes promoted to "error" based on analysis
+ * of 98 sessions across 6 projects (3.6GB of transcripts).
  */
 export const full = {
   // API bans
@@ -12,42 +15,42 @@ export const full = {
   "effect/noRuntimeRunFork": "error",
   "effect/noRunInEffect": "error",
 
-  // Global bans
-  "effect/noGlobalFetch": "warn",
-  "effect/noGlobalConsole": "warn",
-  "effect/noGlobalDate": "warn",
-  "effect/noGlobalRandom": "warn",
-  "effect/noGlobalTimers": "warn",
-  "effect/noNewPromise": "warn",
-  "effect/noNewError": "warn",
-  "effect/noProcessEnv": "warn",
+  // Global bans — promoted from warn to error (265+ agent violations)
+  "effect/noGlobalFetch": "error",
+  "effect/noGlobalConsole": "error",
+  "effect/noGlobalDate": "error",
+  "effect/noGlobalRandom": "error",
+  "effect/noGlobalTimers": "error",
+  "effect/noNewPromise": "error",
+  "effect/noNewError": "error",
+  "effect/noProcessEnv": "error",
 
   // Import bans
-  "effect/noNodeBuiltinImport": "warn",
+  "effect/noNodeBuiltinImport": "error",
   "effect/noDynamicImport": "error",
 
   // Statement bans
   "effect/noThrowStatement": "error",
-  "effect/noTryCatch": "warn",
+  "effect/noTryCatch": "error",
   "effect/noReturnNull": "warn",
   "effect/noSwitchStatement": "warn",
   "effect/noIfStatement": "off",
   "effect/noTernary": "off",
 
-  // JSON
-  "effect/noJsonParse": "warn",
+  // JSON — promoted (116 agent violations)
+  "effect/noJsonParse": "error",
 
   // AST pattern rules
   "effect/noNestedPipe": "error",
   "effect/noNestedEffectGen": "error",
-  "effect/noUnnecessaryEffectGen": "warn",
-  "effect/noEffectSucceedVoid": "warn",
-  "effect/noEffectMapVoid": "warn",
+  "effect/noUnnecessaryEffectGen": "error",
+  "effect/noEffectSucceedVoid": "error",
+  "effect/noEffectMapVoid": "error",
   "effect/noUnnecessaryPipe": "warn",
-  "effect/noExtendsNativeError": "warn",
+  "effect/noExtendsNativeError": "error",
   "effect/noEffectFnGenerator": "warn",
-  "effect/noInstanceofSchema": "warn",
-  "effect/noAsyncFunction": "warn",
+  "effect/noInstanceofSchema": "error",
+  "effect/noAsyncFunction": "error",
   "effect/noFlatmapLadder": "error",
   "effect/noNestedEffectCall": "error",
   "effect/noIifeWrapper": "warn",
@@ -55,7 +58,7 @@ export const full = {
   "effect/noEffectOrElseLadder": "warn",
   "effect/noFromNullableCoalesce": "warn",
   "effect/noUnnecessaryArrowBlock": "warn",
-  "effect/noEffectGenAdapter": "warn",
+  "effect/noEffectGenAdapter": "error",
   "effect/noEffectSyncConsole": "error",
   "effect/noEffectTypeAlias": "warn",
   "effect/noEffectWrapperAlias": "warn",
@@ -68,26 +71,27 @@ export const full = {
   "effect/noEffectSyncWrapper": "off",
   "effect/noArrowLadder": "warn",
   "effect/noMatchEffectBranch": "warn",
-  "effect/noCatchAllToMapError": "warn",
-  "effect/noUnnecessaryPipeChain": "warn",
-  "effect/noMultipleEffectProvide": "warn",
+  "effect/noCatchAllToMapError": "error",
+  "effect/noUnnecessaryPipeChain": "error",
+  "effect/noMultipleEffectProvide": "error",
   "effect/noSchemaUnionOfLiterals": "warn",
   "effect/noSchemaStructWithTag": "warn",
   "effect/noRedundantSchemaTagIdentifier": "warn",
   "effect/noEffectMapFlatten": "warn",
-  "effect/noGlobalErrorInEffectFailure": "warn",
-  "effect/noGlobalErrorInEffectCatch": "warn",
+  "effect/noGlobalErrorInEffectFailure": "error",
+  "effect/noGlobalErrorInEffectCatch": "error",
+  "effect/noPositionalLogError": "error",
 
-  // Effect-context rules
+  // Effect-context rules — promoted from warn to error
   "effect/noThrowInEffectGen": "error",
-  "effect/noTryCatchInEffectGen": "warn",
-  "effect/noConsoleInEffect": "warn",
-  "effect/noFetchInEffect": "warn",
-  "effect/noDateInEffect": "warn",
-  "effect/noRandomInEffect": "warn",
-  "effect/noTimersInEffect": "warn",
-  "effect/noJsonInEffect": "warn",
-  "effect/noProcessEnvInEffect": "warn",
-  "effect/noPlatformGlobals": "warn",
-  "effect/noInlineRuntimeProvide": "warn",
+  "effect/noTryCatchInEffectGen": "error",
+  "effect/noConsoleInEffect": "error",
+  "effect/noFetchInEffect": "error",
+  "effect/noDateInEffect": "error",
+  "effect/noRandomInEffect": "error",
+  "effect/noTimersInEffect": "error",
+  "effect/noJsonInEffect": "error",
+  "effect/noProcessEnvInEffect": "error",
+  "effect/noPlatformGlobals": "error",
+  "effect/noInlineRuntimeProvide": "error",
 } as const

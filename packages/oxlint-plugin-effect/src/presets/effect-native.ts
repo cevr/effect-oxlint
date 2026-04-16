@@ -37,6 +37,9 @@ export const effectNative = {
   "effect/noGlobalErrorInEffectFailure": "error",
   "effect/noGlobalErrorInEffectCatch": "error",
 
+  // Logging hygiene
+  "effect/noPositionalLogError": "error",
+
   // Type hygiene
   "effect/noEffectTypeAlias": "error",
   "effect/noManualEffectChannels": "error",

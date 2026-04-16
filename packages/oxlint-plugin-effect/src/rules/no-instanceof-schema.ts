@@ -32,7 +32,7 @@ export const noInstanceofSchema = Rule.define({
             Diagnostic.make({
               node,
               message:
-                "Avoid instanceof. Use Schema.is(SchemaType) for Schema types, or _tag checks for tagged types.",
+                "Avoid instanceof. Add a static `is` field to your class: `static is = Schema.is(this)`, then use `MyClass.is(value)`. For tagged types, use `_tag` checks.",
             }),
           )
         }

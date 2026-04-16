@@ -80,6 +80,7 @@ export const strict = {
   "effect/noEffectMapFlatten": "error",
   "effect/noGlobalErrorInEffectFailure": "error",
   "effect/noGlobalErrorInEffectCatch": "error",
+  "effect/noPositionalLogError": "error",
 
   // Effect-context rules
   "effect/noThrowInEffectGen": "error",
