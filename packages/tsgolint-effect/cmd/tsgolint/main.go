@@ -27,7 +27,9 @@ import (
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_floating_effect"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_in_failure"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_any_unknown_error"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_class_self_mismatch"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_fn_implicit_any"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_fn_opportunity"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_generic_services"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_layer_merge_all_deps"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_lazy_promise"
@@ -265,6 +267,8 @@ var allRules = []rule.Rule{
 	effect_generic_services.GenericServicesRule,
 	effect_overridden_schema_ctor.OverriddenSchemaCtorRule,
 	effect_fn_implicit_any.FnImplicitAnyRule,
+	effect_class_self_mismatch.ClassSelfMismatchRule,
+	effect_fn_opportunity.FnOpportunityRule,
 }
 
 var allRulesByName = make(map[string]rule.Rule, len(allRules))

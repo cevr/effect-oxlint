@@ -1,0 +1,32 @@
+
+[TestFnOpportunity/invalid-0 - 1]
+Diagnostic 1: fnOpportunity (3:17 - 5:2)
+Message: Function returns an Effect. Consider using Effect.fn for automatic tracing.
+Help: Wrap this function with Effect.fn("name")(function*() { ... }) for built-in span tracing.
+   2 | import { Effect } from "effect"
+   3 | const getUser = (id: string) => Effect.gen(function*() {
+     |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   4 |   return id
+     | ~~~~~~~~~~~
+   5 | })
+     | ~~
+   6 |             
+---
+
+[TestFnOpportunity/invalid-1 - 1]
+Diagnostic 1: fnOpportunity (3:1 - 7:1)
+Message: Function returns an Effect. Consider using Effect.fn for automatic tracing.
+Help: Wrap this function with Effect.fn("name")(function*() { ... }) for built-in span tracing.
+   2 | import { Effect } from "effect"
+   3 | function getUser(id: string) {
+     | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   4 |   return Effect.gen(function*() {
+     | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   5 |     return id
+     | ~~~~~~~~~~~~~
+   6 |   })
+     | ~~~~
+   7 | }
+     | ~
+   8 |             
+---

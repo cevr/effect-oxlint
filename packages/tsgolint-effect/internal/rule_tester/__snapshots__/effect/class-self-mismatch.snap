@@ -1,0 +1,20 @@
+
+[TestClassSelfMismatch/invalid-0 - 1]
+Diagnostic 1: classSelfMismatch (3:41 - 3:49)
+Message: Self type `WrongName` does not match class name `MyService`.
+Help: Change the Self type parameter to `MyService`.
+   2 | import { Context, Effect } from "effect"
+   3 | class MyService extends Context.Service<WrongName>()("MyService", { succeed: { value: 1 } }) {}
+     |                                         ~~~~~~~~~
+   4 |             
+---
+
+[TestClassSelfMismatch/invalid-1 - 1]
+Diagnostic 1: classSelfMismatch (3:33 - 3:37)
+Message: Self type `Admin` does not match class name `User`.
+Help: Change the Self type parameter to `User`.
+   2 | import { Schema } from "effect"
+   3 | class User extends Schema.Class<Admin>("User")({ name: Schema.String }) {}
+     |                                 ~~~~~
+   4 |             
+---
