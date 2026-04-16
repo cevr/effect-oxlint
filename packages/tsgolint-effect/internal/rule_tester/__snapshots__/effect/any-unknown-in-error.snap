@@ -1,0 +1,20 @@
+
+[TestAnyUnknownError/invalid-0 - 1]
+Diagnostic 1: anyUnknownInError (3:15 - 3:49)
+Message: `any` found in the error channel. Use a specific tagged error type instead.
+Help: Replace `any` with a concrete error type like Schema.TaggedErrorClass or Data.TaggedError.
+   2 | import { Effect } from "effect"
+   3 | declare const program: Effect.Effect<number, any>
+     |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   4 |             
+---
+
+[TestAnyUnknownError/invalid-1 - 1]
+Diagnostic 1: anyUnknownInError (3:15 - 3:53)
+Message: `unknown` found in the error channel. Use a specific tagged error type instead.
+Help: Replace `unknown` with a concrete error type like Schema.TaggedErrorClass or Data.TaggedError.
+   2 | import { Effect } from "effect"
+   3 | declare const program: Effect.Effect<number, unknown>
+     |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   4 |             
+---

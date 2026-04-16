@@ -186,3 +186,77 @@ func TypeToString(ch *checker.Checker, t *checker.Type) string {
 	}
 	return ch.TypeToString(t)
 }
+
+// IsYieldableErrorType checks if a type extends YieldableError from the "effect" package.
+// YieldableError types can be yielded directly without wrapping in Effect.fail.
+func IsYieldableErrorType(program *compiler.Program, ch *checker.Checker, t *checker.Type) bool {
+	if t == nil {
+		return false
+	}
+	flags := checker.Type_flags(t)
+	if flags&checker.TypeFlagsNever != 0 || flags&checker.TypeFlagsAny != 0 {
+		return false
+	}
+	// Check if the type has a [Symbol.iterator] or [Effect.EffectTypeId] marker
+	// that makes it yieldable. In practice, TaggedError/TaggedErrorClass types
+	// extend YieldableError which implements Effect<never, Self>.
+	// We check by looking for the Effect type's symbol marker on the type itself.
+	sym := checker.Type_symbol(t)
+	if sym == nil {
+		return false
+	}
+	// Walk the base types to find if any is from the effect package and is yieldable
+	baseTypes := checker.Checker_getBaseTypes(ch, t)
+	for _, base := range baseTypes {
+		baseSym := checker.Type_symbol(base)
+		if baseSym == nil {
+			continue
+		}
+		if IsEffectPackageSymbol(program, baseSym) {
+			// If a base type is from Effect package, this is likely a TaggedError/YieldableError
+			return true
+		}
+	}
+	return false
+}
+
+// IsScopeType checks if a type is Scope.Scope from the "effect" package.
+func IsScopeType(program *compiler.Program, ch *checker.Checker, t *checker.Type) bool {
+	if t == nil {
+		return false
+	}
+	// Check symbol name — Scope type is named "Scope" in the effect package
+	sym := checker.Type_symbol(t)
+	if sym != nil && sym.Name == "Scope" && IsEffectPackageSymbol(program, sym) {
+		return true
+	}
+	// v4: check for "~effect/Scope" property marker
+	scopeProp := checker.Checker_getPropertyOfType(ch, t, "~effect/Scope")
+	if scopeProp != nil {
+		return true
+	}
+	// Check if any property name contains "ScopeTypeId" (v3 marker)
+	props := checker.Checker_getPropertiesOfType(ch, t)
+	for _, prop := range props {
+		if strings.Contains(prop.Name, "ScopeTypeId") || strings.Contains(prop.Name, "Scope") {
+			return true
+		}
+	}
+	return false
+}
+
+// IsAnyType checks if a type is the `any` type.
+func IsAnyType(t *checker.Type) bool {
+	if t == nil {
+		return false
+	}
+	return checker.Type_flags(t)&checker.TypeFlagsAny != 0
+}
+
+// IsUnknownType checks if a type is the `unknown` type.
+func IsUnknownType(t *checker.Type) bool {
+	if t == nil {
+		return false
+	}
+	return checker.Type_flags(t)&checker.TypeFlagsUnknown != 0
+}

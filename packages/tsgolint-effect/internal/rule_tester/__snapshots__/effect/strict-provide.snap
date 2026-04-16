@@ -1,0 +1,10 @@
+
+[TestStrictProvide/invalid-0 - 1]
+Diagnostic 1: strictProvide (6:17 - 6:52)
+Message: Effect.provide(Layer) should only be used at application entry points.
+Help: Move layer provision to the entry point (e.g. main program composition) instead of inlining it here.
+   5 | const myLayer = Layer.succeed(MyService, { value: 1 })
+   6 | const program = Effect.provide(Effect.void, myLayer)
+     |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   7 |             
+---
