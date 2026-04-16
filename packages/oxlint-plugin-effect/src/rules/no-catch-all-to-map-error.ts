@@ -4,8 +4,7 @@
  * Source: language-service/catchAllToMapError
  */
 import type { ESTree } from "@oxlint/plugins"
-import { AST, Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 
@@ -65,7 +64,8 @@ export const noCatchAllToMapError = Rule.define({
         // The callback is the last argument
         const args = call.arguments
         if (args.length === 0) return Effect.void
-        const callback = args[args.length - 1]!
+        const callback = args[args.length - 1]
+        if (callback === undefined) return Effect.void
         if (
           callback.type !== "ArrowFunctionExpression" &&
           callback.type !== "FunctionExpression"

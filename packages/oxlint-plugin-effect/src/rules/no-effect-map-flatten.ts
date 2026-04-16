@@ -7,8 +7,7 @@
  * Source: language-service/effectMapFlatten
  */
 import type { ESTree } from "@oxlint/plugins"
-import { AST, Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 
@@ -24,7 +23,7 @@ const isEffectFlatMap = (node: ESTree.Node): boolean => {
 
 const hasMapFlatMapSequence = (args: ReadonlyArray<ESTree.Node>): boolean => {
   for (let i = 0; i < args.length - 1; i++) {
-    if (isEffectMap(args[i]!) && isEffectFlatMap(args[i + 1]!)) return true
+    const a = args[i]; const b = args[i + 1]; if (a && b && isEffectMap(a) && isEffectFlatMap(b)) return true
   }
   return false
 }

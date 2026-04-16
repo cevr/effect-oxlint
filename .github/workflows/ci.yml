@@ -39,7 +39,7 @@ jobs:
             goos: darwin
             goarch: arm64
           - os: darwin-x64
-            runner: macos-13
+            runner: macos-latest
             goos: darwin
             goarch: amd64
           - os: linux-arm64
@@ -52,8 +52,6 @@ jobs:
             goarch: amd64
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - uses: actions/setup-go@v5
         with:
@@ -62,6 +60,7 @@ jobs:
       - name: Init tsgolint
         working-directory: packages/tsgolint-effect
         run: |
+          git clone https://github.com/nicolo-ribaudo/typescript-go.git typescript-go
           cd typescript-go && for patch in ../patches/*.patch; do git am --3way --no-gpg-sign "$patch"; done && cd ..
           mkdir -p internal/collections && find ./typescript-go/internal/collections -type f ! -name '*_test.go' -exec cp {} internal/collections/ \;
 

@@ -6,10 +6,8 @@
  * Source: biome-effect-linting-rules/no-flatmap-ladder
  */
 import type { ESTree } from "@oxlint/plugins"
-import { AST, Diagnostic, Rule, Visitor } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
-import * as Ref from "effect/Ref"
 
 const isEffectFlatMap = (node: ESTree.CallExpression): boolean =>
   AST.isCallOf(node, "Effect", "flatMap")

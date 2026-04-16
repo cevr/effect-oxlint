@@ -5,8 +5,7 @@
  * Source: language-service/schemaStructWithTag
  */
 import type { ESTree } from "@oxlint/plugins"
-import { AST, Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 
@@ -32,7 +31,8 @@ export const noSchemaStructWithTag = Rule.define({
 
         const args = call.arguments
         if (args.length !== 1) return Effect.void
-        const arg = args[0]!
+        const arg = args[0]
+        if (arg === undefined) return Effect.void
         if (arg.type !== "ObjectExpression") return Effect.void
 
         const props = (arg as unknown as Record<string, unknown>)["properties"]

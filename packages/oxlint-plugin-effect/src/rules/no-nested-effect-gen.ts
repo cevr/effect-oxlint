@@ -6,8 +6,7 @@
  * Sources: biome-effect-linting-rules/no-nested-effect-gen, language-service/nestedEffectGenYield
  */
 import type { ESTree } from "@oxlint/plugins"
-import { AST, Diagnostic, Rule, Visitor } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { AST, Diagnostic, Rule, Visitor, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 import * as Ref from "effect/Ref"
 

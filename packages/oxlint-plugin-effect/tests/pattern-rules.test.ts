@@ -14,8 +14,6 @@ import {
   noInstanceofSchema,
   noNestedPipe,
   noNestedEffectCall,
-  noFlatmapLadder,
-  noEffectOrElseLadder,
   noPositionalLogError,
 } from "../src/rules/index.js"
 

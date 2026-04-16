@@ -7,8 +7,7 @@
  *
  * Note: Very aggressive — should probably be off by default or in a strict preset only.
  */
-import { Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 
 export const noStringSentinelConst = Rule.define({

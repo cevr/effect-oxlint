@@ -5,11 +5,8 @@
  *
  * Source: biome-effect-linting-rules/no-effect-wrapper-alias
  */
-import type { ESTree } from "@oxlint/plugins"
-import { AST, Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
-import * as Option from "effect/Option"
 
 const isEffectFnCall = (node: unknown): boolean => {
   if (node == null || typeof node !== "object") return false

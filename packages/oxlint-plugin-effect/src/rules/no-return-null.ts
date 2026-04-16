@@ -5,11 +5,8 @@
  *
  * Source: biome-effect-linting-rules/no-return-null
  */
-import { AST, Diagnostic, Rule, Visitor } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
-import * as Option from "effect/Option"
-import { pipe } from "effect/Function"
 
 export const noReturnNull = Rule.define({
   name: "no-return-null",

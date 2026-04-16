@@ -6,10 +6,8 @@
  * Sources: biome-effect-linting-rules/no-nested-effect-call, no-effect-call-in-effect-arg, no-call-tower, no-effect-ladder
  */
 import type { ESTree } from "@oxlint/plugins"
-import { AST, Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
-import * as Option from "effect/Option"
 
 const isEffectCall = (node: unknown): boolean => {
   if (node == null || typeof node !== "object") return false

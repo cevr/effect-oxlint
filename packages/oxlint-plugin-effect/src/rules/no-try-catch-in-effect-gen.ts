@@ -5,8 +5,7 @@
  *
  * Source: language-service/tryCatchInEffectGen
  */
-import { Diagnostic, Rule, Visitor } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { Diagnostic, Rule, Visitor, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 import * as Ref from "effect/Ref"
 

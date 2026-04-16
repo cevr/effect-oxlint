@@ -7,9 +7,7 @@
  *
  * Note: Very opinionated — recommended for strict functional presets only.
  */
-import { Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
-import * as Effect from "effect/Effect"
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 
 export const noTernary = Rule.define({
   name: "no-ternary",

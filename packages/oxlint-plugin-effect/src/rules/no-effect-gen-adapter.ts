@@ -6,8 +6,7 @@
  * Source: language-service/effectGenUsesAdapter
  */
 import type { ESTree } from "@oxlint/plugins"
-import { AST, Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 
 export const noEffectGenAdapter = Rule.define({

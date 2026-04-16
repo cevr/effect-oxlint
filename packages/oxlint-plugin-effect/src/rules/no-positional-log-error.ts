@@ -8,8 +8,7 @@
  * Source: agent session analysis — 57 occurrences across 6 projects
  */
 import type { ESTree } from "@oxlint/plugins"
-import { AST, Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 
@@ -50,7 +49,8 @@ export const noPositionalLogError = Rule.define({
 
         // The first arg should be a string message. If second arg exists,
         // it's likely an error being passed positionally.
-        const secondArg = args[1]!
+        const secondArg = args[1]
+        if (secondArg === undefined) return Effect.void
 
         // Allow Cause.fail/Cause.die as second arg (that's the proper API)
         if (secondArg.type === "CallExpression") {

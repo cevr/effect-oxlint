@@ -6,8 +6,7 @@
  * Source: language-service/redundantSchemaTagIdentifier
  */
 import type { ESTree } from "@oxlint/plugins"
-import { AST, Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 
@@ -34,7 +33,8 @@ export const noRedundantSchemaTagIdentifier = Rule.define({
         // TaggedStruct("tag", { fields })
         const args = call.arguments
         if (args.length < 2) return Effect.void
-        const fieldsArg = args[1]!
+        const fieldsArg = args[1]
+        if (fieldsArg === undefined) return Effect.void
         if (fieldsArg.type !== "ObjectExpression") return Effect.void
 
         const props = (fieldsArg as unknown as Record<string, unknown>)["properties"]

@@ -4,8 +4,7 @@
  * Source: language-service/unnecessaryPipeChain
  */
 import type { ESTree } from "@oxlint/plugins"
-import { Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 
 const isMethodPipe = (node: ESTree.Node): boolean => {

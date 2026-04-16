@@ -5,8 +5,7 @@
  *
  * Source: biome-effect-linting-rules/no-arrow-ladder
  */
-import { Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 
 const isIife = (node: unknown): boolean => {

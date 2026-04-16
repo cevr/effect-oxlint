@@ -8,8 +8,7 @@
  * Note: Without type information, we detect common Effect Schema class names
  * used in `instanceof` checks. This is a best-effort heuristic.
  */
-import { Diagnostic, Rule } from "../vendor/effect-oxlint/index.js"
-import { RuleContext } from "../vendor/effect-oxlint/index.js"
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Effect from "effect/Effect"
 
 export const noInstanceofSchema = Rule.define({
