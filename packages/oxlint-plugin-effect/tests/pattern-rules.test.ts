@@ -16,6 +16,7 @@ import {
   noNestedEffectCall,
   noFlatmapLadder,
   noEffectOrElseLadder,
+  noPositionalLogError,
 } from "../src/rules/index.js"
 
 describe("noReturnNull", () => {
@@ -253,6 +254,44 @@ describe("noNestedEffectCall", () => {
   test("ignores flat Effect.map(x)", () => {
     const node = Testing.callOfMember("Effect", "map", [Testing.id("x")])
     const result = Testing.runRule(noNestedEffectCall, "CallExpression", node)
+    Testing.expectNoDiagnostics(result)
+  })
+})
+
+describe("noPositionalLogError", () => {
+  test("reports Effect.logWarning with two args", () => {
+    const node = Testing.callOfMember("Effect", "logWarning", [
+      Testing.strLiteral("something failed"),
+      Testing.id("error"),
+    ])
+    const result = Testing.runRule(noPositionalLogError, "CallExpression", node)
+    expect(result.length).toBe(1)
+  })
+
+  test("reports Effect.logError with two args", () => {
+    const node = Testing.callOfMember("Effect", "logError", [
+      Testing.strLiteral("fatal"),
+      Testing.id("err"),
+    ])
+    const result = Testing.runRule(noPositionalLogError, "CallExpression", node)
+    expect(result.length).toBe(1)
+  })
+
+  test("ignores Effect.log with single arg", () => {
+    const node = Testing.callOfMember("Effect", "log", [
+      Testing.strLiteral("hello"),
+    ])
+    const result = Testing.runRule(noPositionalLogError, "CallExpression", node)
+    Testing.expectNoDiagnostics(result)
+  })
+
+  test("allows Cause as second arg", () => {
+    const causeArg = Testing.callOfMember("Cause", "fail", [Testing.id("error")])
+    const node = Testing.callOfMember("Effect", "logWarning", [
+      Testing.strLiteral("something failed"),
+      causeArg,
+    ])
+    const result = Testing.runRule(noPositionalLogError, "CallExpression", node)
     Testing.expectNoDiagnostics(result)
   })
 })
