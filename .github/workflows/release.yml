@@ -41,10 +41,11 @@ jobs:
       - name: Init tsgolint
         working-directory: packages/tsgolint-effect
         run: |
+          TSGO_COMMIT=$(cat .typescript-go-commit | tr -d '[:space:]')
           git init typescript-go
           cd typescript-go
           git remote add origin https://github.com/microsoft/typescript-go.git
-          git fetch --depth 1 origin cc9b3e67b8d5d2189be3e3bd9bbf945dfe99fe98
+          git fetch --depth 1 origin "$TSGO_COMMIT"
           git checkout FETCH_HEAD
           for patch in ../patches/*.patch; do git apply "$patch"; done
 

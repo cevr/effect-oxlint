@@ -2,7 +2,8 @@
   "name": "tsgolint",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "fmt": "dprint fmt"
+    "fmt": "dprint fmt",
+    "update:tsgo": "bun run scripts/update-typescript-go.ts"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
