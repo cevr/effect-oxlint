@@ -49,6 +49,7 @@ export const noCatchAllToMapError = Rule.define({
     type: "suggestion",
     description:
       "Use Effect.mapError instead of Effect.catchAll(e => Effect.fail(f(e))).",
+    effectVersion: "v3",
   }),
   create: function* () {
     const ctx = yield* RuleContext

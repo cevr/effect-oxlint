@@ -7,6 +7,7 @@ import {
   noNewPromise,
   noNewError,
   noReturnNullish,
+  noRunInEffectGen,
 } from "../src/rules/index.js"
 
 // Helper: simulate entering and exiting Effect.gen context
@@ -191,6 +192,70 @@ describe("noGlobals", () => {
     const result = Testing.runRuleMulti(noGlobals, [
       ["CallExpression", effectGenNode],
       ["MemberExpression", Testing.memberExpr("Effect", "succeed")],
+      ["CallExpression:exit", effectGenNode],
+    ])
+    Testing.expectNoDiagnostics(result)
+  })
+})
+
+describe("noRunInEffectGen", () => {
+  test("reports Effect.runPromise inside Effect.gen", () => {
+    const result = Testing.runRuleMulti(noRunInEffectGen, [
+      ["CallExpression", effectGenNode],
+      ["CallExpression", Testing.callOfMember("Effect", "runPromise", [Testing.id("x")])],
+      ["CallExpression:exit", effectGenNode],
+    ])
+    expect(result.length).toBe(1)
+  })
+
+  test("reports Effect.runFork inside Effect.fn", () => {
+    const effectFnNode = Testing.callOfMember("Effect", "fn", [])
+    const result = Testing.runRuleMulti(noRunInEffectGen, [
+      ["CallExpression", effectFnNode],
+      ["CallExpression", Testing.callOfMember("Effect", "runFork", [Testing.id("x")])],
+      ["CallExpression:exit", effectFnNode],
+    ])
+    expect(result.length).toBe(1)
+  })
+
+  test("reports Runtime.runFork inside Effect.gen", () => {
+    const result = Testing.runRuleMulti(noRunInEffectGen, [
+      ["CallExpression", effectGenNode],
+      ["CallExpression", Testing.callOfMember("Runtime", "runFork", [Testing.id("x")])],
+      ["CallExpression:exit", effectGenNode],
+    ])
+    expect(result.length).toBe(1)
+  })
+
+  test("ignores Effect.runForkWith inside Effect.gen (legit v4 callback boundary)", () => {
+    const result = Testing.runRuleMulti(noRunInEffectGen, [
+      ["CallExpression", effectGenNode],
+      ["CallExpression", Testing.callOfMember("Effect", "runForkWith", [Testing.id("services")])],
+      ["CallExpression:exit", effectGenNode],
+    ])
+    Testing.expectNoDiagnostics(result)
+  })
+
+  test("ignores managedRuntime.runFork on identifier callee", () => {
+    const result = Testing.runRuleMulti(noRunInEffectGen, [
+      ["CallExpression", effectGenNode],
+      ["CallExpression", Testing.callOfMember("managedRuntime", "runFork", [Testing.id("x")])],
+      ["CallExpression:exit", effectGenNode],
+    ])
+    Testing.expectNoDiagnostics(result)
+  })
+
+  test("ignores Effect.runPromise outside Effect.gen", () => {
+    const result = Testing.runRuleMulti(noRunInEffectGen, [
+      ["CallExpression", Testing.callOfMember("Effect", "runPromise", [Testing.id("x")])],
+    ])
+    Testing.expectNoDiagnostics(result)
+  })
+
+  test("ignores yield* child effect inside Effect.gen", () => {
+    const result = Testing.runRuleMulti(noRunInEffectGen, [
+      ["CallExpression", effectGenNode],
+      ["CallExpression", Testing.callOfMember("Effect", "succeed", [Testing.id("x")])],
       ["CallExpression:exit", effectGenNode],
     ])
     Testing.expectNoDiagnostics(result)

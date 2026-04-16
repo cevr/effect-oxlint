@@ -10,5 +10,5 @@ import { Rule } from "../vendor/effect-oxlint/index.js"
 export const noRuntimeRunFork = Rule.banMember("Runtime", "runFork", {
   message:
     "Avoid Runtime.runFork. Use forkScoped, Stream, or runtime-provided layers.",
-  meta: { type: "problem" },
+  meta: { type: "problem", effectVersion: "v3" },
 })

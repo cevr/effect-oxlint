@@ -8,7 +8,7 @@ export const core = {
   "effect/noEffectNever": "error",
   "effect/noEffectAs": "error",
   "effect/noEffectBind": "error",
-  "effect/noRunInEffect": "error",
+  "effect/noRunInEffectGen": "error",
 
   // AST pattern rules
   "effect/noNestedPipe": "error",

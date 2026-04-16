@@ -2,6 +2,7 @@
 package effect
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/microsoft/typescript-go/shim/ast"
@@ -9,7 +10,18 @@ import (
 	"github.com/microsoft/typescript-go/shim/compiler"
 )
 
-// IsEffectPackageSymbol checks if a symbol originates from the "effect" package.
+// effectPackagePathRe matches paths into the "effect" or "effect-v3" package across
+// package managers: npm/yarn-classic node_modules, pnpm (.pnpm/effect@…), bun
+// isolated (.bun/effect@…), yarn berry cache (.yarn/cache/effect-npm-…).
+// Path separators are normalized to "/" by typescript-go before this runs.
+// The trailing boundary is "/" (directory), "@" (pnpm/bun versioned dir), or
+// "-npm-" (yarn berry cache archive name).
+var effectPackagePathRe = regexp.MustCompile(
+	`(?:^|/)(?:node_modules|\.pnpm|\.bun|\.yarn/cache)/(?:\.pnpm/|\.bun/)?effect(?:-v3)?(?:/|@|-npm-)`,
+)
+
+// IsEffectPackageSymbol checks if a symbol originates from the "effect" (v4) or
+// "effect-v3" (v3 alias) package.
 func IsEffectPackageSymbol(program *compiler.Program, symbol *ast.Symbol) bool {
 	if symbol == nil || len(symbol.Declarations) == 0 {
 		return false
@@ -19,9 +31,37 @@ func IsEffectPackageSymbol(program *compiler.Program, symbol *ast.Symbol) bool {
 	if sourceFile == nil {
 		return false
 	}
-	path := string(sourceFile.FileName())
-	return strings.Contains(path, "node_modules/effect/") ||
-		strings.Contains(path, "node_modules/.pnpm/effect@")
+	return effectPackagePathRe.MatchString(string(sourceFile.FileName()))
+}
+
+// hasEffectBrand checks whether a type carries an Effect brand property.
+//
+// v4 uses string-keyed brands like "~effect/Effect" that we can look up directly.
+// v3 uses unique-symbol brands like `EffectTypeId`; those aren't string-keyed,
+// so we scan property names ending in the v3 identifier and verify the property
+// was declared inside the effect package.
+//
+// brandV4 — the v4 string key (e.g. "~effect/Effect").
+// brandV3 — the v3 identifier suffix (e.g. "EffectTypeId"), empty to skip v3.
+func hasEffectBrand(program *compiler.Program, ch *checker.Checker, t *checker.Type, brandV4, brandV3 string) bool {
+	if t == nil {
+		return false
+	}
+	if brandV4 != "" && checker.Checker_getPropertyOfType(ch, t, brandV4) != nil {
+		return true
+	}
+	if brandV3 == "" {
+		return false
+	}
+	for _, prop := range checker.Checker_getPropertiesOfType(ch, t) {
+		if !strings.HasSuffix(prop.Name, brandV3) {
+			continue
+		}
+		if IsEffectPackageSymbol(program, prop) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsEffectType checks if a type is Effect.Effect<A, E, R> from the "effect" package.
@@ -29,11 +69,11 @@ func IsEffectType(program *compiler.Program, ch *checker.Checker, t *checker.Typ
 	if t == nil {
 		return false
 	}
-	sym := checker.Type_symbol(t)
-	if sym == nil {
-		return false
+	if hasEffectBrand(program, ch, t, "~effect/Effect", "EffectTypeId") {
+		return true
 	}
-	if sym.Name != "Effect" {
+	sym := checker.Type_symbol(t)
+	if sym == nil || sym.Name != "Effect" {
 		return false
 	}
 	return IsEffectPackageSymbol(program, sym)
@@ -44,11 +84,11 @@ func IsLayerType(program *compiler.Program, ch *checker.Checker, t *checker.Type
 	if t == nil {
 		return false
 	}
-	sym := checker.Type_symbol(t)
-	if sym == nil {
-		return false
+	if hasEffectBrand(program, ch, t, "~effect/Layer", "LayerTypeId") {
+		return true
 	}
-	if sym.Name != "Layer" {
+	sym := checker.Type_symbol(t)
+	if sym == nil || sym.Name != "Layer" {
 		return false
 	}
 	return IsEffectPackageSymbol(program, sym)
@@ -59,11 +99,11 @@ func IsStreamType(program *compiler.Program, ch *checker.Checker, t *checker.Typ
 	if t == nil {
 		return false
 	}
-	sym := checker.Type_symbol(t)
-	if sym == nil {
-		return false
+	if hasEffectBrand(program, ch, t, "~effect/Stream", "StreamTypeId") {
+		return true
 	}
-	if sym.Name != "Stream" {
+	sym := checker.Type_symbol(t)
+	if sym == nil || sym.Name != "Stream" {
 		return false
 	}
 	return IsEffectPackageSymbol(program, sym)
@@ -225,22 +265,12 @@ func IsScopeType(program *compiler.Program, ch *checker.Checker, t *checker.Type
 	if t == nil {
 		return false
 	}
-	// Check symbol name — Scope type is named "Scope" in the effect package
+	if hasEffectBrand(program, ch, t, "~effect/Scope", "ScopeTypeId") {
+		return true
+	}
 	sym := checker.Type_symbol(t)
 	if sym != nil && sym.Name == "Scope" && IsEffectPackageSymbol(program, sym) {
 		return true
-	}
-	// v4: check for "~effect/Scope" property marker
-	scopeProp := checker.Checker_getPropertyOfType(ch, t, "~effect/Scope")
-	if scopeProp != nil {
-		return true
-	}
-	// Check if any property name contains "ScopeTypeId" (v3 marker)
-	props := checker.Checker_getPropertiesOfType(ch, t)
-	for _, prop := range props {
-		if strings.Contains(prop.Name, "ScopeTypeId") || strings.Contains(prop.Name, "Scope") {
-			return true
-		}
 	}
 	return false
 }

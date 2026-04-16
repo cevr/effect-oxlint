@@ -11,7 +11,7 @@ export const strict = {
   "effect/noEffectBind": "error",
   "effect/noOptionAs": "error",
   "effect/noRuntimeRunFork": "error",
-  "effect/noRunInEffect": "error",
+  "effect/noRunInEffectGen": "error",
 
   // Style / functional
   "effect/noReturnNull": "error",

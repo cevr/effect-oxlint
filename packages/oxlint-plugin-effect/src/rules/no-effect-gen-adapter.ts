@@ -14,6 +14,7 @@ export const noEffectGenAdapter = Rule.define({
   meta: Rule.meta({
     type: "suggestion",
     description: "Deprecated adapter parameter in Effect.gen. Use `yield*` directly.",
+    effectVersion: "v3",
   }),
   create: function* () {
     const ctx = yield* RuleContext

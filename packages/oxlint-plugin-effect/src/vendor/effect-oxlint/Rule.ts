@@ -131,6 +131,16 @@ export const define = <Options = undefined>(
 // ---------------------------------------------------------------------------
 
 /**
+ * Which Effect version a rule applies to.
+ *
+ * Stored on `meta.docs.effectVersion` so preset authors can filter rules
+ * per project. Default `both`, meaning the rule is version-agnostic.
+ *
+ * @since 0.2.0
+ */
+export type EffectVersion = 'v3' | 'v4' | 'both';
+
+/**
  * Build `RuleMeta` with sensible defaults.
  *
  * @since 0.1.0
@@ -142,6 +152,7 @@ export const meta = (opts: {
 	readonly hasSuggestions?: boolean | undefined;
 	readonly messages?: Record<string, string> | undefined;
 	readonly docs?: RuleDocs | undefined;
+	readonly effectVersion?: EffectVersion | undefined;
 }): RuleMeta => ({
 	type: opts.type,
 	...(opts.fixable !== undefined ? { fixable: opts.fixable } : {}),
@@ -151,6 +162,7 @@ export const meta = (opts: {
 	...(opts.messages !== undefined ? { messages: opts.messages } : {}),
 	docs: {
 		description: opts.description,
+		effectVersion: opts.effectVersion ?? 'both',
 		...opts.docs
 	}
 });
@@ -172,7 +184,7 @@ export const banMember = (
 	opts: {
 		readonly message: string;
 		readonly meta?:
-			| { readonly type?: 'problem' | 'suggestion' }
+			| { readonly type?: 'problem' | 'suggestion'; readonly effectVersion?: EffectVersion }
 			| undefined;
 	}
 ): CreateRule =>
@@ -180,7 +192,8 @@ export const banMember = (
 		name: `ban-${obj}-${P.isString(prop) ? prop : Arr.join(prop, '-')}`,
 		meta: meta({
 			type: opts.meta?.type ?? 'suggestion',
-			description: opts.message
+			description: opts.message,
+			effectVersion: opts.meta?.effectVersion
 		}),
 		create: function* () {
 			const ctx = yield* RuleContext;
@@ -216,7 +229,7 @@ export const banImport = (
 	opts: {
 		readonly message: string;
 		readonly meta?:
-			| { readonly type?: 'problem' | 'suggestion' }
+			| { readonly type?: 'problem' | 'suggestion'; readonly effectVersion?: EffectVersion }
 			| undefined;
 	}
 ): CreateRule =>
@@ -224,7 +237,8 @@ export const banImport = (
 		name: 'ban-import',
 		meta: meta({
 			type: opts.meta?.type ?? 'suggestion',
-			description: opts.message
+			description: opts.message,
+			effectVersion: opts.meta?.effectVersion
 		}),
 		create: function* () {
 			const ctx = yield* RuleContext;
@@ -270,7 +284,7 @@ export const banCallOf = (
 	opts: {
 		readonly message: string;
 		readonly meta?:
-			| { readonly type?: 'problem' | 'suggestion' }
+			| { readonly type?: 'problem' | 'suggestion'; readonly effectVersion?: EffectVersion }
 			| undefined;
 	}
 ): CreateRule => {
@@ -279,7 +293,8 @@ export const banCallOf = (
 		name: `ban-call-${Arr.join(names, '-')}`,
 		meta: meta({
 			type: opts.meta?.type ?? 'suggestion',
-			description: opts.message
+			description: opts.message,
+			effectVersion: opts.meta?.effectVersion
 		}),
 		create: function* () {
 			const ctx = yield* RuleContext;
@@ -327,7 +342,7 @@ export const banNewExpr = (
 	opts: {
 		readonly message: string;
 		readonly meta?:
-			| { readonly type?: 'problem' | 'suggestion' }
+			| { readonly type?: 'problem' | 'suggestion'; readonly effectVersion?: EffectVersion }
 			| undefined;
 	}
 ): CreateRule => {
@@ -336,7 +351,8 @@ export const banNewExpr = (
 		name: `ban-new-${Arr.join(names, '-')}`,
 		meta: meta({
 			type: opts.meta?.type ?? 'suggestion',
-			description: opts.message
+			description: opts.message,
+			effectVersion: opts.meta?.effectVersion
 		}),
 		create: function* () {
 			const ctx = yield* RuleContext;
@@ -372,7 +388,7 @@ export const banStatement = (
 	opts: {
 		readonly message: string;
 		readonly meta?:
-			| { readonly type?: 'problem' | 'suggestion' }
+			| { readonly type?: 'problem' | 'suggestion'; readonly effectVersion?: EffectVersion }
 			| undefined;
 	}
 ): CreateRule =>
@@ -380,7 +396,8 @@ export const banStatement = (
 		name: `ban-${nodeType}`,
 		meta: meta({
 			type: opts.meta?.type ?? 'suggestion',
-			description: opts.message
+			description: opts.message,
+			effectVersion: opts.meta?.effectVersion
 		}),
 		create: function* () {
 			const ctx = yield* RuleContext;
@@ -427,7 +444,9 @@ export type BanSpec =
  */
 export const banMultiple = (config: {
 	readonly name: string;
-	readonly meta?: { readonly type?: 'problem' | 'suggestion' } | undefined;
+	readonly meta?:
+		| { readonly type?: 'problem' | 'suggestion'; readonly effectVersion?: EffectVersion }
+		| undefined;
 	readonly specs: ReadonlyArray<BanSpec>;
 }): CreateRule => {
 	const description = config.specs.map((s) => s.message).join(' ');
@@ -435,7 +454,8 @@ export const banMultiple = (config: {
 		name: config.name,
 		meta: meta({
 			type: config.meta?.type ?? 'suggestion',
-			description
+			description,
+			effectVersion: config.meta?.effectVersion
 		}),
 		create: function* () {
 			const ctx = yield* RuleContext;

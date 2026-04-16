@@ -31,9 +31,22 @@ func ListenerOnNotAllowPattern(kind ast.Kind) ast.Kind {
 
 type RuleListeners map[ast.Kind](func(node *ast.Node))
 
+// EffectVersion identifies which Effect versions a rule applies to.
+// Empty string is treated as "both" for backwards compatibility.
+type EffectVersion string
+
+const (
+	EffectVersionBoth EffectVersion = "both"
+	EffectVersionV3   EffectVersion = "v3"
+	EffectVersionV4   EffectVersion = "v4"
+)
+
 type Rule struct {
 	Name string
 	Run  func(ctx RuleContext, options any) RuleListeners
+	// EffectVersion indicates whether the rule applies to v3, v4, or both.
+	// Empty defaults to EffectVersionBoth — version-agnostic.
+	EffectVersion EffectVersion
 }
 
 type RuleMessage struct {

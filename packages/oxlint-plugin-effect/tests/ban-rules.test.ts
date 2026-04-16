@@ -8,7 +8,6 @@ import {
   noEffectBind,
   noOptionAs,
   noRuntimeRunFork,
-  noRunInEffect,
 } from "../src/rules/index.js"
 
 // --- API ban rules ---
@@ -67,19 +66,3 @@ describe("noRuntimeRunFork", () => {
   })
 })
 
-describe("noRunInEffect", () => {
-  test("reports Effect.runSync", () => {
-    const result = Testing.runRule(noRunInEffect, "MemberExpression", Testing.memberExpr("Effect", "runSync"))
-    expect(result.length).toBe(1)
-  })
-
-  test("reports Effect.runPromise", () => {
-    const result = Testing.runRule(noRunInEffect, "MemberExpression", Testing.memberExpr("Effect", "runPromise"))
-    expect(result.length).toBe(1)
-  })
-
-  test("ignores Effect.gen", () => {
-    const result = Testing.runRule(noRunInEffect, "MemberExpression", Testing.memberExpr("Effect", "gen"))
-    Testing.expectNoDiagnostics(result)
-  })
-})

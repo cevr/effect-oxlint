@@ -13,7 +13,7 @@ export const full = {
   "effect/noEffectBind": "error",
   "effect/noOptionAs": "error",
   "effect/noRuntimeRunFork": "error",
-  "effect/noRunInEffect": "error",
+  "effect/noRunInEffectGen": "error",
 
   // Global bans (everywhere, not just Effect context)
   "effect/noAsyncFunction": "warn",
