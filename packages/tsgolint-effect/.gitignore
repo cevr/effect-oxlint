@@ -1,5 +1,5 @@
 /tsgolint
-internal/collections/
+# internal/collections/ — committed (vendored from microsoft/typescript-go@4a59cd78390d + patch 0004)
 e2e/node_modules/
 node_modules/
 
