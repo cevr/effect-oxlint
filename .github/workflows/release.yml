@@ -81,6 +81,8 @@ jobs:
         run: sudo npm install -g npm@latest
 
       - run: bun install
+        env:
+          LEFTHOOK: 0
 
       # Stage built binaries so tsgolint-effect publish script can find them
       - name: Download all binaries
