@@ -1,0 +1,10 @@
+
+[TestLayerMergeAllDeps/invalid-0 - 1]
+Diagnostic 1: layerMergeAllDeps (5:16 - 5:49)
+Message: Layer.mergeAll has inter-layer dependencies. Layer at position 0 provides a service required by layer at position 1. mergeAll runs layers in parallel, so this dependency won't be satisfied.
+Help: Use Layer.provide or Layer.provideMerge to compose layers with dependencies, then pass the composed layer to mergeAll.
+   4 | declare const consumer: Layer.Layer<{ app: 1 }, never, { db: 1 }>
+   5 | const merged = Layer.mergeAll(provider, consumer)
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   6 |             
+---

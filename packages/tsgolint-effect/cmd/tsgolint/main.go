@@ -26,7 +26,12 @@ import (
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_effect_in_void_success"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_floating_effect"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_in_failure"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_layer_merge_all_deps"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_lazy_promise"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_leaking_requirements"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_missing_effect_context"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_missing_effect_error"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_missing_layer_context"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_missing_yield_star"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_return_in_gen"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_schema_sync"
@@ -237,6 +242,11 @@ var allRules = []rule.Rule{
 	effect_lazy_promise.LazyPromiseInSyncRule,
 	effect_in_failure.EffectInFailureRule,
 	effect_effect_in_void_success.EffectInVoidSuccessRule,
+	effect_missing_effect_context.MissingEffectContextRule,
+	effect_missing_effect_error.MissingEffectErrorRule,
+	effect_missing_layer_context.MissingLayerContextRule,
+	effect_leaking_requirements.LeakingRequirementsRule,
+	effect_layer_merge_all_deps.LayerMergeAllDepsRule,
 }
 
 var allRulesByName = make(map[string]rule.Rule, len(allRules))

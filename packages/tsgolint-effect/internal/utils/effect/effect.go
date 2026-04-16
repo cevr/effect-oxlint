@@ -121,3 +121,68 @@ func IsNeverType(t *checker.Type) bool {
 	}
 	return checker.Type_flags(t)&checker.TypeFlagsNever != 0
 }
+
+// GetEffectSuccessChannel extracts the A (success) type parameter from Effect.Effect<A, E, R>.
+func GetEffectSuccessChannel(program *compiler.Program, ch *checker.Checker, t *checker.Type) *checker.Type {
+	if !IsEffectType(program, ch, t) {
+		return nil
+	}
+	args := checker.Checker_getTypeArguments(ch, t)
+	if len(args) < 1 {
+		return nil
+	}
+	return args[0]
+}
+
+// GetEffectContextChannel extracts the R (requirements/context) type parameter from Effect.Effect<A, E, R>.
+func GetEffectContextChannel(program *compiler.Program, ch *checker.Checker, t *checker.Type) *checker.Type {
+	if !IsEffectType(program, ch, t) {
+		return nil
+	}
+	args := checker.Checker_getTypeArguments(ch, t)
+	if len(args) < 3 {
+		return nil
+	}
+	return args[2]
+}
+
+// GetLayerChannels extracts (ROut, E, RIn) from Layer.Layer<ROut, E, RIn>.
+func GetLayerChannels(program *compiler.Program, ch *checker.Checker, t *checker.Type) (rOut, e, rIn *checker.Type) {
+	if !IsLayerType(program, ch, t) {
+		return nil, nil, nil
+	}
+	args := checker.Checker_getTypeArguments(ch, t)
+	if len(args) >= 1 {
+		rOut = args[0]
+	}
+	if len(args) >= 2 {
+		e = args[1]
+	}
+	if len(args) >= 3 {
+		rIn = args[2]
+	}
+	return
+}
+
+// GetMissingTypes returns types from `real` that are not assignable to any type in `expected`.
+// Useful for checking missing services in R or missing errors in E.
+func GetMissingTypes(ch *checker.Checker, real []*checker.Type, expected *checker.Type) []*checker.Type {
+	var missing []*checker.Type
+	for _, t := range real {
+		if IsNeverType(t) {
+			continue
+		}
+		if !checker.Checker_isTypeAssignableTo(ch, expected, t) {
+			missing = append(missing, t)
+		}
+	}
+	return missing
+}
+
+// TypeToString converts a type to its string representation.
+func TypeToString(ch *checker.Checker, t *checker.Type) string {
+	if t == nil {
+		return "unknown"
+	}
+	return ch.TypeToString(t)
+}
