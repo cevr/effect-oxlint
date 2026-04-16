@@ -1,12 +1,15 @@
 /**
- * v3 preset — rules that only apply to Effect v3 codebases.
+ * v3 preset — rules that only apply to Effect v3 codebases, as warnings.
  *
- * Layer on top of `core`, `full`, or `strict` when linting a v3 project.
- * These rules target v3-only APIs (Effect.gen adapter, Runtime.runFork,
- * catchAll → mapError patterns) that are absent or changed in v4.
+ * Layer on top of `core` or `full` when linting a v3 project:
+ * ```ts
+ * rules: { ...core, ...v3 }
+ * ```
+ *
+ * Pair with `v3Strict` for zero-tolerance v3 linting.
  */
 export const v3 = {
-  "effect/noCatchAllToMapError": "error",
-  "effect/noEffectGenAdapter": "error",
-  "effect/noRuntimeRunFork": "error",
+  "effect/noCatchAllToMapError": "warn",
+  "effect/noEffectGenAdapter": "warn",
+  "effect/noRuntimeRunFork": "warn",
 } as const
