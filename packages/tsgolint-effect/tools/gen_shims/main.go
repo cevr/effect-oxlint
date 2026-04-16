@@ -54,7 +54,6 @@ func main() {
 		"core",
 		"lsp/lsproto",
 		"parser",
-		"project",
 		"scanner",
 		"tsoptions",
 		"tspath",
