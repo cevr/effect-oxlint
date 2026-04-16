@@ -17,7 +17,7 @@
     "gate:go": "cd packages/tsgolint-effect && go build -o /dev/null ./cmd/tsgolint && go test ./internal/rules/effect_.../",
     "codegen": "bun run packages/oxlint-plugin-effect/scripts/codegen.ts",
     "version": "changeset version",
-    "release": "changeset publish",
+    "release": "cd packages/oxlint-plugin-effect && bun run build && cd ../.. && changeset publish",
     "prepare": "lefthook install"
   },
   "devDependencies": {

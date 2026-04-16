@@ -8,14 +8,30 @@
     "type": "git",
     "url": "https://github.com/cevr/effect-oxlint"
   },
+  "files": ["dist"],
   "exports": {
-    ".": "./src/index.ts",
-    "./plugin": "./src/plugin.ts",
-    "./presets/*": "./src/presets/*.ts"
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./plugin": {
+      "import": {
+        "types": "./dist/plugin.d.ts",
+        "default": "./dist/plugin.js"
+      }
+    },
+    "./presets/*": {
+      "import": {
+        "types": "./dist/presets/*.d.ts",
+        "default": "./dist/presets/*.js"
+      }
+    }
   },
   "scripts": {
     "dev": "bun run src/index.ts",
-    "build": "bun run scripts/build.ts",
+    "build": "tsdown",
     "typecheck": "tsgo --noEmit",
     "lint": "concurrently -n ox,effect -c yellow,blue \"oxlint\" \"bun run lint:effect\"",
     "lint:ox": "oxlint",
@@ -44,6 +60,7 @@
     "lefthook": "latest",
     "oxfmt": "latest",
     "oxlint": "latest",
+    "tsdown": "^0.21.7",
     "typescript": "latest",
     "vitest": "latest"
   }
