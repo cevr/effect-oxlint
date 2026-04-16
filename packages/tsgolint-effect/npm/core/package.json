@@ -1,6 +1,6 @@
 {
   "name": "tsgolint-effect",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Type-aware Effect linter powered by typescript-go, for use with oxlint",
   "license": "MIT",
   "repository": {
