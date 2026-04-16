@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "Type-aware Effect linter powered by typescript-go, for use with oxlint",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/cevr/effect-oxlint" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cevr/effect-oxlint"
+  },
   "bin": {
     "tsgolint-effect": "bin/tsgolint.js"
   },
