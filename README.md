@@ -6,8 +6,8 @@ oxlint plugin + type-aware linter for [Effect](https://effect.website) codebases
 
 | Package | What | Install |
 |---------|------|---------|
-| [`oxlint-plugin-effect`](./packages/oxlint-plugin-effect) | 66 AST lint rules | `bun add -D oxlint-plugin-effect` |
-| [`tsgolint-effect`](./packages/tsgolint-effect) | 8 type-aware lint rules | `bun add -D tsgolint-effect` |
+| [`oxlint-plugin-effect`](./packages/oxlint-plugin-effect) | 59 AST lint rules | `bun add -D oxlint-plugin-effect` |
+| [`tsgolint-effect`](./packages/tsgolint-effect) | 24 type-aware lint rules | `bun add -D tsgolint-effect` |
 
 ## Quick Start
 
@@ -18,15 +18,27 @@ bun add -D oxlint oxlint-plugin-effect
 `.oxlintrc.json`:
 ```json
 {
-  "jsPlugins": ["oxlint-plugin-effect"],
+  "jsPlugins": ["oxlint-plugin-effect/plugin"],
   "rules": {
     "effect/noEffectDo": "error",
     "effect/noNestedPipe": "error",
-    "effect/noThrowInEffectGen": "error",
-    "effect/noPlatformGlobals": "warn"
-  }
+    "effect/noThrowStatement": "error",
+    "effect/noGlobals": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/tests/**", "**/test/**"],
+      "rules": {
+        "effect/noInlineProvide": "off"
+      }
+    }
+  ]
 }
 ```
+
+The `overrides` entry turns off `noInlineProvide` in test files. The rule's intent is "provide layers at the boundary, not scattered through production code" — in tests, `it.effect(() => Effect.gen(function*() { ... }).pipe(Effect.provide(TestLayer)))` *is* the boundary.
+
+Other rules (`noThrowStatement`, `noTryCatch`, `noNewError`, etc.) stay enabled in tests — test code should still prefer Effect primitives.
 
 ```bash
 oxlint
@@ -42,7 +54,7 @@ bun add -D tsgolint-effect
 
 ```json
 {
-  "jsPlugins": ["oxlint-plugin-effect"],
+  "jsPlugins": ["oxlint-plugin-effect/plugin"],
   "options": { "typeAware": true },
   "rules": {
     "effect/floating-effect": "error",
@@ -61,7 +73,7 @@ OXLINT_TSGOLINT_PATH=./node_modules/.bin/tsgolint-effect oxlint
 
 ### JS Plugin (AST-only, fast)
 
-66 rules across categories: API bans, global bans, import bans, statement bans, AST patterns, and Effect-context rules. Three presets available: `core`, `full`, `effect-native`.
+59 rules across categories: API bans, global bans, import bans, statement bans, AST patterns, and Effect-context rules. Five presets available: `core`, `full`, `effect-native`, `functional`, `strict`.
 
 ### Go Binary (type-aware)
 
