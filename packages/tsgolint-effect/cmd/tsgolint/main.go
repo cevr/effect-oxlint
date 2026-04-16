@@ -27,6 +27,8 @@ import (
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_floating_effect"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_in_failure"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_any_unknown_error"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_fn_implicit_any"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_generic_services"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_layer_merge_all_deps"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_lazy_promise"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_leaking_requirements"
@@ -35,10 +37,12 @@ import (
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_missing_layer_context"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_missing_yield_star"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_non_object_service_type"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_overridden_schema_ctor"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_return_in_gen"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_schema_sync"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_scope_in_layer"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_strict_provide"
+	"github.com/typescript-eslint/tsgolint/internal/rules/effect_unknown_in_catch"
 	"github.com/typescript-eslint/tsgolint/internal/rules/effect_unnecessary_fail_yieldable"
 	"github.com/typescript-eslint/tsgolint/internal/rules/consistent_return"
 	"github.com/typescript-eslint/tsgolint/internal/rules/consistent_type_exports"
@@ -257,6 +261,10 @@ var allRules = []rule.Rule{
 	effect_any_unknown_error.AnyUnknownErrorRule,
 	effect_scope_in_layer.ScopeInLayerRule,
 	effect_non_object_service_type.NonObjectServiceTypeRule,
+	effect_unknown_in_catch.UnknownInCatchRule,
+	effect_generic_services.GenericServicesRule,
+	effect_overridden_schema_ctor.OverriddenSchemaCtorRule,
+	effect_fn_implicit_any.FnImplicitAnyRule,
 }
 
 var allRulesByName = make(map[string]rule.Rule, len(allRules))

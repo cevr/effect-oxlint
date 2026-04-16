@@ -1,0 +1,10 @@
+
+[TestFnImplicitAny/invalid-0 - 1]
+Diagnostic 1: fnImplicitAny (3:48 - 3:49)
+Message: Parameter has implicit `any` type in Effect.fn callback. Add a type annotation.
+Help: Add an explicit type annotation to the parameter.
+   2 | import { Effect } from "effect"
+   3 | const getUser = Effect.fn("getUser")(function*(id) {
+     |                                                ~~
+   4 |   return id
+---

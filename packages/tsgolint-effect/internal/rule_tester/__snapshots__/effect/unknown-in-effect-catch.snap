@@ -1,0 +1,16 @@
+
+[TestUnknownInCatch/invalid-0 - 1]
+Diagnostic 1: unknownInCatch (3:17 - 6:2)
+Message: The `catch` callback returns `unknown`. Use a specific tagged error type.
+Help: Return a typed error from the catch callback, e.g. new MyError({ cause: e }).
+   2 | import { Effect } from "effect"
+   3 | const program = Effect.tryPromise({
+     |                 ~~~~~~~~~~~~~~~~~~~
+   4 |   try: () => Promise.resolve(42),
+     | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   5 |   catch: (e) => e
+     | ~~~~~~~~~~~~~~~~~
+   6 | })
+     | ~~
+   7 |             
+---
