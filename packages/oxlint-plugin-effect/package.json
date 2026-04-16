@@ -1,10 +1,13 @@
 {
   "name": "oxlint-plugin-effect",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "oxlint plugin with Effect-specific lint rules",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/cevr/effect-oxlint" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cevr/effect-oxlint"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./plugin": "./src/plugin.ts",
