@@ -2,7 +2,10 @@
   "name": "effect-oxlint",
   "private": true,
   "packageManager": "bun@1.3.11",
-  "workspaces": ["packages/oxlint-plugin-effect"],
+  "workspaces": [
+    "packages/oxlint-plugin-effect",
+    "packages/tsgolint-effect/npm/core"
+  ],
   "scripts": {
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
@@ -13,9 +16,13 @@
     "gate:js": "cd packages/oxlint-plugin-effect && bunx tsgo --noEmit && bun test",
     "gate:go": "cd packages/tsgolint-effect && go build -o /dev/null ./cmd/tsgolint && go test ./internal/rules/effect_.../",
     "codegen": "bun run packages/oxlint-plugin-effect/scripts/codegen.ts",
+    "version": "changeset version",
+    "release": "changeset publish",
     "prepare": "lefthook install"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/cli": "^2.30.0",
     "concurrently": "latest",
     "lefthook": "latest",
     "turbo": "latest"

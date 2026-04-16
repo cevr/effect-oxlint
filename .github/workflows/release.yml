@@ -4,46 +4,13 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "tsgolint-effect@*"
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
-  # JS plugin release via changesets (on main push)
-  release-plugin:
-    name: Release JS Plugin
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Update npm for OIDC support
-        run: sudo npm install -g npm@latest
-
-      - run: bun install
-
-      - name: Create Release Pull Request or Publish
-        uses: changesets/action@v1
-        with:
-          publish: cd packages/oxlint-plugin-effect && bun run release
-          version: cd packages/oxlint-plugin-effect && bun run version
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ""
-
-  # Go binary — build for all platforms (on tag push)
+  # Build Go binaries for all platforms (always, so they're ready for publish)
   build-binaries:
     name: Build tsgolint (${{ matrix.os }})
-    if: startsWith(github.ref, 'refs/tags/tsgolint-effect@')
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -91,18 +58,28 @@ jobs:
           name: tsgolint-${{ matrix.os }}
           path: packages/tsgolint-effect/npm/${{ matrix.os }}/tsgolint
 
-  # Publish all npm packages (after binaries built)
-  release-tsgolint:
-    name: Publish tsgolint-effect
-    if: startsWith(github.ref, 'refs/tags/tsgolint-effect@')
+  # Release both packages via changesets
+  release:
+    name: Release
     needs: [build-binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Update npm for OIDC support
+        run: sudo npm install -g npm@latest
+
+      - run: bun install
+
+      # Stage built binaries so tsgolint-effect publish script can find them
       - name: Download all binaries
         uses: actions/download-artifact@v4
         with:
@@ -116,17 +93,11 @@ jobs:
             chmod +x "packages/tsgolint-effect/npm/${platform}/tsgolint"
           done
 
-      - name: Setup npm
-        run: |
-          sudo npm install -g npm@latest
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+      - name: Create Release Pull Request or Publish
+        uses: changesets/action@v1
+        with:
+          publish: bun run release
+          version: bun run version
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF#refs/tags/tsgolint-effect@}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to npm
-        working-directory: packages/tsgolint-effect
-        run: VERSION=${{ steps.version.outputs.version }} ./scripts/publish-npm.sh
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ""

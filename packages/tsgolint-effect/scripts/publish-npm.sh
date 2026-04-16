@@ -36,7 +36,7 @@ jq --arg v "$VERSION" '.version = $v | .optionalDependencies |= with_entries(.va
 # Publish platform packages first
 for platform in "${platforms[@]}"; do
   echo "Publishing tsgolint-effect-${platform}@${VERSION}"
-  (cd "npm/$platform" && npm publish --access public --provenance $DRY_RUN)
+  (cd "npm/$platform" && npm publish --access public $DRY_RUN)
 done
 
 # Publish core meta package

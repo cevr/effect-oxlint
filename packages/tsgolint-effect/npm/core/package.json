@@ -1,16 +1,19 @@
 {
   "name": "tsgolint-effect",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Type-aware Effect linter powered by typescript-go, for use with oxlint",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/cevr/effect-oxlint" },
   "bin": {
     "tsgolint-effect": "bin/tsgolint.js"
   },
+  "scripts": {
+    "release": "node ../../scripts/publish-platforms.mjs && npm publish --access public"
+  },
   "optionalDependencies": {
-    "tsgolint-effect-darwin-arm64": "0.0.0",
-    "tsgolint-effect-darwin-x64": "0.0.0",
-    "tsgolint-effect-linux-arm64": "0.0.0",
-    "tsgolint-effect-linux-x64": "0.0.0"
+    "tsgolint-effect-darwin-arm64": "0.1.0",
+    "tsgolint-effect-darwin-x64": "0.1.0",
+    "tsgolint-effect-linux-arm64": "0.1.0",
+    "tsgolint-effect-linux-x64": "0.1.0"
   }
 }

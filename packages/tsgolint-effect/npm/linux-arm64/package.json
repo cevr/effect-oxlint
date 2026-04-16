@@ -1,9 +1,16 @@
 {
   "name": "tsgolint-effect-linux-arm64",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "tsgolint-effect binary for linux-arm64",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/cevr/effect-oxlint" },
-  "os": ["linux"],
-  "cpu": ["arm64"]
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cevr/effect-oxlint"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ]
 }
