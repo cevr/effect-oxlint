@@ -12,11 +12,9 @@ export const full = {
   "effect/noEffectAsync": "error",
   "effect/noEffectBind": "error",
   "effect/noOptionAs": "error",
-  "effect/noRuntimeRunFork": "error",
   "effect/noRunInEffectGen": "error",
 
   // Global bans (everywhere, not just Effect context)
-  "effect/noAsyncFunction": "warn",
   "effect/noNodeBuiltinImport": "warn",
 
   // AST pattern rules
@@ -36,7 +34,6 @@ export const full = {
   "effect/noEffectOrElseLadder": "warn",
   "effect/noFromNullableCoalesce": "warn",
   "effect/noUnnecessaryArrowBlock": "warn",
-  "effect/noEffectGenAdapter": "error",
   "effect/noEffectSyncConsole": "error",
   "effect/noEffectTypeAlias": "warn",
   "effect/noEffectWrapperAlias": "warn",
@@ -46,7 +43,6 @@ export const full = {
   "effect/noOptionBooleanNormalization": "warn",
   "effect/noEffectSyncWrapper": "off",
   "effect/noMatchEffectBranch": "warn",
-  "effect/noCatchAllToMapError": "error",
   "effect/noUnnecessaryPipeChain": "error",
   "effect/noMultipleEffectProvide": "error",
   "effect/noSchemaUnionOfLiterals": "warn",
