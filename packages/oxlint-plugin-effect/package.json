@@ -1,6 +1,6 @@
 {
   "name": "oxlint-plugin-effect",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "type": "module",
   "description": "oxlint plugin with Effect-specific lint rules",
   "license": "MIT",
