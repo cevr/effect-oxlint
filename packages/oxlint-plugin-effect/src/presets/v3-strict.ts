@@ -3,7 +3,7 @@
  *
  * Layer on top of `strict` when linting a v3 project with zero tolerance:
  * ```ts
- * rules: { ...strict.all, ...v3Strict }
+ * rules: { ...strict, ...v3Strict }
  * ```
  */
 export const v3Strict = {
