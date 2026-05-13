@@ -8,63 +8,8 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
-  # Build Go binaries for all platforms (always, so they're ready for publish)
-  build-binaries:
-    name: Build tsgolint (${{ matrix.os }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        include:
-          - os: darwin-arm64
-            runner: macos-latest
-            goos: darwin
-            goarch: arm64
-          - os: darwin-x64
-            runner: macos-latest
-            goos: darwin
-            goarch: amd64
-          - os: linux-arm64
-            runner: ubuntu-24.04-arm
-            goos: linux
-            goarch: arm64
-          - os: linux-x64
-            runner: ubuntu-latest
-            goos: linux
-            goarch: amd64
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.26"
-
-      - name: Init tsgolint
-        working-directory: packages/tsgolint-effect
-        run: |
-          TSGO_COMMIT=$(cat .typescript-go-commit | tr -d '[:space:]')
-          git init typescript-go
-          cd typescript-go
-          git remote add origin https://github.com/microsoft/typescript-go.git
-          git fetch --depth 1 origin "$TSGO_COMMIT"
-          git checkout FETCH_HEAD
-          for patch in ../patches/*.patch; do git apply "$patch"; done
-
-      - name: Build
-        working-directory: packages/tsgolint-effect
-        run: |
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-            go build -o npm/${{ matrix.os }}/tsgolint ./cmd/tsgolint
-
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: tsgolint-${{ matrix.os }}
-          path: packages/tsgolint-effect/npm/${{ matrix.os }}/tsgolint
-
-  # Release both packages via changesets
   release:
     name: Release
-    needs: [build-binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -83,20 +28,6 @@ jobs:
         run: sudo npm install -g npm@latest
 
       - run: bun install
-
-      # Stage built binaries so tsgolint-effect publish script can find them
-      - name: Download all binaries
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Stage binaries
-        run: |
-          for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
-            cp "artifacts/tsgolint-${platform}/tsgolint" \
-               "packages/tsgolint-effect/npm/${platform}/tsgolint"
-            chmod +x "packages/tsgolint-effect/npm/${platform}/tsgolint"
-          done
 
       - name: Create Release Pull Request or Publish
         uses: changesets/action@v1

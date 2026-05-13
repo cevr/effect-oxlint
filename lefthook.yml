@@ -1,7 +1,5 @@
 pre-commit:
   parallel: true
   jobs:
-    - name: js
-      run: cd packages/oxlint-plugin-effect && bunx tsgo --noEmit && bun test
-    - name: go
-      run: cd packages/tsgolint-effect && go build -o /dev/null ./cmd/tsgolint && go test ./internal/rules/effect_.../
+    - name: gate
+      run: bun run gate

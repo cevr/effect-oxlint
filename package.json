@@ -1,30 +1,81 @@
 {
-  "name": "effect-oxlint",
-  "private": true,
-  "packageManager": "bun@1.3.11",
-  "workspaces": [
-    "packages/oxlint-plugin-effect",
-    "packages/tsgolint-effect/npm/core"
+  "name": "oxlint-plugin-effect",
+  "version": "0.2.2",
+  "description": "oxlint plugin with Effect-specific lint rules",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cevr/effect-oxlint"
+  },
+  "files": [
+    "dist"
   ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./plugin": {
+      "import": {
+        "types": "./dist/plugin.d.ts",
+        "default": "./dist/plugin.js"
+      }
+    },
+    "./rule-bindings": {
+      "import": {
+        "types": "./dist/vendor/effect-oxlint/index.d.ts",
+        "default": "./dist/vendor/effect-oxlint/index.js"
+      }
+    },
+    "./presets/*": {
+      "import": {
+        "types": "./dist/presets/*.d.ts",
+        "default": "./dist/presets/*.js"
+      }
+    }
+  },
   "scripts": {
-    "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
+    "dev": "bun run src/index.ts",
+    "build": "tsdown",
+    "typecheck": "tsgo --noEmit",
+    "lint": "concurrently -n ox,effect -c yellow,blue \"oxlint\" \"bun run lint:effect\"",
     "lint:ox": "oxlint",
-    "test": "turbo run test",
-    "build": "turbo run build",
-    "gate": "concurrently -n js,go -c blue,green \"bun run gate:js\" \"bun run gate:go\"",
-    "gate:js": "cd packages/oxlint-plugin-effect && bunx tsgo --noEmit && bun test",
-    "gate:go": "cd packages/tsgolint-effect && go build -o /dev/null ./cmd/tsgolint && go test ./internal/rules/effect_.../",
-    "codegen": "bun run packages/oxlint-plugin-effect/scripts/codegen.ts",
+    "lint:effect": "effect-language-service diagnostics --project tsconfig.json --lspconfig \"$(cat .effect-lsp.json)\"",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "test": "bun test",
+    "gate": "concurrently -n type,style,test -c blue,yellow,green \"bun run typecheck\" \"bun run lint\" \"bun run test\"",
+    "codegen": "bun run scripts/codegen.ts",
+    "add-rule": "bun run scripts/add-rule.ts",
     "version": "changeset version",
-    "release": "cd packages/oxlint-plugin-effect && bun run build && cd ../.. && node packages/tsgolint-effect/scripts/publish-platforms.mjs && changeset publish",
+    "release": "bun run build && changeset publish",
     "prepare": "lefthook install"
   },
+  "dependencies": {
+    "@oxlint/plugins": "^1.64.0"
+  },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.6.0",
-    "@changesets/cli": "^2.30.0",
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.0",
+    "@effect/language-service": "latest",
+    "@effect/vitest": "latest",
+    "@types/bun": "latest",
+    "@typescript/native-preview": "latest",
     "concurrently": "latest",
+    "effect": "4.0.0-beta.66",
     "lefthook": "latest",
-    "turbo": "latest"
-  }
+    "oxfmt": "latest",
+    "oxlint": "latest",
+    "tsdown": "^0.22.0",
+    "typescript": "latest",
+    "vitest": "latest"
+  },
+  "peerDependencies": {
+    "effect": ">=4.0.0-beta.66 <5"
+  },
+  "packageManager": "bun@1.3.13"
 }

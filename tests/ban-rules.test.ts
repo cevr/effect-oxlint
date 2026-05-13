@@ -1,0 +1,131 @@
+import { describe, test, expect } from "bun:test";
+import { Testing } from "../src/vendor/effect-oxlint/index.js";
+import {
+  noEffectDo,
+  noEffectNever,
+  noEffectAs,
+  noEffectAsync,
+  noEffectBind,
+  noOptionAs,
+  noRuntimeRunFork,
+  noSpread,
+} from "../src/rules/index.js";
+
+// --- API ban rules ---
+
+describe("noEffectDo", () => {
+  test("reports Effect.Do", () => {
+    const result = Testing.runRule(
+      noEffectDo,
+      "MemberExpression",
+      Testing.memberExpr("Effect", "Do"),
+    );
+    Testing.expectDiagnostics(result, [
+      { message: "Avoid Effect.Do builder notation. Use flat pipe-based flow or Effect.gen." },
+    ]);
+  });
+
+  test("ignores Effect.map", () => {
+    const result = Testing.runRule(
+      noEffectDo,
+      "MemberExpression",
+      Testing.memberExpr("Effect", "map"),
+    );
+    Testing.expectNoDiagnostics(result);
+  });
+});
+
+describe("noEffectNever", () => {
+  test("reports Effect.never", () => {
+    const result = Testing.runRule(
+      noEffectNever,
+      "MemberExpression",
+      Testing.memberExpr("Effect", "never"),
+    );
+    Testing.expectDiagnostics(result, [
+      { message: "Avoid Effect.never. Use Stream or explicit acquire/release lifecycles." },
+    ]);
+  });
+});
+
+describe("noEffectAs", () => {
+  test("reports Effect.as", () => {
+    const result = Testing.runRule(
+      noEffectAs,
+      "MemberExpression",
+      Testing.memberExpr("Effect", "as"),
+    );
+    Testing.expectDiagnostics(result, [
+      { message: "Avoid Effect.as. Use Effect.map for value mapping or Effect.asVoid." },
+    ]);
+  });
+});
+
+describe("noEffectAsync", () => {
+  test("reports Effect.async", () => {
+    const result = Testing.runRule(
+      noEffectAsync,
+      "MemberExpression",
+      Testing.memberExpr("Effect", "async"),
+    );
+    expect(result.length).toBe(1);
+  });
+});
+
+describe("noEffectBind", () => {
+  test("reports Effect.bind", () => {
+    const result = Testing.runRule(
+      noEffectBind,
+      "MemberExpression",
+      Testing.memberExpr("Effect", "bind"),
+    );
+    expect(result.length).toBe(1);
+  });
+});
+
+describe("noOptionAs", () => {
+  test("reports Option.as", () => {
+    const result = Testing.runRule(
+      noOptionAs,
+      "MemberExpression",
+      Testing.memberExpr("Option", "as"),
+    );
+    expect(result.length).toBe(1);
+  });
+});
+
+describe("noRuntimeRunFork", () => {
+  test("reports Runtime.runFork", () => {
+    const result = Testing.runRule(
+      noRuntimeRunFork,
+      "MemberExpression",
+      Testing.memberExpr("Runtime", "runFork"),
+    );
+    expect(result.length).toBe(1);
+  });
+});
+
+describe("noSpread", () => {
+  test("reports array/object/call spread syntax", () => {
+    const spread = { type: "SpreadElement", argument: Testing.id("value") } as never;
+    const result = Testing.runRule(noSpread, "SpreadElement", spread);
+    Testing.expectDiagnostics(result, [
+      {
+        message:
+          "Avoid spread syntax. Use explicit construction or a named transformation instead.",
+      },
+    ]);
+  });
+
+  test("reports JSX spread attributes", () => {
+    const spread = { type: "JSXSpreadAttribute", argument: Testing.id("props") } as never;
+    const result = Testing.runRule(noSpread, "JSXSpreadAttribute", spread);
+    expect(result.length).toBe(1);
+  });
+
+  test("ignores rest elements", () => {
+    const rest = { type: "RestElement", argument: Testing.id("rest") } as never;
+    const result = Testing.runRule(noSpread, "RestElement", rest);
+    Testing.expectNoDiagnostics(result);
+  });
+});
