@@ -72,6 +72,7 @@
     "oxlint": "latest",
     "tsdown": "^0.22.0",
     "typescript": "latest",
+    "unrun": "^0.3.0",
     "vitest": "latest"
   },
   "peerDependencies": {
