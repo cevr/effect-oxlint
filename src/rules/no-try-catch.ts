@@ -1,5 +1,5 @@
 /**
- * Ban `try/catch` statements. Context-aware messaging.
+ * Ban all `try` statements: try/catch, try/finally, and try/catch/finally.
  *
  * Inside Effect.gen/fn: "Use Effect.try or Effect.tryPromise"
  * Outside: "Wrap with Effect.fn and use Effect.try for error handling"
@@ -16,7 +16,8 @@ export const noTryCatch = Rule.define({
   name: "no-try-catch",
   meta: Rule.meta({
     type: "suggestion",
-    description: "Avoid try/catch. Use Effect.try or Effect.tryPromise.",
+    description:
+      "Avoid try/catch/finally blocks. Use Effect error handling and finalization operators.",
   }),
   create: function* () {
     const ctx = yield* RuleContext;
@@ -30,8 +31,8 @@ export const noTryCatch = Rule.define({
               node,
               message:
                 d > 0
-                  ? "Avoid try/catch inside Effect.gen/fn. Use Effect.try({ try: () => ..., catch: (e) => new MyError({ cause: e }) })."
-                  : "Avoid try/catch. Wrap this function with Effect.fn and use Effect.try or Effect.tryPromise for error handling.",
+                  ? "Avoid try/catch/finally inside Effect.gen/fn. Use Effect.try or Effect.tryPromise for failures and Effect.ensuring or Effect.acquireUseRelease for finalization."
+                  : "Avoid try/catch/finally. Use Effect.try or Effect.tryPromise for failures and Effect.ensuring or Effect.acquireUseRelease for finalization.",
             }),
           ),
         ),

@@ -24,7 +24,40 @@ describe("noThrowStatement", () => {
 
 describe("noTryCatch", () => {
   test("reports try/catch", () => {
-    const result = Testing.runRule(noTryCatch, "TryStatement", Testing.tryStmt());
+    const result = Testing.runRule(noTryCatch, "TryStatement", {
+      type: "TryStatement",
+      block: { type: "BlockStatement", body: [] },
+      handler: {
+        type: "CatchClause",
+        param: null,
+        body: { type: "BlockStatement", body: [] },
+      },
+      finalizer: null,
+    } as never);
+    expect(result.length).toBe(1);
+  });
+
+  test("reports try/finally without catch", () => {
+    const result = Testing.runRule(noTryCatch, "TryStatement", {
+      type: "TryStatement",
+      block: { type: "BlockStatement", body: [] },
+      handler: null,
+      finalizer: { type: "BlockStatement", body: [] },
+    } as never);
+    expect(result.length).toBe(1);
+  });
+
+  test("reports try/catch/finally", () => {
+    const result = Testing.runRule(noTryCatch, "TryStatement", {
+      type: "TryStatement",
+      block: { type: "BlockStatement", body: [] },
+      handler: {
+        type: "CatchClause",
+        param: null,
+        body: { type: "BlockStatement", body: [] },
+      },
+      finalizer: { type: "BlockStatement", body: [] },
+    } as never);
     expect(result.length).toBe(1);
   });
 });

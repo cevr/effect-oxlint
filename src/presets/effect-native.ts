@@ -11,6 +11,7 @@ export const effectNative = {
   // Effect-enforcing bans
   "effect/noThrowStatement": "error",
   "effect/noTryCatch": "error",
+  "effect/noEffectAllStepSequencing": "error",
   "effect/noNewPromise": "error",
   "effect/noNewError": "error",
   "effect/noReturnNullish": "error",

@@ -66,7 +66,16 @@ import { Rule, Diagnostic, RuleContext } from "oxlint-plugin-effect";
 
 ## Rules
 
-66 AST-only rules across categories: API bans, global bans, import bans, statement bans, AST patterns, and Effect-context rules. Five presets are available: `core`, `full`, `effect-native`, `functional`, and `strict`.
+68 AST-only rules across categories: API bans, global bans, import bans, statement bans, AST patterns, and Effect-context rules. Five presets are available: `core`, `full`, `effect-native`, `functional`, and `strict`.
+
+`effect/noTryCatch` rejects every JavaScript `try` statement, including
+`try/catch`, bare `try/finally`, and `try/catch/finally`. Use Effect's typed
+failure channel and scoped finalization operators instead.
+
+The core presets also reject sequential state mutations hidden in
+`Effect.all(..., { concurrency: 1 })`. The stricter `noManualDataGuard` rule
+requires unknown input to cross a Schema boundary instead of being promoted by
+a hand-written type predicate.
 
 ## Development
 

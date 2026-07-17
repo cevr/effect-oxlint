@@ -67,6 +67,8 @@ export const strict = {
   // Effect-enforcing bans
   "effect/noThrowStatement": "error",
   "effect/noTryCatch": "error",
+  "effect/noEffectAllStepSequencing": "error",
+  "effect/noManualDataGuard": "error",
   "effect/noNewPromise": "error",
   "effect/noNewError": "error",
   "effect/noReturnNullish": "error",

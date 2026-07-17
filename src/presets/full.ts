@@ -57,6 +57,7 @@ export const full = {
   "effect/noMakeUnsafe": "error",
   "effect/noHandRolledTaggedUnion": "error",
   "effect/noDynamicImports": "error",
+  "effect/noEffectAllStepSequencing": "error",
 
   // Effect-enforcing bans (prevent escaping Effect model)
   "effect/noThrowStatement": "error",
