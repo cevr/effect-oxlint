@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.3.0
+
+### Minor Changes
+
+- [`ef0ee31`](https://github.com/cevr/effect-oxlint/commit/ef0ee3120fe7f37e0cad751ef65b8fcd0b75c245) Thanks [@cevr](https://github.com/cevr)! - Ban every try statement explicitly and add rules for schema-bypassing data guards and sequential stateful Effect.all steps.
+
 ## 0.2.3
 
 ### Patch Changes
