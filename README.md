@@ -1,44 +1,105 @@
 # oxlint-plugin-effect
 
-Oxlint plugin for [Effect](https://effect.website) codebases.
+A strict, non-type-aware oxlint plugin for Effect-native TypeScript.
 
-## Quick Start
+The package has one recommended preset. It protects application code from imperative failure handling, Promise control flow, ambient runtime dependencies, and a small set of non-idiomatic Effect APIs. Effect tsgo remains responsible for semantic and type-aware correctness.
+
+## Install
 
 ```bash
 bun add -D oxlint oxlint-plugin-effect
 ```
 
-`.oxlintrc.json`:
+Load the plugin and enable the recommended rules in your oxlint configuration:
+
+```ts
+import { recommended } from "oxlint-plugin-effect/presets/recommended";
+
+export default {
+  jsPlugins: ["oxlint-plugin-effect/plugin"],
+  rules: recommended,
+};
+```
+
+If the project uses JSON configuration, copy the exported rule map into `rules`; every recommended rule has `error` severity.
+
+## Recommended Rules
+
+| Rule                         | Contract                                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `effect/noAsyncFunction`     | Bans async functions and await expressions                                                |
+| `effect/noTryCatch`          | Bans every try/catch/finally statement                                                    |
+| `effect/noThrowStatement`    | Bans every throw statement                                                                |
+| `effect/noNewPromise`        | Bans new Promise, Promise calls, and Promise static APIs                                  |
+| `effect/noNewError`          | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die |
+| `effect/noTernary`           | Bans conditional expressions while allowing ordinary if statements                        |
+| `effect/noDynamicImports`    | Allows import() only behind a named lazy-loading boundary; bans require()                 |
+| `effect/noEffectDo`          | Bans Effect.Do                                                                            |
+| `effect/noEffectBind`        | Bans Effect.bind                                                                          |
+| `effect/noGlobals`           | Bans ambient capabilities with direct Effect replacements                                 |
+| `effect/noNodeBuiltinImport` | Bans fully replaced Node modules and replaced operations from partial modules             |
+
+The preset intentionally allows `Effect.as`, `Option.as`, `Effect.never`, `Effect.async`, ordinary `if` and `switch` statements, and runtime runners at explicit application boundaries.
+
+## Platform Boundaries
+
+Application code should use Effect services for time, randomness, crypto randomness and supported digests, configuration, files, paths, child processes, stdio, HTTP, sockets, workers, streams, logging, JSON boundaries, encoding, and key-value storage.
+
+The rules are capability-based rather than runtime-wide. They do not pretend Effect replaces HMAC, signing, encryption, password hashing, DNS, UDP, compression, module resolution, FFI, VM inspection, or every Buffer/EventEmitter/native-stream operation.
+
+Put unmatched host calls in named adapter files and disable only the relevant rule there:
 
 ```json
 {
-  "jsPlugins": ["oxlint-plugin-effect/plugin"],
-  "rules": {
-    "effect/noEffectDo": "error",
-    "effect/noNestedPipe": "error",
-    "effect/noThrowStatement": "error",
-    "effect/noGlobals": "warn"
-  },
   "overrides": [
     {
-      "files": ["**/*.test.ts", "**/*.test.tsx", "**/tests/**", "**/test/**"],
+      "files": ["src/platform/**/*.ts"],
       "rules": {
-        "effect/noInlineProvide": "off"
+        "effect/noGlobals": "off",
+        "effect/noNodeBuiltinImport": "off"
       }
     }
   ]
 }
 ```
 
-The `overrides` entry turns off `noInlineProvide` in test files. The rule's intent is "provide layers at the boundary, not scattered through production code" — in tests, `it.effect(() => Effect.gen(function*() { ... }).pipe(Effect.provide(TestLayer)))` is the boundary.
+## Effect tsgo Pairing
 
-```bash
-oxlint
+Oxlint owns unconditional syntax. Effect tsgo owns floating Effects, missing channels, nested execution, leaking requirements, strict provisioning, schema semantics, and other type-aware diagnostics.
+
+When using both tools, disable the tsgo diagnostics duplicated by this preset:
+
+```json
+{
+  "diagnosticSeverity": {
+    "asyncFunction": "off",
+    "cryptoRandomUUID": "off",
+    "cryptoRandomUUIDInEffect": "off",
+    "globalConsole": "off",
+    "globalConsoleInEffect": "off",
+    "globalDate": "off",
+    "globalDateInEffect": "off",
+    "globalFetch": "off",
+    "globalFetchInEffect": "off",
+    "globalRandom": "off",
+    "globalRandomInEffect": "off",
+    "globalTimers": "off",
+    "globalTimersInEffect": "off",
+    "newPromise": "off",
+    "nodeBuiltinImport": "off",
+    "preferSchemaOverJson": "off",
+    "processEnv": "off",
+    "processEnvInEffect": "off",
+    "tryCatchInEffectGen": "off"
+  }
+}
 ```
+
+Leave type-aware diagnostics such as `floatingEffect`, `runEffectInsideEffect`, `strictEffectProvide`, `extendsNativeError`, and `unsafeEffectTypeAssertion` enabled.
 
 ## Rule Authoring
 
-The package also exports the Effect-first rule authoring bindings:
+The package exports Effect-first rule-authoring bindings:
 
 ```ts
 import { Diagnostic, Rule, RuleContext } from "oxlint-plugin-effect/rule-bindings";
@@ -50,32 +111,13 @@ export const noThing = Rule.define({
     description: "Avoid thing.",
   }),
   create: function* () {
-    const ctx = yield* RuleContext;
+    const context = yield* RuleContext;
     return {
-      Identifier: (node) => ctx.report(Diagnostic.make({ node, message: "Avoid thing." })),
+      Identifier: (node) => context.report(Diagnostic.make({ node, message: "Avoid thing." })),
     };
   },
 });
 ```
-
-The same bindings are available from the root export for convenience:
-
-```ts
-import { Rule, Diagnostic, RuleContext } from "oxlint-plugin-effect";
-```
-
-## Rules
-
-68 AST-only rules across categories: API bans, global bans, import bans, statement bans, AST patterns, and Effect-context rules. Five presets are available: `core`, `full`, `effect-native`, `functional`, and `strict`.
-
-`effect/noTryCatch` rejects every JavaScript `try` statement, including
-`try/catch`, bare `try/finally`, and `try/catch/finally`. Use Effect's typed
-failure channel and scoped finalization operators instead.
-
-The core presets also reject sequential state mutations hidden in
-`Effect.all(..., { concurrency: 1 })`. The stricter `noManualDataGuard` rule
-requires unknown input to cross a Schema boundary instead of being promoted by
-a hand-written type predicate.
 
 ## Development
 
@@ -83,7 +125,6 @@ a hand-written type predicate.
 bun install
 bun run gate
 bun run codegen
-bun run add-rule <name> [--context]
 ```
 
 ## License

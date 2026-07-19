@@ -1,17 +1,8 @@
-/**
- * Ban `new Error(...)` and native error constructors. Context-aware messaging.
- *
- * Inside Effect.gen/fn: "Use yield* new MyError() (yieldable TaggedErrorClass)"
- * Outside: "Define class MyError extends Schema.TaggedErrorClass..."
- *
- * Source: language-service/globalErrorInEffectFailure, extendsNativeError
- */
+/** Ban native Error construction except as the direct input to a defect constructor. */
 import type { ESTree } from "@oxlint/plugins";
-import { Diagnostic, Rule, Visitor, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
-import * as Ref from "effect/Ref";
-
-import { makeEffectContextTracker } from "./_effect-context.js";
+import * as Option from "effect/Option";
 
 const nativeErrors = new Set([
   "Error",
@@ -23,37 +14,46 @@ const nativeErrors = new Set([
   "EvalError",
 ]);
 
+const defectNamespaces = new Set(["Effect", "Cause", "Exit"]);
+
+const isDirectDefectArgument = (node: ESTree.NewExpression): boolean => {
+  const parent = node.parent;
+  if (parent?.type !== "CallExpression" || !parent.arguments.includes(node)) return false;
+  const callee = parent.callee;
+  if (callee.type !== "MemberExpression" || callee.computed) return false;
+  if (callee.object.type !== "Identifier" || callee.property.type !== "Identifier") return false;
+  return defectNamespaces.has(callee.object.name) && callee.property.name === "die";
+};
+
 export const noNewError = Rule.define({
   name: "no-new-error",
   meta: Rule.meta({
     type: "suggestion",
-    description: "Avoid native Error constructors. Use Schema.TaggedErrorClass.",
+    description: "Reserve native Error values for explicit Effect defects.",
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    const [depth, tracker] = yield* makeEffectContextTracker;
-
-    return Visitor.merge(tracker, {
+    return {
       NewExpression: (node) =>
-        Effect.flatMap(Ref.get(depth), (d) => {
-          const callee = (node as unknown as Record<string, unknown>)["callee"] as ESTree.Node;
-          if (
-            callee.type === "Identifier" &&
-            "name" in callee &&
-            nativeErrors.has(callee.name as string)
-          ) {
+        Option.match(AST.narrow(node, "NewExpression"), {
+          onNone: () => Effect.void,
+          onSome: (expression) => {
+            if (
+              expression.callee.type !== "Identifier" ||
+              !nativeErrors.has(expression.callee.name) ||
+              isDirectDefectArgument(expression)
+            ) {
+              return Effect.void;
+            }
             return ctx.report(
               Diagnostic.make({
-                node,
+                node: expression,
                 message:
-                  d > 0
-                    ? 'Avoid native Error inside Effect.gen/fn. Define: class MyError extends Schema.TaggedErrorClass<MyError>()("MyError", { ... }) {} — then yield* new MyError().'
-                    : 'Avoid native Error constructors. Define: class MyError extends Schema.TaggedErrorClass<MyError>()("MyError", { message: Schema.String }) {}',
+                  "Avoid native Error constructors for expected failures. Use a tagged error, or pass the Error directly to Effect.die, Cause.die, or Exit.die for an explicit defect.",
               }),
             );
-          }
-          return Effect.void;
+          },
         }),
-    });
+    };
   },
 });

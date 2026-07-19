@@ -1,130 +1,166 @@
-/**
- * Ban dynamic module loading.
- *
- * Dynamic import/require paths hide dependency edges from static analysis and
- * compiled-binary bundling. Use static imports unless the call site opts out
- * with an adjacent `effect/no-dynamic-imports: allow <reason>` comment.
- */
-import type { Comment, ESTree } from "@oxlint/plugins";
-import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+/** Allow dynamic imports only at named lazy-loading boundaries. */
+import type { ESTree } from "@oxlint/plugins";
+import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
-interface AstNode {
-  readonly type: string;
-  readonly [key: string]: unknown;
-}
+const identifierName = (node: ESTree.Node | null | undefined): string | undefined =>
+  node?.type === "Identifier" ? node.name : undefined;
 
-const allowPattern = /\beffect\/no-dynamic-imports:\s*allow\s+\S/;
-
-const isAstNode = (value: unknown): value is AstNode =>
-  typeof value === "object" && value !== null && "type" in value && typeof value.type === "string";
-
-const getNodeField = (node: AstNode, field: string): AstNode | undefined => {
-  const value = node[field];
-  return isAstNode(value) ? value : undefined;
+const hasNamedBinding = (pattern: ESTree.BindingPattern): boolean => {
+  if (pattern.type === "Identifier") return true;
+  if (pattern.type === "ObjectPattern") return pattern.properties.length > 0;
+  if (pattern.type === "ArrayPattern") return pattern.elements.some((element) => element !== null);
+  return false;
 };
 
-const getStringField = (node: AstNode, field: string): string | undefined => {
-  const value = node[field];
-  return typeof value === "string" ? value : undefined;
-};
+const isNamedVariable = (node: ESTree.Node, value: ESTree.Node): boolean =>
+  node.type === "VariableDeclarator" && node.init === value && hasNamedBinding(node.id);
 
-const getLine = (node: AstNode, edge: "start" | "end"): number | undefined => {
-  const loc = node["loc"];
-  if (typeof loc !== "object" || loc === null) return undefined;
-  const point = (loc as Record<string, unknown>)[edge];
-  if (typeof point !== "object" || point === null) return undefined;
-  const line = (point as Record<string, unknown>)["line"];
-  return typeof line === "number" ? line : undefined;
-};
+const transparentWrappers = new Set([
+  "AwaitExpression",
+  "ChainExpression",
+  "TSAsExpression",
+  "TSNonNullExpression",
+  "TSTypeAssertion",
+  "YieldExpression",
+]);
 
-const hasAllowComment = (node: AstNode, comments: ReadonlyArray<Comment>): boolean => {
-  const startLine = getLine(node, "start");
-  if (startLine === undefined) return false;
-  return comments.some((comment) => {
-    const endLine = getLine(comment as unknown as AstNode, "end");
-    if (endLine === undefined) return false;
-    if (endLine !== startLine - 1 && endLine !== startLine) return false;
-    return allowPattern.test(comment.value);
-  });
-};
-
-const createRequireAliasName = (node: AstNode): string | undefined => {
-  if (node.type !== "VariableDeclarator") return undefined;
-  const id = getNodeField(node, "id");
-  const init = getNodeField(node, "init");
-  if (id?.type !== "Identifier" || init?.type !== "CallExpression") return undefined;
-  const callee = getNodeField(init, "callee");
-  if (callee?.type !== "Identifier" || getStringField(callee, "name") !== "createRequire")
-    return undefined;
-  return getStringField(id, "name");
-};
-
-const classifyDynamicLoadCall = (
-  callee: AstNode | undefined,
-  createRequireAliases: ReadonlySet<string>,
-): string | undefined => {
-  if (callee === undefined) return undefined;
-  if (callee.type === "Identifier") {
-    const name = getStringField(callee, "name");
-    if (name === "require") return "`require(...)` is forbidden. Use a top-level static import.";
-    if (name !== undefined && createRequireAliases.has(name))
-      return "`createRequire(...)` aliases are forbidden. Use a top-level static import.";
+const climbTransparent = (start: ESTree.Node): ESTree.Node => {
+  let current = start;
+  while (current.parent != null && transparentWrappers.has(current.parent.type)) {
+    current = current.parent;
   }
-  if (callee.type === "MemberExpression") {
-    const object = getNodeField(callee, "object");
-    const property = getNodeField(callee, "property");
-    if (
-      object?.type === "Identifier" &&
-      getStringField(object, "name") === "module" &&
-      property?.type === "Identifier" &&
-      getStringField(property, "name") === "require"
-    ) {
-      return "`module.require(...)` is forbidden. Use a top-level static import.";
-    }
+  return current;
+};
+
+const isNamedDirectBinding = (node: ESTree.Node): boolean => {
+  const value = climbTransparent(node);
+  return value.parent != null && isNamedVariable(value.parent, value);
+};
+
+const isNamedFunctionBoundary = (node: ESTree.Node): boolean => {
+  const parent = node.parent;
+  if (parent?.type === "ArrowFunctionExpression" && parent.body === node) {
+    return parent.parent != null && isNamedVariable(parent.parent, parent);
   }
-  if (callee.type === "CallExpression") {
-    const inner = getNodeField(callee, "callee");
-    if (inner?.type === "Identifier" && getStringField(inner, "name") === "createRequire") {
-      return "`createRequire(...)(...)` is forbidden. Use a top-level static import.";
-    }
+  if (parent?.type !== "ReturnStatement" || parent.argument !== node) return false;
+  const block = parent.parent;
+  const fn = block?.parent;
+  return block?.type === "BlockStatement" && fn?.type === "FunctionDeclaration" && fn.id !== null;
+};
+
+const isEffectPromiseCall = (node: ESTree.Node): boolean => {
+  if (node.type !== "CallExpression") return false;
+  const callee = node.callee;
+  if (callee.type !== "MemberExpression" || callee.computed) return false;
+  return (
+    identifierName(callee.object) === "Effect" &&
+    ["promise", "tryPromise"].includes(identifierName(callee.property) ?? "")
+  );
+};
+
+const isEffectPromiseBoundary = (node: ESTree.Node): boolean => {
+  const callback = node.parent;
+  if (callback?.type !== "ArrowFunctionExpression" || callback.body !== node) {
+    return false;
   }
-  return undefined;
+  const call = callback.parent;
+  return call != null && isEffectPromiseCall(call);
+};
+
+const isNamedLazyBoundary = (node: ESTree.Node): boolean => {
+  return (
+    isNamedDirectBinding(node) || isNamedFunctionBoundary(node) || isEffectPromiseBoundary(node)
+  );
+};
+
+const dynamicRequireMessage = (callee: ESTree.Node): string | undefined => {
+  if (identifierName(callee) === "require") return "Avoid require(). Use a static import.";
+  if (callee?.type !== "MemberExpression") return undefined;
+  return identifierName(callee.object) === "module" && identifierName(callee.property) === "require"
+    ? "Avoid module.require(). Use a static import."
+    : undefined;
 };
 
 export const noDynamicImports = Rule.define({
   name: "no-dynamic-imports",
   meta: Rule.meta({
     type: "problem",
-    description: "Avoid dynamic import/require. Use top-level static imports.",
+    description: "Keep dynamic imports behind named lazy-loading boundaries.",
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    const createRequireAliases = new Set<string>();
-    const reportUnlessAllowed = (node: ESTree.Node, message: string) =>
-      hasAllowComment(node as unknown as AstNode, ctx.sourceCode.getAllComments())
-        ? Effect.void
-        : ctx.report(Diagnostic.make({ node, message }));
-
+    const createRequireNames = new Set<string>();
+    const requireAliases = new Set<string>();
+    const report = (node: ESTree.Node, message: string) =>
+      ctx.report(Diagnostic.make({ node, message }));
     return {
-      VariableDeclarator: (node: ESTree.Node) => {
-        const alias = createRequireAliasName(node as unknown as AstNode);
-        if (alias === undefined) return Effect.void;
-        createRequireAliases.add(alias);
-        return reportUnlessAllowed(
-          node,
-          "`createRequire(...)` is forbidden. Use a top-level static import.",
-        );
-      },
-      ImportExpression: (node: ESTree.Node) =>
-        reportUnlessAllowed(
-          node,
-          "Dynamic `import(...)` is forbidden. Use a top-level static import.",
-        ),
-      CallExpression: (node: ESTree.Node) => {
-        const call = node as unknown as AstNode;
-        const message = classifyDynamicLoadCall(getNodeField(call, "callee"), createRequireAliases);
-        return message === undefined ? Effect.void : reportUnlessAllowed(node, message);
+      ImportDeclaration: (node) =>
+        Option.match(AST.narrow(node, "ImportDeclaration"), {
+          onNone: () => Effect.void,
+          onSome: (declaration) => {
+            if (!["module", "node:module"].includes(AST.importSource(declaration))) {
+              return Effect.void;
+            }
+            for (const specifier of declaration.specifiers) {
+              if (
+                specifier.type === "ImportSpecifier" &&
+                identifierName(specifier.imported) === "createRequire"
+              ) {
+                createRequireNames.add(specifier.local.name);
+              }
+            }
+            return Effect.void;
+          },
+        }),
+      VariableDeclarator: (node) =>
+        Option.match(AST.narrow(node, "VariableDeclarator"), {
+          onNone: () => Effect.void,
+          onSome: (declaration) => {
+            if (
+              declaration.id.type === "Identifier" &&
+              declaration.init?.type === "CallExpression" &&
+              declaration.init.callee.type === "Identifier" &&
+              createRequireNames.has(declaration.init.callee.name)
+            ) {
+              requireAliases.add(declaration.id.name);
+              return report(
+                declaration,
+                "Avoid createRequire(). Keep module loading static or use a named import() boundary.",
+              );
+            }
+            return Effect.void;
+          },
+        }),
+      ImportExpression: (node) =>
+        Option.match(AST.narrow(node, "ImportExpression"), {
+          onNone: () => Effect.void,
+          onSome: (importExpression) =>
+            isNamedLazyBoundary(importExpression)
+              ? Effect.void
+              : ctx.report(
+                  Diagnostic.make({
+                    node,
+                    message:
+                      "Avoid inline dynamic imports. Bind the imported module or a lazy loader to a descriptive name before using it.",
+                  }),
+                ),
+        }),
+      CallExpression: (node) => {
+        return Option.match(AST.narrow(node, "CallExpression"), {
+          onNone: () => Effect.void,
+          onSome: (call) => {
+            const calleeName = identifierName(call.callee);
+            const message =
+              calleeName !== undefined && requireAliases.has(calleeName)
+                ? "Avoid createRequire aliases. Keep module loading static."
+                : dynamicRequireMessage(call.callee);
+            return message === undefined
+              ? Effect.void
+              : ctx.report(Diagnostic.make({ node: call, message }));
+          },
+        });
       },
     };
   },

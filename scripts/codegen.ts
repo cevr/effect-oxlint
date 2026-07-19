@@ -94,7 +94,7 @@ for (const cat of categoryOrder) {
   if (!catEntries || catEntries.length === 0) continue;
   lines.push(`// --- ${cat} ---`);
   for (const entry of catEntries) {
-    lines.push(`export { ${entry.exportName} } from "./${entry.fileName}.js"`);
+    lines.push(`export { ${entry.exportName} } from "./${entry.fileName}.js";`);
   }
   lines.push("");
 }

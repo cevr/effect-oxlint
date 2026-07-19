@@ -1,51 +1,46 @@
-/**
- * Ban `new Promise()`. Context-aware messaging.
- *
- * Inside Effect.gen/fn: "Use Effect.tryPromise or Effect.async"
- * Outside: "Use Effect.tryPromise or wrap with Effect.fn"
- *
- * Source: language-service/newPromise
- */
-import { Diagnostic, Rule, Visitor, RuleContext } from "../vendor/effect-oxlint/index.js";
+/** Ban the global Promise constructor and its static APIs. */
+import type { ESTree } from "@oxlint/plugins";
+import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
-import * as Ref from "effect/Ref";
+import * as Option from "effect/Option";
 
-import { makeEffectContextTracker } from "./_effect-context.js";
+const isPromiseIdentifier = (node: ESTree.Node): boolean =>
+  node.type === "Identifier" && "name" in node && node.name === "Promise";
 
 export const noNewPromise = Rule.define({
   name: "no-new-promise",
   meta: Rule.meta({
     type: "suggestion",
-    description: "Avoid new Promise(). Use Effect.async or Effect.tryPromise.",
+    description: "Avoid Promise APIs. Use Effect concurrency and promise boundaries.",
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    const [depth, tracker] = yield* makeEffectContextTracker;
-
-    return Visitor.merge(tracker, {
-      NewExpression: (node) =>
-        Effect.flatMap(Ref.get(depth), (d) => {
-          const callee = (node as unknown as Record<string, unknown>)["callee"];
-          if (
-            callee != null &&
-            typeof callee === "object" &&
-            "type" in callee &&
-            callee.type === "Identifier" &&
-            "name" in callee &&
-            callee.name === "Promise"
-          ) {
-            return ctx.report(
-              Diagnostic.make({
-                node,
-                message:
-                  d > 0
-                    ? "Avoid new Promise() inside Effect.gen/fn. Use Effect.async for callback APIs, Effect.tryPromise for existing promises, or Effect.promise for infallible promises."
-                    : "Avoid new Promise(). Use Effect.async for callback APIs, Effect.tryPromise for existing promises — wrap this function with Effect.fn.",
-              }),
-            );
-          }
-          return Effect.void;
+    const report = (node: ESTree.Node) =>
+      ctx.report(
+        Diagnostic.make({
+          node,
+          message:
+            "Avoid Promise APIs. Use Effect.async for callbacks and Effect.promise or Effect.tryPromise at promise boundaries.",
         }),
-    });
+      );
+
+    return {
+      NewExpression: (node) =>
+        Option.match(AST.narrow(node, "NewExpression"), {
+          onNone: () => Effect.void,
+          onSome: (expression) =>
+            isPromiseIdentifier(expression.callee) ? report(expression) : Effect.void,
+        }),
+      CallExpression: (node) =>
+        Option.match(AST.narrow(node, "CallExpression"), {
+          onNone: () => Effect.void,
+          onSome: (call) => {
+            if (isPromiseIdentifier(call.callee)) return report(call);
+            if (call.callee.type !== "MemberExpression") return Effect.void;
+            const member = Option.getOrUndefined(AST.memberNames(call.callee));
+            return member?.[0] === "Promise" ? report(call) : Effect.void;
+          },
+        }),
+    };
   },
 });
