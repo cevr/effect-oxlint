@@ -47,7 +47,7 @@
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
-    "test": "bun test",
+    "test": "bun run build && bun test",
     "gate": "concurrently -n type,style,test -c blue,yellow,green \"bun run typecheck\" \"bun run lint\" \"bun run test\"",
     "codegen": "bun run scripts/codegen.ts",
     "add-rule": "bun run scripts/add-rule.ts",
