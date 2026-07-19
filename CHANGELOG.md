@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.4.0
+
+### Minor Changes
+
+- [#7](https://github.com/cevr/effect-oxlint/pull/7) [`acfc8d4`](https://github.com/cevr/effect-oxlint/commit/acfc8d4bb34b1b564d8b03dc705bffbe08b5edc4) Thanks [@cevr](https://github.com/cevr)! - Replace the legacy preset matrix with one strict `recommended` preset for Effect-native application code. The maintained AST-only rules now ban imperative failure handling, Promise control flow, ternaries, inline dynamic imports, and runtime capabilities that have direct Effect replacements while preserving explicit defect, lazy-loading, and platform-adapter boundaries.
+
 ## 0.3.0
 
 ### Minor Changes
