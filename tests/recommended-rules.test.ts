@@ -162,4 +162,43 @@ describe("dynamic loading", () => {
     Object.defineProperty(awaited, "parent", { value: binding });
     expect(Testing.runRule(noDynamicImports, "ImportExpression", imported)).toHaveLength(0);
   });
+
+  test("allows direct Effect promise boundaries and named destructuring", () => {
+    const importedByEffect = {
+      type: "ImportExpression",
+      source: Testing.strLiteral("./module.js"),
+    } as never;
+    const callback = Testing.arrowFn(importedByEffect);
+    const boundary = Testing.callOfMember("Effect", "tryPromise", [callback]);
+    Object.defineProperty(importedByEffect, "parent", { value: callback });
+    Object.defineProperty(callback, "parent", { value: boundary });
+    expect(Testing.runRule(noDynamicImports, "ImportExpression", importedByEffect)).toHaveLength(0);
+
+    const importedByBinding = {
+      type: "ImportExpression",
+      source: Testing.strLiteral("./module.js"),
+    } as never;
+    const destructuring = {
+      type: "VariableDeclarator",
+      id: {
+        type: "ObjectPattern",
+        properties: [
+          {
+            type: "Property",
+            key: Testing.id("moduleValue"),
+            value: Testing.id("moduleValue"),
+            computed: false,
+            shorthand: true,
+            kind: "init",
+            method: false,
+          },
+        ],
+      },
+      init: importedByBinding,
+    } as never;
+    Object.defineProperty(importedByBinding, "parent", { value: destructuring });
+    expect(Testing.runRule(noDynamicImports, "ImportExpression", importedByBinding)).toHaveLength(
+      0,
+    );
+  });
 });

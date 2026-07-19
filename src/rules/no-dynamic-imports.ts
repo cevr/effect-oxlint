@@ -7,8 +7,15 @@ import * as Option from "effect/Option";
 const identifierName = (node: ESTree.Node | null | undefined): string | undefined =>
   node?.type === "Identifier" ? node.name : undefined;
 
+const hasNamedBinding = (pattern: ESTree.BindingPattern): boolean => {
+  if (pattern.type === "Identifier") return true;
+  if (pattern.type === "ObjectPattern") return pattern.properties.length > 0;
+  if (pattern.type === "ArrayPattern") return pattern.elements.some((element) => element !== null);
+  return false;
+};
+
 const isNamedVariable = (node: ESTree.Node, value: ESTree.Node): boolean =>
-  node.type === "VariableDeclarator" && node.init === value && node.id.type === "Identifier";
+  node.type === "VariableDeclarator" && node.init === value && hasNamedBinding(node.id);
 
 const transparentWrappers = new Set([
   "AwaitExpression",
@@ -35,7 +42,7 @@ const isNamedDirectBinding = (node: ESTree.Node): boolean => {
 const isNamedFunctionBoundary = (node: ESTree.Node): boolean => {
   const parent = node.parent;
   if (parent?.type === "ArrowFunctionExpression" && parent.body === node) {
-    return parent.parent !== undefined && isNamedVariable(parent.parent, parent);
+    return parent.parent != null && isNamedVariable(parent.parent, parent);
   }
   if (parent?.type !== "ReturnStatement" || parent.argument !== node) return false;
   const block = parent.parent;
@@ -53,19 +60,19 @@ const isEffectPromiseCall = (node: ESTree.Node): boolean => {
   );
 };
 
-const isNamedEffectBoundary = (node: ESTree.Node): boolean => {
+const isEffectPromiseBoundary = (node: ESTree.Node): boolean => {
   const callback = node.parent;
   if (callback?.type !== "ArrowFunctionExpression" || callback.body !== node) {
     return false;
   }
   const call = callback.parent;
-  if (call === undefined || !isEffectPromiseCall(call)) return false;
-  const value = climbTransparent(call);
-  return value.parent != null && isNamedVariable(value.parent, value);
+  return call != null && isEffectPromiseCall(call);
 };
 
 const isNamedLazyBoundary = (node: ESTree.Node): boolean => {
-  return isNamedDirectBinding(node) || isNamedFunctionBoundary(node) || isNamedEffectBoundary(node);
+  return (
+    isNamedDirectBinding(node) || isNamedFunctionBoundary(node) || isEffectPromiseBoundary(node)
+  );
 };
 
 const dynamicRequireMessage = (callee: ESTree.Node): string | undefined => {
