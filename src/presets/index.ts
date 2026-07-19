@@ -1,7 +1,1 @@
-export { full } from "./full.js";
-export { core } from "./core.js";
-export { effectNative } from "./effect-native.js";
-export { functional } from "./functional.js";
-export { strict } from "./strict.js";
-export { v3 } from "./v3.js";
-export { v3Strict } from "./v3-strict.js";
+export { recommended } from "./recommended.js";

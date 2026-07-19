@@ -1,16 +1,5 @@
-/**
- * Ban `throw` statements. Context-aware messaging.
- *
- * Inside Effect.gen/fn: "Use yield* Effect.fail() or yield* new MyError()"
- * Outside: "Model errors with Effect.fail() — wrap this function with Effect.fn"
- *
- * Source: effect convention — errors should be in the type system
- */
-import { Diagnostic, Rule, Visitor, RuleContext } from "../vendor/effect-oxlint/index.js";
-import * as Effect from "effect/Effect";
-import * as Ref from "effect/Ref";
-
-import { makeEffectContextTracker } from "./_effect-context.js";
+/** Ban every throw statement. */
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 
 export const noThrowStatement = Rule.define({
   name: "no-throw-statement",
@@ -20,21 +9,15 @@ export const noThrowStatement = Rule.define({
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    const [depth, tracker] = yield* makeEffectContextTracker;
-
-    return Visitor.merge(tracker, {
+    return {
       ThrowStatement: (node) =>
-        Effect.flatMap(Ref.get(depth), (d) =>
-          ctx.report(
-            Diagnostic.make({
-              node,
-              message:
-                d > 0
-                  ? "Avoid throw inside Effect.gen/fn. Use yield* Effect.fail(new MyError()) or yield* new MyError() for yieldable errors."
-                  : "Avoid throw. Model errors with Effect — wrap this function with Effect.fn and use Effect.fail with tagged errors.",
-            }),
-          ),
+        ctx.report(
+          Diagnostic.make({
+            node,
+            message:
+              "Avoid throw. Model expected failures with tagged errors and explicit defects with Effect.die.",
+          }),
         ),
-    });
+    };
   },
 });

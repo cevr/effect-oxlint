@@ -1,16 +1,5 @@
-/**
- * Ban all `try` statements: try/catch, try/finally, and try/catch/finally.
- *
- * Inside Effect.gen/fn: "Use Effect.try or Effect.tryPromise"
- * Outside: "Wrap with Effect.fn and use Effect.try for error handling"
- *
- * Source: biome-effect-linting-rules/no-try-catch, language-service/tryCatchInEffectGen
- */
-import { Diagnostic, Rule, Visitor, RuleContext } from "../vendor/effect-oxlint/index.js";
-import * as Effect from "effect/Effect";
-import * as Ref from "effect/Ref";
-
-import { makeEffectContextTracker } from "./_effect-context.js";
+/** Ban every try statement, including catch and finally variants. */
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 
 export const noTryCatch = Rule.define({
   name: "no-try-catch",
@@ -21,21 +10,15 @@ export const noTryCatch = Rule.define({
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    const [depth, tracker] = yield* makeEffectContextTracker;
-
-    return Visitor.merge(tracker, {
+    return {
       TryStatement: (node) =>
-        Effect.flatMap(Ref.get(depth), (d) =>
-          ctx.report(
-            Diagnostic.make({
-              node,
-              message:
-                d > 0
-                  ? "Avoid try/catch/finally inside Effect.gen/fn. Use Effect.try or Effect.tryPromise for failures and Effect.ensuring or Effect.acquireUseRelease for finalization."
-                  : "Avoid try/catch/finally. Use Effect.try or Effect.tryPromise for failures and Effect.ensuring or Effect.acquireUseRelease for finalization.",
-            }),
-          ),
+        ctx.report(
+          Diagnostic.make({
+            node,
+            message:
+              "Avoid try/catch/finally. Use Effect.try or Effect.tryPromise for failures and Effect.ensuring or Effect.acquireUseRelease for finalization.",
+          }),
         ),
-    });
+    };
   },
 });
