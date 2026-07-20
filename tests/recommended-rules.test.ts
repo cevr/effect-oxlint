@@ -9,6 +9,7 @@ import {
   noNewError,
   noNewPromise,
   noTernary,
+  noTestLifecycleHooks,
   noThrowStatement,
   noTryCatch,
 } from "../src/rules/index.js";
@@ -26,6 +27,7 @@ describe("recommended preset", () => {
       "effect/noNewPromise": "error",
       "effect/noNodeBuiltinImport": "error",
       "effect/noTernary": "error",
+      "effect/noTestLifecycleHooks": "error",
       "effect/noThrowStatement": "error",
       "effect/noTryCatch": "error",
     });
@@ -33,6 +35,18 @@ describe("recommended preset", () => {
 });
 
 describe("unconditional syntax", () => {
+  test("rejects test lifecycle hooks", () => {
+    for (const hook of ["afterAll", "afterEach", "beforeAll", "beforeEach"]) {
+      expect(
+        Testing.runRule(noTestLifecycleHooks, "CallExpression", Testing.callExpr(hook)),
+      ).toHaveLength(1);
+    }
+
+    expect(
+      Testing.runRule(noTestLifecycleHooks, "CallExpression", Testing.callExpr("scoped")),
+    ).toHaveLength(0);
+  });
+
   test("rejects async functions and await", () => {
     const asyncFunction = { ...Testing.arrowFn(), async: true } as never;
     const awaitExpression = {

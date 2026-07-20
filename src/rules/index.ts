@@ -16,5 +16,6 @@ export { noNewError } from "./no-new-error.js";
 export { noNewPromise } from "./no-new-promise.js";
 export { noNodeBuiltinImport } from "./no-node-builtin-import.js";
 export { noTernary } from "./no-ternary.js";
+export { noTestLifecycleHooks } from "./no-test-lifecycle-hooks.js";
 export { noThrowStatement } from "./no-throw-statement.js";
 export { noTryCatch } from "./no-try-catch.js";

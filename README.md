@@ -25,19 +25,20 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 
 ## Recommended Rules
 
-| Rule                         | Contract                                                                                  |
-| ---------------------------- | ----------------------------------------------------------------------------------------- |
-| `effect/noAsyncFunction`     | Bans async functions and await expressions                                                |
-| `effect/noTryCatch`          | Bans every try/catch/finally statement                                                    |
-| `effect/noThrowStatement`    | Bans every throw statement                                                                |
-| `effect/noNewPromise`        | Bans new Promise, Promise calls, and Promise static APIs                                  |
-| `effect/noNewError`          | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die |
-| `effect/noTernary`           | Bans conditional expressions while allowing ordinary if statements                        |
-| `effect/noDynamicImports`    | Allows import() only behind a named lazy-loading boundary; bans require()                 |
-| `effect/noEffectDo`          | Bans Effect.Do                                                                            |
-| `effect/noEffectBind`        | Bans Effect.bind                                                                          |
-| `effect/noGlobals`           | Bans ambient capabilities with direct Effect replacements                                 |
-| `effect/noNodeBuiltinImport` | Bans fully replaced Node modules and replaced operations from partial modules             |
+| Rule                          | Contract                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------- |
+| `effect/noAsyncFunction`      | Bans async functions and await expressions                                                |
+| `effect/noTryCatch`           | Bans every try/catch/finally statement                                                    |
+| `effect/noTestLifecycleHooks` | Bans `beforeEach`, `afterEach`, `beforeAll`, and `afterAll`; use Effect scopes instead    |
+| `effect/noThrowStatement`     | Bans every throw statement                                                                |
+| `effect/noNewPromise`         | Bans new Promise, Promise calls, and Promise static APIs                                  |
+| `effect/noNewError`           | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die |
+| `effect/noTernary`            | Bans conditional expressions while allowing ordinary if statements                        |
+| `effect/noDynamicImports`     | Allows import() only behind a named lazy-loading boundary; bans require()                 |
+| `effect/noEffectDo`           | Bans Effect.Do                                                                            |
+| `effect/noEffectBind`         | Bans Effect.bind                                                                          |
+| `effect/noGlobals`            | Bans ambient capabilities with direct Effect replacements                                 |
+| `effect/noNodeBuiltinImport`  | Bans fully replaced Node modules and replaced operations from partial modules             |
 
 The preset intentionally allows `Effect.as`, `Option.as`, `Effect.never`, `Effect.async`, ordinary `if` and `switch` statements, and runtime runners at explicit application boundaries.
 

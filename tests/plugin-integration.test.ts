@@ -34,6 +34,7 @@ describe("compiled oxlint plugin", () => {
       "noNewPromise",
       "noNodeBuiltinImport",
       "noTernary",
+      "noTestLifecycleHooks",
       "noThrowStatement",
       "noTryCatch",
     ]) {

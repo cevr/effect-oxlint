@@ -2,6 +2,8 @@ import * as fs from "node:fs";
 
 import * as Effect from "effect/Effect";
 
+beforeEach(() => Effect.void);
+
 export async function invalidProgram(condition: boolean) {
   try {
     await fetch("https://example.com");
