@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.5.0
+
+### Minor Changes
+
+- [`fd2dfd6`](https://github.com/cevr/effect-oxlint/commit/fd2dfd6dc263947f2b997754c8e64661975e316d) Thanks [@cevr](https://github.com/cevr)! - Ban test lifecycle hooks in the recommended preset. Use Effect scopes and scoped test variants for fixture acquisition and release.
+
 ## 0.4.0
 
 ### Minor Changes
