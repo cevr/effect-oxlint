@@ -107,6 +107,20 @@ const staticMember = (
 ): readonly [object: string, property: string] | undefined =>
   Option.getOrUndefined(AST.memberNames(node));
 
+const processStreams = new Set(["stderr", "stdin", "stdout"]);
+
+// No Effect service exposes TTY detection, so capability probes stay allowed
+// while every operational use of the streams remains banned.
+const isTtyRead = (node: ESTree.MemberExpression): boolean => {
+  const parent = node.parent;
+  if (parent?.type !== "MemberExpression" || parent.computed) return false;
+  return (
+    parent.object === node &&
+    parent.property.type === "Identifier" &&
+    parent.property.name === "isTTY"
+  );
+};
+
 const isCryptoDigest = (node: ESTree.MemberExpression): boolean => {
   if (node.computed || node.property.type !== "Identifier" || node.property.name !== "digest") {
     return false;
@@ -155,6 +169,13 @@ export const noGlobals = Rule.define({
 
         for (const [bannedObject, properties, alternative] of memberBans) {
           if (object === bannedObject && properties.has(property)) {
+            if (
+              object === "process" &&
+              processStreams.has(property) &&
+              isTtyRead(memberExpression)
+            ) {
+              return Effect.void;
+            }
             return report(memberExpression, `${object}.${property}`, alternative);
           }
         }

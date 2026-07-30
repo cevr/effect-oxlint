@@ -31,6 +31,35 @@ describe("ambient platform APIs", () => {
     }
   });
 
+  test("allows isTTY capability reads on process streams but keeps every other use banned", () => {
+    for (const stream of ["stderr", "stdin", "stdout"] as const) {
+      const streamAccess = Testing.memberExpr("process", stream);
+      const ttyRead = {
+        type: "MemberExpression",
+        object: streamAccess,
+        property: Testing.id("isTTY"),
+        computed: false,
+        optional: false,
+      } as never;
+      Object.assign(streamAccess, { parent: ttyRead });
+      expect(Testing.runRule(noGlobals, "MemberExpression", streamAccess)).toHaveLength(0);
+    }
+
+    const writeAccess = Testing.memberExpr("process", "stderr");
+    const writeCall = {
+      type: "MemberExpression",
+      object: writeAccess,
+      property: Testing.id("write"),
+      computed: false,
+      optional: false,
+    } as never;
+    Object.assign(writeAccess, { parent: writeCall });
+    expect(Testing.runRule(noGlobals, "MemberExpression", writeAccess)).toHaveLength(1);
+    expect(
+      Testing.runRule(noGlobals, "MemberExpression", Testing.memberExpr("process", "stdout")),
+    ).toHaveLength(1);
+  });
+
   test("rejects Web Crypto digest but leaves unmatched crypto operations alone", () => {
     const digest = {
       type: "MemberExpression",

@@ -37,7 +37,7 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 | `effect/noDynamicImports`     | Allows import() only behind a named lazy-loading boundary; bans require()                 |
 | `effect/noEffectDo`           | Bans Effect.Do                                                                            |
 | `effect/noEffectBind`         | Bans Effect.bind                                                                          |
-| `effect/noGlobals`            | Bans ambient capabilities with direct Effect replacements                                 |
+| `effect/noGlobals`            | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`    |
 | `effect/noNodeBuiltinImport`  | Bans fully replaced Node modules and replaced operations from partial modules             |
 
 The preset intentionally allows `Effect.as`, `Option.as`, `Effect.never`, `Effect.async`, ordinary `if` and `switch` statements, and runtime runners at explicit application boundaries.
