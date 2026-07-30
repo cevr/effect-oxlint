@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.5.1
+
+### Patch Changes
+
+- [`8633093`](https://github.com/cevr/effect-oxlint/commit/8633093b3be0ac124320588b8c28c69203abbbe3) Thanks [@cevr](https://github.com/cevr)! - Allow `process.stdout.isTTY`, `process.stderr.isTTY`, and `process.stdin.isTTY` reads in `effect/noGlobals`. No Effect service exposes TTY detection; every other use of the process streams stays banned.
+
 ## 0.5.0
 
 ### Minor Changes
