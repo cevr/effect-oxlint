@@ -25,6 +25,7 @@ describe("compiled oxlint plugin", () => {
     const output = new TextDecoder().decode(result.stdout);
     expect(result.exitCode).toBe(1);
     for (const rule of [
+      "noAs",
       "noAsyncFunction",
       "noDynamicImports",
       "noEffectBind",
@@ -40,5 +41,6 @@ describe("compiled oxlint plugin", () => {
     ]) {
       expect(output).toContain(`effect(${rule})`);
     }
+    expect(output.match(/effect\(noAs\)/g)).toHaveLength(2);
   });
 });
