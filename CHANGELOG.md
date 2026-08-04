@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.6.0
+
+### Minor Changes
+
+- [#12](https://github.com/cevr/effect-oxlint/pull/12) [`bbe1ca5`](https://github.com/cevr/effect-oxlint/commit/bbe1ca54e2cc54d7f0137be75fdf5d549fa91fd8) Thanks [@cevr](https://github.com/cevr)! - Add `effect/noAs` to the recommended preset. Ban TypeScript `as` assertions in favor of `satisfies` expressions.
+
 ## 0.5.1
 
 ### Patch Changes
