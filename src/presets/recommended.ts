@@ -1,5 +1,6 @@
 /** Strict, non-type-aware policy for Effect-native application code. */
 export const recommended = {
+  "effect/noAs": "error",
   "effect/noAsyncFunction": "error",
   "effect/noDynamicImports": "error",
   "effect/noEffectBind": "error",

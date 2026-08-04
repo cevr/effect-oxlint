@@ -15,3 +15,5 @@ export const validProgram = Effect.gen(function* () {
   yield* Effect.as(Effect.void, createHmac("sha256", "fixture"));
   return yield* Effect.die(new Error("explicit fixture defect"));
 });
+
+export const validPolicy = { enabled: true } satisfies { enabled: boolean };

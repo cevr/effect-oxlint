@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { recommended } from "../src/presets/recommended.js";
 import {
+  noAs,
   noAsyncFunction,
   noDynamicImports,
   noEffectBind,
@@ -18,6 +19,7 @@ import { Testing } from "../src/vendor/effect-oxlint/index.js";
 describe("recommended preset", () => {
   test("enables the complete maintained rule set at error severity", () => {
     expect(recommended).toEqual({
+      "effect/noAs": "error",
       "effect/noAsyncFunction": "error",
       "effect/noDynamicImports": "error",
       "effect/noEffectBind": "error",
@@ -35,6 +37,19 @@ describe("recommended preset", () => {
 });
 
 describe("unconditional syntax", () => {
+  test("rejects as assertions and allows satisfies expressions", () => {
+    expect(
+      Testing.runRule(noAs, "TSAsExpression", Testing.tsAsExpr("TSTypeReference")),
+    ).toHaveLength(1);
+
+    const satisfiesExpression = {
+      type: "TSSatisfiesExpression",
+      expression: Testing.id("value"),
+      typeAnnotation: Testing.tsTypeRef("Expected"),
+    } as never;
+    expect(Testing.runRule(noAs, "TSSatisfiesExpression", satisfiesExpression)).toHaveLength(0);
+  });
+
   test("rejects test lifecycle hooks", () => {
     for (const hook of ["afterAll", "afterEach", "beforeAll", "beforeEach"]) {
       expect(

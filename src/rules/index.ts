@@ -9,6 +9,7 @@ export { noEffectBind } from "./no-effect-bind.js";
 export { noEffectDo } from "./no-effect-do.js";
 
 // --- AST pattern rules ---
+export { noAs } from "./no-as.js";
 export { noAsyncFunction } from "./no-async-function.js";
 export { noDynamicImports } from "./no-dynamic-imports.js";
 export { noGlobals } from "./no-globals.js";

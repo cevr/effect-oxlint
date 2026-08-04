@@ -1,6 +1,7 @@
 {
   "jsPlugins": ["../../dist/plugin.js"],
   "rules": {
+    "effect/noAs": "error",
     "effect/noAsyncFunction": "error",
     "effect/noDynamicImports": "error",
     "effect/noEffectBind": "error",

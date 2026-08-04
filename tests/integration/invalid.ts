@@ -21,3 +21,5 @@ export async function invalidProgram(condition: boolean) {
 }
 
 export const nativeFailure = Effect.fail(new Error("typed channel"));
+export const assertedFailure = nativeFailure as Effect.Effect<never, Error>;
+export const assertedLiteral = { enabled: true } as const;
