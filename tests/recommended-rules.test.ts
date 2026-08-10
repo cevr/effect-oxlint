@@ -9,6 +9,7 @@ import {
   noEffectDo,
   noNewError,
   noNewPromise,
+  noNullish,
   noTernary,
   noTestLifecycleHooks,
   noThrowStatement,
@@ -28,6 +29,7 @@ describe("recommended preset", () => {
       "effect/noNewError": "error",
       "effect/noNewPromise": "error",
       "effect/noNodeBuiltinImport": "error",
+      "effect/noNullish": "error",
       "effect/noTernary": "error",
       "effect/noTestLifecycleHooks": "error",
       "effect/noThrowStatement": "error",
@@ -37,6 +39,32 @@ describe("recommended preset", () => {
 });
 
 describe("unconditional syntax", () => {
+  test("rejects explicit nullish values and types", () => {
+    const diagnostics = Testing.runRule(noNullish, "Literal", {
+      type: "Literal",
+      value: null,
+    } as never);
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.diagnostic.message).toContain("Use Option");
+    expect(
+      Testing.runRule(noNullish, "TSNullKeyword", { type: "TSNullKeyword" } as never),
+    ).toHaveLength(1);
+    expect(
+      Testing.runRule(noNullish, "TSUndefinedKeyword", {
+        type: "TSUndefinedKeyword",
+      } as never),
+    ).toHaveLength(1);
+    expect(Testing.runRule(noNullish, "Literal", Testing.strLiteral("available"))).toHaveLength(0);
+    expect(
+      Testing.runRule(noNullish, "Literal", {
+        type: "Literal",
+        value: null,
+        regex: { flags: "v", pattern: "[a&&b]" },
+      } as never),
+    ).toHaveLength(0);
+  });
+
   test("rejects as assertions and allows satisfies expressions", () => {
     expect(
       Testing.runRule(noAs, "TSAsExpression", Testing.tsAsExpr("TSTypeReference")),

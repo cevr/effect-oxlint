@@ -34,6 +34,7 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 | `effect/noThrowStatement`     | Bans every throw statement                                                                |
 | `effect/noNewPromise`         | Bans new Promise, Promise calls, and Promise static APIs                                  |
 | `effect/noNewError`           | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die |
+| `effect/noNullish`            | Bans null and undefined; use Option or a domain enum for richer state                     |
 | `effect/noTernary`            | Bans conditional expressions while allowing ordinary if statements                        |
 | `effect/noDynamicImports`     | Allows import() only behind a named lazy-loading boundary; bans require()                 |
 | `effect/noEffectDo`           | Bans Effect.Do                                                                            |

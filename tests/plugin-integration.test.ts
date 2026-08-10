@@ -34,6 +34,7 @@ describe("compiled oxlint plugin", () => {
       "noNewError",
       "noNewPromise",
       "noNodeBuiltinImport",
+      "noNullish",
       "noTernary",
       "noTestLifecycleHooks",
       "noThrowStatement",
@@ -42,5 +43,6 @@ describe("compiled oxlint plugin", () => {
       expect(output).toContain(`effect(${rule})`);
     }
     expect(output.match(/effect\(noAs\)/g)).toHaveLength(2);
+    expect(output.match(/effect\(noNullish\)/g)).toHaveLength(5);
   });
 });

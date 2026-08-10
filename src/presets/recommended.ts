@@ -9,6 +9,7 @@ export const recommended = {
   "effect/noNewError": "error",
   "effect/noNewPromise": "error",
   "effect/noNodeBuiltinImport": "error",
+  "effect/noNullish": "error",
   "effect/noTernary": "error",
   "effect/noTestLifecycleHooks": "error",
   "effect/noThrowStatement": "error",

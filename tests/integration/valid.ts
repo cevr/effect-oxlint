@@ -17,3 +17,6 @@ export const validProgram = Effect.gen(function* () {
 });
 
 export const validPolicy = { enabled: true } satisfies { enabled: boolean };
+export const wireNames = { undefined: true };
+export const wireName = wireNames.undefined;
+export type WireNames = { undefined: boolean };
