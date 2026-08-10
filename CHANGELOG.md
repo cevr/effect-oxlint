@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.7.0
+
+### Minor Changes
+
+- [`d4b5cbf`](https://github.com/cevr/effect-oxlint/commit/d4b5cbf82d6256f58f4a52e97e46ffdc19ff893b) Thanks [@cevr](https://github.com/cevr)! - Add the recommended `effect/noNullish` rule for Option-first domain modeling.
+
 ## 0.6.0
 
 ### Minor Changes
