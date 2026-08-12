@@ -1,5 +1,13 @@
 # oxlint-plugin-effect
 
+## 0.8.1
+
+### Patch Changes
+
+- [#17](https://github.com/cevr/effect-oxlint/pull/17) [`15ef66b`](https://github.com/cevr/effect-oxlint/commit/15ef66b0d1433ead22cd05bb0f37c9188414572a) Thanks [@cevr](https://github.com/cevr)! - Keep public build entries and generated rule surfaces explicit.
+
+  Make the rule scaffolder produce the established Effect-first rule pattern.
+
 ## 0.8.0
 
 ### Minor Changes
