@@ -1,49 +1,82 @@
 /** Require Effect.fn for named generator operations. */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
-import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { Diagnostic, Rule, RuleContext, Scope } from "../vendor/effect-oxlint/index.js";
 
 const isStaticMember = (
   node: ESTree.Expression,
-  object: string,
+  objects: ReadonlySet<string>,
   property: string,
 ): node is ESTree.MemberExpression =>
   node.type === "MemberExpression" &&
   !node.computed &&
   node.object.type === "Identifier" &&
-  node.object.name === object &&
+  objects.has(node.object.name) &&
   node.property.type === "Identifier" &&
   node.property.name === property;
 
-const isEffectGenCall = (node: ESTree.Expression): node is ESTree.CallExpression =>
+const isEffectGenCall = (
+  node: ESTree.Expression,
+  effectNamespaces: ReadonlySet<string>,
+): node is ESTree.CallExpression =>
   node.type === "CallExpression" &&
   node.callee.type !== "Super" &&
-  isStaticMember(node.callee, "Effect", "gen");
+  isStaticMember(node.callee, effectNamespaces, "gen");
 
-const isEffectWithSpanCall = (node: ESTree.CallExpression["arguments"][number]): boolean =>
+const isEffectWithSpanCall = (
+  node: ESTree.CallExpression["arguments"][number],
+  effectNamespaces: ReadonlySet<string>,
+): boolean =>
   node.type === "CallExpression" &&
   node.callee.type !== "Super" &&
-  isStaticMember(node.callee, "Effect", "withSpan");
+  isStaticMember(node.callee, effectNamespaces, "withSpan");
 
-const spansEffectGenDirectly = (node: ESTree.CallExpression): boolean =>
+const spansEffectGenDirectly = (
+  node: ESTree.CallExpression,
+  effectNamespaces: ReadonlySet<string>,
+): boolean =>
   node.callee.type !== "Super" &&
   node.callee.type === "MemberExpression" &&
   !node.callee.computed &&
   node.callee.property.type === "Identifier" &&
   node.callee.property.name === "withSpan" &&
-  isEffectGenCall(node.callee.object);
+  isEffectGenCall(node.callee.object, effectNamespaces);
 
-const pipesOnlyWithSpanFromEffectGen = (node: ESTree.CallExpression): boolean =>
+const pipesWithSpanFromEffectGen = (
+  node: ESTree.CallExpression,
+  effectNamespaces: ReadonlySet<string>,
+): boolean =>
   node.callee.type !== "Super" &&
   node.callee.type === "MemberExpression" &&
   !node.callee.computed &&
   node.callee.property.type === "Identifier" &&
   node.callee.property.name === "pipe" &&
-  isEffectGenCall(node.callee.object) &&
-  node.arguments.length === 1 &&
-  node.arguments[0] !== undefined &&
-  isEffectWithSpanCall(node.arguments[0]);
+  isEffectGenCall(node.callee.object, effectNamespaces) &&
+  node.arguments.some((argument) => isEffectWithSpanCall(argument, effectNamespaces));
+
+const effectNamespaceFromImport = (node: ESTree.ImportDeclaration): ReadonlyArray<string> => {
+  const source = node.source.value;
+  if (source !== "effect" && source !== "effect/Effect") return [];
+
+  const namespaces: Array<string> = [];
+  for (const specifier of node.specifiers) {
+    if (specifier.type === "ImportNamespaceSpecifier" && source === "effect/Effect") {
+      namespaces.push(specifier.local.name);
+      continue;
+    }
+    if (
+      specifier.type === "ImportSpecifier" &&
+      source === "effect" &&
+      specifier.imported.type === "Identifier" &&
+      specifier.imported.name === "Effect"
+    ) {
+      namespaces.push(specifier.local.name);
+    }
+  }
+  return namespaces;
+};
 
 export const preferEffectFn = Rule.define({
   name: "prefer-effect-fn",
@@ -53,11 +86,31 @@ export const preferEffectFn = Rule.define({
   }),
   create: function* () {
     const ctx = yield* RuleContext;
+    const effectNamespaces = new Set<string>();
+    const visibleEffectNamespaces = (node: ESTree.Node): ReadonlySet<string> =>
+      new Set(
+        [...effectNamespaces].filter((namespace) =>
+          Option.match(Scope.findVariableUp(ctx.sourceCode.getScope(node), namespace), {
+            onNone: () => true,
+            onSome: (variable) =>
+              variable.defs.some((definition) => definition.type === "ImportBinding"),
+          }),
+        ),
+      );
 
     return {
+      ImportDeclaration: (node) => {
+        if (node.type !== "ImportDeclaration") return Effect.void;
+        for (const namespace of effectNamespaceFromImport(node)) effectNamespaces.add(namespace);
+        return Effect.void;
+      },
       CallExpression: (node) => {
         if (node.type !== "CallExpression") return Effect.void;
-        if (!spansEffectGenDirectly(node) && !pipesOnlyWithSpanFromEffectGen(node)) {
+        const namespaces = visibleEffectNamespaces(node);
+        if (
+          !spansEffectGenDirectly(node, namespaces) &&
+          !pipesWithSpanFromEffectGen(node, namespaces)
+        ) {
           return Effect.void;
         }
         return ctx.report(
