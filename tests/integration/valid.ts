@@ -17,6 +17,13 @@ export const validProgram = Effect.gen(function* () {
 });
 
 export const validPolicy = { enabled: true } satisfies { enabled: boolean };
+// oxlint-disable-next-line no-shadow -- verifies that the rule resolves the local binding
+export const localEffectNamespace = (Effect: {
+  gen: (body: () => Generator<never, void>) => {
+    pipe: (...operations: ReadonlyArray<unknown>) => void;
+  };
+  withSpan: (name: string) => unknown;
+}) => Effect.gen(function* () {}).pipe(Effect.withSpan("not-effect"));
 export const wireNames = { undefined: true };
 export const wireName = wireNames.undefined;
 export type WireNames = { undefined: boolean };
