@@ -39,8 +39,29 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 | `effect/noDynamicImports`     | Allows import() only behind a named lazy-loading boundary; bans require()                 |
 | `effect/noEffectDo`           | Bans Effect.Do                                                                            |
 | `effect/noEffectBind`         | Bans Effect.bind                                                                          |
+| `effect/preferEffectFn`       | Requires `Effect.fn` for a generator operation that adds a span                           |
 | `effect/noGlobals`            | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`    |
 | `effect/noNodeBuiltinImport`  | Bans fully replaced Node modules and replaced operations from partial modules             |
+
+## Anti-Slop Rules
+
+The recommended preset also includes these rules from
+[`dmmulroy/anti-slop`](https://github.com/dmmulroy/anti-slop):
+
+| Rule                                    | Contract                                                           |
+| --------------------------------------- | ------------------------------------------------------------------ |
+| `effect/noChainedTypeAssertions`        | Bans nested type assertions that invent type evidence              |
+| `effect/noConditionalEmptyObjectSpread` | Bans conditional spreads that use an empty object to omit fields   |
+| `effect/noKnownValueWidening`           | Bans broad target types that discard known value evidence          |
+| `effect/noObjectParameters`             | Bans the broad `object` type on function inputs                    |
+| `effect/noRuntimeTypeof`                | Requires boundary parsing instead of runtime `typeof` narrowing    |
+| `effect/noShapeInSymbolNames`           | Bans `shape` in symbol names                                       |
+| `effect/noUnknownParameters`            | Bans `unknown` inputs except an input named `cause`                |
+| `effect/noUnknownTypeAliases`           | Bans aliases that only hide `unknown`                              |
+| `effect/noUnsafeDictionaryType`         | Bans dictionaries with unsafe broad value types                    |
+| `effect/noWidenThenAssert`              | Bans local flows that widen known values and then assert them back |
+
+See `THIRD_PARTY_NOTICES.md` for the source revision and license.
 
 The preset intentionally allows `Effect.as`, `Option.as`, `Effect.never`, `Effect.async`, ordinary `if` and `switch` statements, and runtime runners at explicit application boundaries.
 
