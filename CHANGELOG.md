@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.8.2
+
+### Patch Changes
+
+- [#19](https://github.com/cevr/effect-oxlint/pull/19) [`a4b6c4c`](https://github.com/cevr/effect-oxlint/commit/a4b6c4c3a80bee2a9054abc9a81a0cd60d3c3daf) Thanks [@cevr](https://github.com/cevr)! - Detect traced generators in multi-step pipes and resolve Effect namespace import aliases.
+
 ## 0.8.1
 
 ### Patch Changes
