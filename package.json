@@ -8,7 +8,8 @@
     "url": "https://github.com/cevr/effect-oxlint"
   },
   "files": [
-    "dist"
+    "dist",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "type": "module",
   "exports": {

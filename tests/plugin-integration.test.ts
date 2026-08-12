@@ -13,6 +13,25 @@ const runFixture = (fixture: string) =>
     },
   );
 
+const runAntiSlopFixture = (fixture: string) =>
+  Bun.spawnSync(
+    [
+      "bunx",
+      "oxlint",
+      "--format",
+      "unix",
+      "--config",
+      "tests/integration/anti-slop-oxlint.json",
+      fixture,
+    ],
+    {
+      cwd: packageRoot,
+      env: process.env,
+      stderr: "pipe",
+      stdout: "pipe",
+    },
+  );
+
 describe("compiled oxlint plugin", () => {
   test("accepts the constrained Effect-native boundary fixture", () => {
     const result = runFixture("tests/integration/valid.ts");
@@ -35,6 +54,7 @@ describe("compiled oxlint plugin", () => {
       "noNewPromise",
       "noNodeBuiltinImport",
       "noNullish",
+      "preferEffectFn",
       "noTernary",
       "noTestLifecycleHooks",
       "noThrowStatement",
@@ -44,5 +64,31 @@ describe("compiled oxlint plugin", () => {
     }
     expect(output.match(/effect\(noAs\)/g)).toHaveLength(2);
     expect(output.match(/effect\(noNullish\)/g)).toHaveLength(5);
+  });
+
+  test("accepts evidence-preserving TypeScript through every anti-slop rule", () => {
+    const result = runAntiSlopFixture("tests/integration/anti-slop-valid.ts");
+    expect(result.exitCode).toBe(0);
+    expect(new TextDecoder().decode(result.stdout)).not.toContain("effect(");
+  });
+
+  test("reports every anti-slop rule through the real oxlint parser", () => {
+    const result = runAntiSlopFixture("tests/integration/anti-slop-invalid.ts");
+    const output = new TextDecoder().decode(result.stdout);
+    expect(result.exitCode).toBe(1);
+    for (const rule of [
+      "noChainedTypeAssertions",
+      "noConditionalEmptyObjectSpread",
+      "noKnownValueWidening",
+      "noObjectParameters",
+      "noRuntimeTypeof",
+      "noShapeInSymbolNames",
+      "noUnknownParameters",
+      "noUnknownTypeAliases",
+      "noUnsafeDictionaryType",
+      "noWidenThenAssert",
+    ]) {
+      expect(output).toContain(`effect(${rule})`);
+    }
   });
 });
