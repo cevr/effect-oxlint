@@ -1,5 +1,13 @@
 # oxlint-plugin-effect
 
+## 0.8.0
+
+### Minor Changes
+
+- [#15](https://github.com/cevr/effect-oxlint/pull/15) [`8204f54`](https://github.com/cevr/effect-oxlint/commit/8204f549545378565e7a8104e0e6f398b8a4fba6) Thanks [@cevr](https://github.com/cevr)! - Add a rule that prefers `Effect.fn` over a spanned `Effect.gen` operation.
+
+  Add the anti-slop rule set with source attribution.
+
 ## 0.7.0
 
 ### Minor Changes
