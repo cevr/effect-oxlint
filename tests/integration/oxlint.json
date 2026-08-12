@@ -11,6 +11,7 @@
     "effect/noNewPromise": "error",
     "effect/noNodeBuiltinImport": "error",
     "effect/noNullish": "error",
+    "effect/preferEffectFn": "error",
     "effect/noTernary": "error",
     "effect/noTestLifecycleHooks": "error",
     "effect/noThrowStatement": "error",

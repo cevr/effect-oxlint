@@ -1,0 +1,15 @@
+{
+  "jsPlugins": ["../../dist/plugin.js"],
+  "rules": {
+    "effect/noChainedTypeAssertions": "error",
+    "effect/noConditionalEmptyObjectSpread": "error",
+    "effect/noKnownValueWidening": "error",
+    "effect/noObjectParameters": "error",
+    "effect/noRuntimeTypeof": "error",
+    "effect/noShapeInSymbolNames": "error",
+    "effect/noUnknownParameters": "error",
+    "effect/noUnknownTypeAliases": "error",
+    "effect/noUnsafeDictionaryType": "error",
+    "effect/noWidenThenAssert": "error"
+  }
+}
