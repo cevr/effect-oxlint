@@ -149,7 +149,11 @@ export const noThing = Rule.define({
 bun install
 bun run gate
 bun run codegen
+bun run add-rule -- no-example --dry-run
 ```
+
+`bun run codegen` owns both the rule export barrel and the recommended preset.
+`bun run gate` fails when either generated file is stale.
 
 ## License
 
