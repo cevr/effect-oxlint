@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.9.0
+
+### Minor Changes
+
+- [#21](https://github.com/cevr/effect-oxlint/pull/21) [`1e651e1`](https://github.com/cevr/effect-oxlint/commit/1e651e199603f2f650baf90c306b40fa3b60afbb) Thanks [@cevr](https://github.com/cevr)! - Add rules that guide tagged values toward `Predicate` and exhaustive `Match`, and guide tagged failures toward `Effect.catchTag` or `Effect.catchTags`.
+
 ## 0.8.2
 
 ### Patch Changes
