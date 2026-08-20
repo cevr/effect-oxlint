@@ -30,3 +30,31 @@ export const absent = null;
 export const missing = undefined;
 export type Absent = null;
 export type Missing = undefined;
+
+declare const event: { readonly _tag: "Created" | "Updated" | "Deleted" };
+export const selectedEvent = event._tag === "Created" || event._tag === "Updated";
+
+export const eventLabel = () => {
+  switch (event._tag) {
+    case "Created":
+      return "created";
+    case "Updated":
+      return "updated";
+    case "Deleted":
+      return "deleted";
+  }
+};
+
+export const recovered = nativeFailure.pipe(
+  Effect.catchIf(
+    (error) => error._tag === "ExpectedFailure",
+    () => Effect.void,
+  ),
+);
+
+export const recoveredMany = nativeFailure.pipe(
+  Effect.catchIf(
+    (error) => error._tag === "ExpectedFailure" || error._tag === "RetryableFailure",
+    () => Effect.void,
+  ),
+);

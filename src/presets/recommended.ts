@@ -28,5 +28,8 @@ export const recommended = {
   "effect/noUnknownTypeAliases": "error",
   "effect/noUnsafeDictionaryType": "error",
   "effect/noWidenThenAssert": "error",
+  "effect/preferCatchTag": "error",
   "effect/preferEffectFn": "error",
+  "effect/preferMatchTagsExhaustive": "error",
+  "effect/preferPredicateIsTagged": "error",
 } as const;

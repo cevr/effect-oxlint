@@ -54,7 +54,10 @@ describe("compiled oxlint plugin", () => {
       "noNewPromise",
       "noNodeBuiltinImport",
       "noNullish",
+      "preferCatchTag",
       "preferEffectFn",
+      "preferMatchTagsExhaustive",
+      "preferPredicateIsTagged",
       "noTernary",
       "noTestLifecycleHooks",
       "noThrowStatement",
@@ -64,6 +67,9 @@ describe("compiled oxlint plugin", () => {
     }
     expect(output.match(/effect\(noAs\)/g)).toHaveLength(2);
     expect(output.match(/effect\(noNullish\)/g)).toHaveLength(5);
+    expect(output.match(/effect\(preferCatchTag\)/g)).toHaveLength(2);
+    expect(output.match(/effect\(preferMatchTagsExhaustive\)/g)).toHaveLength(1);
+    expect(output.match(/effect\(preferPredicateIsTagged\)/g)).toHaveLength(1);
   });
 
   test("accepts evidence-preserving TypeScript through every anti-slop rule", () => {

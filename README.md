@@ -25,23 +25,26 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 
 ## Recommended Rules
 
-| Rule                          | Contract                                                                                  |
-| ----------------------------- | ----------------------------------------------------------------------------------------- |
-| `effect/noAs`                 | Bans TypeScript `as` assertions; use `satisfies`                                          |
-| `effect/noAsyncFunction`      | Bans async functions and await expressions                                                |
-| `effect/noTryCatch`           | Bans every try/catch/finally statement                                                    |
-| `effect/noTestLifecycleHooks` | Bans `beforeEach`, `afterEach`, `beforeAll`, and `afterAll`; use Effect scopes instead    |
-| `effect/noThrowStatement`     | Bans every throw statement                                                                |
-| `effect/noNewPromise`         | Bans new Promise, Promise calls, and Promise static APIs                                  |
-| `effect/noNewError`           | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die |
-| `effect/noNullish`            | Bans null and undefined; use Option or a domain enum for richer state                     |
-| `effect/noTernary`            | Bans conditional expressions while allowing ordinary if statements                        |
-| `effect/noDynamicImports`     | Allows import() only behind a named lazy-loading boundary; bans require()                 |
-| `effect/noEffectDo`           | Bans Effect.Do                                                                            |
-| `effect/noEffectBind`         | Bans Effect.bind                                                                          |
-| `effect/preferEffectFn`       | Requires `Effect.fn` for a generator operation that adds a span                           |
-| `effect/noGlobals`            | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`    |
-| `effect/noNodeBuiltinImport`  | Bans fully replaced Node modules and replaced operations from partial modules             |
+| Rule                               | Contract                                                                                  |
+| ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| `effect/noAs`                      | Bans TypeScript `as` assertions; use `satisfies`                                          |
+| `effect/noAsyncFunction`           | Bans async functions and await expressions                                                |
+| `effect/noTryCatch`                | Bans every try/catch/finally statement                                                    |
+| `effect/noTestLifecycleHooks`      | Bans `beforeEach`, `afterEach`, `beforeAll`, and `afterAll`; use Effect scopes instead    |
+| `effect/noThrowStatement`          | Bans every throw statement                                                                |
+| `effect/noNewPromise`              | Bans new Promise, Promise calls, and Promise static APIs                                  |
+| `effect/noNewError`                | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die |
+| `effect/noNullish`                 | Bans null and undefined; use Option or a domain enum for richer state                     |
+| `effect/noTernary`                 | Bans conditional expressions while allowing ordinary if statements                        |
+| `effect/noDynamicImports`          | Allows import() only behind a named lazy-loading boundary; bans require()                 |
+| `effect/noEffectDo`                | Bans Effect.Do                                                                            |
+| `effect/noEffectBind`              | Bans Effect.bind                                                                          |
+| `effect/preferCatchTag`            | Replaces manual `_tag` predicates in `Effect.catchIf` with tagged recovery                |
+| `effect/preferEffectFn`            | Requires `Effect.fn` for a generator operation that adds a span                           |
+| `effect/preferMatchTagsExhaustive` | Requires exhaustive `Match` for return-only `_tag` switches                               |
+| `effect/preferPredicateIsTagged`   | Replaces combined `_tag` comparisons with a named `Predicate` refinement                  |
+| `effect/noGlobals`                 | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`    |
+| `effect/noNodeBuiltinImport`       | Bans fully replaced Node modules and replaced operations from partial modules             |
 
 ## Anti-Slop Rules
 
@@ -63,7 +66,7 @@ The recommended preset also includes these rules from
 
 See `THIRD_PARTY_NOTICES.md` for the source revision and license.
 
-The preset intentionally allows `Effect.as`, `Option.as`, `Effect.never`, `Effect.async`, ordinary `if` and `switch` statements, and runtime runners at explicit application boundaries.
+The preset intentionally allows `Effect.as`, `Option.as`, `Effect.never`, `Effect.async`, simple `_tag` guards, partial or stateful `switch` statements, and runtime runners at explicit application boundaries.
 
 ## Platform Boundaries
 

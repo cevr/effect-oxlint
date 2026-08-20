@@ -20,3 +20,30 @@ export const validPolicy = { enabled: true } satisfies { enabled: boolean };
 export const wireNames = { undefined: true };
 export const wireName = wireNames.undefined;
 export type WireNames = { undefined: boolean };
+
+type Event =
+  | { readonly _tag: "Created" }
+  | { readonly _tag: "Updated" }
+  | { readonly _tag: "Deleted" };
+
+declare const event: Event;
+export const isCreated = event._tag === "Created";
+
+export const recordEvent = (events: Array<string>) => {
+  switch (event._tag) {
+    case "Created":
+      events.push("created");
+      break;
+    case "Updated":
+      events.push("updated");
+      break;
+    case "Deleted":
+      events.push("deleted");
+      break;
+  }
+};
+
+const isExpectedFailure = (error: { readonly _tag: string }) => error._tag === "ExpectedFailure";
+export const recoveredWithNamedPredicate = Effect.fail({ _tag: "ExpectedFailure" }).pipe(
+  Effect.catchIf(isExpectedFailure, () => Effect.void),
+);
