@@ -17,6 +17,11 @@ export const validProgram = Effect.gen(function* () {
 });
 
 export const validPolicy = { enabled: true } satisfies { enabled: boolean };
+const testHarness = {
+  mock: () => Effect.void,
+  spyOn: () => Effect.void,
+};
+export const validTestHarness = [testHarness.mock(), testHarness.spyOn()];
 // oxlint-disable-next-line no-shadow -- verifies that the rule resolves the local binding
 export const localEffectNamespace = (Effect: {
   gen: (body: () => Generator<never, void>) => {

@@ -7,6 +7,7 @@ import {
   noDynamicImports,
   noEffectBind,
   noEffectDo,
+  noModuleMocks,
   noNewError,
   noNewPromise,
   noNullish,
@@ -29,6 +30,7 @@ describe("recommended preset", () => {
       "effect/noEffectDo": "error",
       "effect/noGlobals": "error",
       "effect/noKnownValueWidening": "error",
+      "effect/noModuleMocks": "error",
       "effect/noNewError": "error",
       "effect/noNewPromise": "error",
       "effect/noNodeBuiltinImport": "error",
@@ -101,6 +103,24 @@ describe("unconditional syntax", () => {
 
     expect(
       Testing.runRule(noTestLifecycleHooks, "CallExpression", Testing.callExpr("scoped")),
+    ).toHaveLength(0);
+  });
+
+  test("rejects Vitest and Jest module mocks and method spies", () => {
+    for (const api of ["vi", "jest"] as const) {
+      for (const method of ["mock", "spyOn"] as const) {
+        const diagnostics = Testing.runRule(
+          noModuleMocks,
+          "CallExpression",
+          Testing.callOfMember(api, method),
+        );
+        expect(diagnostics).toHaveLength(1);
+        expect(diagnostics[0]?.diagnostic.message).toContain("Effect service test Layer");
+      }
+    }
+
+    expect(
+      Testing.runRule(noModuleMocks, "CallExpression", Testing.callOfMember("testHarness", "mock")),
     ).toHaveLength(0);
   });
 

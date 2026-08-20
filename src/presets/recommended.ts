@@ -13,6 +13,7 @@ export const recommended = {
   "effect/noEffectDo": "error",
   "effect/noGlobals": "error",
   "effect/noKnownValueWidening": "error",
+  "effect/noModuleMocks": "error",
   "effect/noNewError": "error",
   "effect/noNewPromise": "error",
   "effect/noNodeBuiltinImport": "error",

@@ -1,8 +1,19 @@
 import * as fs from "node:fs";
 
 import * as Effect from "effect/Effect";
+import { vi as testDouble } from "vitest";
 
 beforeEach(() => Effect.void);
+testDouble.mock("./lazy-module.js");
+testDouble.spyOn(Effect, "runSync");
+export const localTestDoubleIsAllowed = () => {
+  // oxlint-disable-next-line no-shadow -- verifies imported test API shadowing
+  const testDouble = {
+    mock: () => Effect.void,
+    spyOn: () => Effect.void,
+  };
+  return [testDouble.mock(), testDouble.spyOn()];
+};
 
 export async function invalidProgram(condition: boolean) {
   try {
