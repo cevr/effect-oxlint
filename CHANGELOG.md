@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.10.0
+
+### Minor Changes
+
+- [#23](https://github.com/cevr/effect-oxlint/pull/23) [`8766ebf`](https://github.com/cevr/effect-oxlint/commit/8766ebfd0cb88ad884987f5c3187193be2578846) Thanks [@cevr](https://github.com/cevr)! - Add `effect/noModuleMocks` to guide Vitest and Jest tests toward Effect service test layers.
+
 ## 0.9.0
 
 ### Minor Changes
