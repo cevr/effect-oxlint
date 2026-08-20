@@ -16,6 +16,7 @@ export { noConditionalEmptyObjectSpread } from "./no-conditional-empty-object-sp
 export { noDynamicImports } from "./no-dynamic-imports.js";
 export { noGlobals } from "./no-globals.js";
 export { noKnownValueWidening } from "./no-known-value-widening.js";
+export { noModuleMocks } from "./no-module-mocks.js";
 export { noNewError } from "./no-new-error.js";
 export { noNewPromise } from "./no-new-promise.js";
 export { noNodeBuiltinImport } from "./no-node-builtin-import.js";

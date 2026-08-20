@@ -50,6 +50,7 @@ describe("compiled oxlint plugin", () => {
       "noEffectBind",
       "noEffectDo",
       "noGlobals",
+      "noModuleMocks",
       "noNewError",
       "noNewPromise",
       "noNodeBuiltinImport",
@@ -67,6 +68,7 @@ describe("compiled oxlint plugin", () => {
     }
     expect(output.match(/effect\(noAs\)/g)).toHaveLength(2);
     expect(output.match(/effect\(noNullish\)/g)).toHaveLength(5);
+    expect(output.match(/effect\(noModuleMocks\)/g)).toHaveLength(2);
     expect(output.match(/effect\(preferCatchTag\)/g)).toHaveLength(2);
     expect(output.match(/effect\(preferMatchTagsExhaustive\)/g)).toHaveLength(1);
     expect(output.match(/effect\(preferPredicateIsTagged\)/g)).toHaveLength(1);
