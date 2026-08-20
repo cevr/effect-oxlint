@@ -31,4 +31,7 @@ export { noUnknownParameters } from "./no-unknown-parameters.js";
 export { noUnknownTypeAliases } from "./no-unknown-type-aliases.js";
 export { noUnsafeDictionaryType } from "./no-unsafe-dictionary-type.js";
 export { noWidenThenAssert } from "./no-widen-then-assert.js";
+export { preferCatchTag } from "./prefer-catch-tag.js";
 export { preferEffectFn } from "./prefer-effect-fn.js";
+export { preferMatchTagsExhaustive } from "./prefer-match-tags-exhaustive.js";
+export { preferPredicateIsTagged } from "./prefer-predicate-is-tagged.js";

@@ -17,6 +17,7 @@
     ],
     "typescript/no-unsafe-type-assertion": "error",
     "import/no-duplicates": "error",
+    "no-underscore-dangle": ["error", { "allow": ["_tag"] }],
     "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }]
   },
   "ignorePatterns": ["**/dist/**", "**/node_modules/**", "**/*.d.ts"],

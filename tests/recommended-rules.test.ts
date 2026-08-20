@@ -45,6 +45,9 @@ describe("recommended preset", () => {
       "effect/noUnknownTypeAliases": "error",
       "effect/noUnsafeDictionaryType": "error",
       "effect/noWidenThenAssert": "error",
+      "effect/preferCatchTag": "error",
+      "effect/preferMatchTagsExhaustive": "error",
+      "effect/preferPredicateIsTagged": "error",
     });
   });
 });
