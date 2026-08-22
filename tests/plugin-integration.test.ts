@@ -50,11 +50,18 @@ describe("compiled oxlint plugin", () => {
       "noEffectBind",
       "noEffectDo",
       "noGlobals",
+      "noInlineProvide",
+      "noManagedRuntimeInEffect",
       "noModuleMocks",
+      "noNestedEffectGen",
       "noNewError",
       "noNewPromise",
       "noNodeBuiltinImport",
       "noNullish",
+      "noPerCallCacheConstruction",
+      "noRunCollectOnUnboundedStream",
+      "noSequentialEffectAll",
+      "noSilentCatchAll",
       "preferCatchTag",
       "preferEffectFn",
       "preferMatchTagsExhaustive",
@@ -63,15 +70,30 @@ describe("compiled oxlint plugin", () => {
       "noTestLifecycleHooks",
       "noThrowStatement",
       "noTryCatch",
+      "noUnboundedConcurrency",
+      "noUnboundedRetry",
+      "preferServiceOf",
+      "requireNamedEffectFn",
     ]) {
       expect(output).toContain(`effect(${rule})`);
     }
     expect(output.match(/effect\(noAs\)/g)).toHaveLength(2);
     expect(output.match(/effect\(noNullish\)/g)).toHaveLength(5);
     expect(output.match(/effect\(noModuleMocks\)/g)).toHaveLength(2);
-    expect(output.match(/effect\(preferCatchTag\)/g)).toHaveLength(2);
-    expect(output.match(/effect\(preferMatchTagsExhaustive\)/g)).toHaveLength(1);
+    expect(output.match(/effect\(preferCatchTag\)/g)).toHaveLength(4);
+    expect(output.match(/effect\(preferMatchTagsExhaustive\)/g)).toHaveLength(3);
     expect(output.match(/effect\(preferPredicateIsTagged\)/g)).toHaveLength(1);
+    expect(output.match(/effect\(noManagedRuntimeInEffect\)/g)).toHaveLength(1);
+    expect(output.match(/effect\(noUnboundedConcurrency\)/g)).toHaveLength(2);
+    expect(output.match(/effect\(noUnboundedRetry\)/g)).toHaveLength(4);
+    expect(output.match(/effect\(preferServiceOf\)/g)).toHaveLength(2);
+    expect(output.match(/effect\(noInlineProvide\)/g)).toHaveLength(1);
+    expect(output.match(/effect\(noNestedEffectGen\)/g)).toHaveLength(1);
+    expect(output.match(/effect\(noPerCallCacheConstruction\)/g)).toHaveLength(1);
+    expect(output.match(/effect\(noRunCollectOnUnboundedStream\)/g)).toHaveLength(1);
+    expect(output.match(/effect\(noSequentialEffectAll\)/g)).toHaveLength(1);
+    expect(output.match(/effect\(noSilentCatchAll\)/g)).toHaveLength(1);
+    expect(output.match(/effect\(requireNamedEffectFn\)/g)).toHaveLength(1);
   });
 
   test("accepts evidence-preserving TypeScript through every anti-slop rule", () => {

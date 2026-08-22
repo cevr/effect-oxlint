@@ -1,7 +1,11 @@
 import { createHmac } from "node:crypto";
 
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Option from "effect/Option";
+import * as Schedule from "effect/Schedule";
 
 const crypto = {
   randomUUID: () => "fixture-id",
@@ -31,6 +35,22 @@ export const localEffectNamespace = (Effect: {
 }) => Effect.gen(function* () {}).pipe(Effect.withSpan("not-effect"));
 export const wireNames = { undefined: true };
 export const wireName = wireNames.undefined;
+
+class Jobs extends Context.Service<Jobs, { readonly run: () => Effect.Effect<void> }>()(
+  "oxlint-plugin-effect/tests/integration/valid/Jobs",
+) {}
+declare const growingEffects: ReadonlyArray<Effect.Effect<void>>;
+declare const serviceLayer: Layer.Layer<never>;
+export const checkedService = Layer.succeed(Jobs, Jobs.of({ run: () => Effect.void }));
+export const fixedParallelWork = Effect.all([Effect.void, Effect.void], {
+  concurrency: "unbounded",
+});
+export const boundedParallelWork = Effect.all(growingEffects, { concurrency: 4 });
+export const boundedRetry = Effect.retry(Effect.fail("retry"), {
+  schedule: Schedule.exponential("100 millis"),
+  times: 3,
+});
+export const hostRuntime = ManagedRuntime.make(serviceLayer);
 export type WireNames = { undefined: boolean };
 
 type Event =
@@ -53,6 +73,12 @@ export const recordEvent = (events: Array<string>) => {
       events.push("deleted");
       break;
   }
+};
+
+export const eventLabelWithFallback = () => {
+  if (event._tag === "Created") return "created";
+  else if (event._tag === "Updated") return "updated";
+  else return "other";
 };
 
 const isExpectedFailure = (error: { readonly _tag: string }) => error._tag === "ExpectedFailure";

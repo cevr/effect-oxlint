@@ -3,7 +3,7 @@ import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
-import { isEffectCall, tagComparisonsInOr } from "./_tagged-control-flow.js";
+import { isEffectCall, tagComparisonsInOr, taggedSwitchSubject } from "./_tagged-control-flow.js";
 
 const returnedExpression = (
   fn: ESTree.ArrowFunctionExpression | ESTree.Function,
@@ -29,6 +29,44 @@ const hasManualTagPredicate = (argument: ESTree.Argument | undefined): boolean =
   return comparisons.every((comparison) => comparison.subject === parameter.name);
 };
 
+const isFunction = (
+  argument: ESTree.Argument | undefined,
+): argument is ESTree.ArrowFunctionExpression | ESTree.Function =>
+  argument?.type === "ArrowFunctionExpression" || argument?.type === "FunctionExpression";
+
+const hasTagCondition = (node: ESTree.IfStatement, parameter: string): boolean => {
+  const comparisons = tagComparisonsInOr(node.test);
+  if (comparisons === null || comparisons.length === 0) return false;
+  return comparisons.every((comparison) => comparison.subject === parameter);
+};
+
+const hasTagSwitch = (node: ESTree.SwitchStatement, parameter: string): boolean => {
+  if (taggedSwitchSubject(node) !== parameter) return false;
+  return node.cases.some(
+    (switchCase) =>
+      switchCase.test?.type === "Literal" && typeof switchCase.test.value === "string",
+  );
+};
+
+const hasManualTagDispatch = (argument: ESTree.Argument | undefined): boolean => {
+  if (!isFunction(argument) || argument.body?.type !== "BlockStatement") return false;
+  const parameter = argument.params[0];
+  if (parameter?.type !== "Identifier") return false;
+
+  return argument.body.body.some((statement) => {
+    if (statement.type === "IfStatement") return hasTagCondition(statement, parameter.name);
+    if (statement.type === "SwitchStatement") return hasTagSwitch(statement, parameter.name);
+    return false;
+  });
+};
+
+const catchAllHandler = (node: ESTree.CallExpression): ESTree.Argument | undefined => {
+  if (!isEffectCall(node, "catchAll")) return undefined;
+  let handlerIndex = 1;
+  if (node.arguments.length === 1) handlerIndex = 0;
+  return node.arguments[handlerIndex];
+};
+
 export const preferCatchTag = Rule.define({
   name: "prefer-catch-tag",
   meta: Rule.meta({
@@ -39,11 +77,14 @@ export const preferCatchTag = Rule.define({
     const context = yield* RuleContext;
     return {
       CallExpression: (node: ESTree.CallExpression) => {
-        if (!isEffectCall(node, "catchIf")) return Effect.void;
-        let predicateIndex = 1;
-        if (node.arguments.length === 2) predicateIndex = 0;
-        const predicate = node.arguments[predicateIndex];
-        if (!hasManualTagPredicate(predicate)) return Effect.void;
+        if (isEffectCall(node, "catchIf")) {
+          let predicateIndex = 1;
+          if (node.arguments.length === 2) predicateIndex = 0;
+          const predicate = node.arguments[predicateIndex];
+          if (!hasManualTagPredicate(predicate)) return Effect.void;
+        } else if (!hasManualTagDispatch(catchAllHandler(node))) {
+          return Effect.void;
+        }
         return context.report(
           Diagnostic.make({
             node,
