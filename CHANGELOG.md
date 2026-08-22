@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.11.0
+
+### Minor Changes
+
+- [`f38a253`](https://github.com/cevr/effect-oxlint/commit/f38a253911cf2d977b9fef60098889df2514ccf1) Thanks [@cevr](https://github.com/cevr)! - Expand Effect program design guidance. Detect manual tagged control flow, unchecked inline service implementations, hidden provisioning, nested generators, unnamed operations, discarded serial aggregation, silent failure erasure, per-call cache construction, unbounded stream collection, unbounded concurrency, unbounded retry schedules, and nested `ManagedRuntime` construction.
+
 ## 0.10.0
 
 ### Minor Changes
