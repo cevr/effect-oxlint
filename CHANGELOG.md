@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.12.0
+
+### Minor Changes
+
+- [#26](https://github.com/cevr/effect-oxlint/pull/26) [`3b5e2df`](https://github.com/cevr/effect-oxlint/commit/3b5e2dfb43435ef7f8940e2464063990ab936c4e) Thanks [@cevr](https://github.com/cevr)! - Cap function complexity in the recommended preset. The preset now enables the native oxlint `complexity` rule (cyclomatic, max 21) and two new plugin rules: `effect/maxCognitiveComplexity` (SonarSource cognitive complexity, max 21) and `effect/maxHalsteadDifficulty` (Halstead difficulty, max 79). Both rules accept `{ max }`. Rule metadata can declare `recommendedOptions`, which the generated preset publishes as `["error", options]`.
+
 ## 0.11.0
 
 ### Minor Changes
