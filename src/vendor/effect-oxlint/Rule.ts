@@ -147,14 +147,31 @@ export const meta = (opts: {
   readonly messages?: Record<string, string> | undefined;
   readonly docs?: RuleDocs | undefined;
   readonly effectVersion?: EffectVersion | undefined;
+  /** JSON schema for the rule options. Oxlint rejects options on rules without one. */
+  readonly schema?: RuleMeta["schema"] | undefined;
+  /** Options oxlint merges underneath the user's configuration. */
+  readonly defaultOptions?: RuleMeta["defaultOptions"] | undefined;
+  /**
+   * Options the recommended preset passes to this rule.
+   *
+   * Stored on `meta.docs.recommendedOptions`. The preset generator emits
+   * `["error", recommendedOptions]` instead of a bare `"error"` entry, so
+   * the rule's default threshold and the published preset stay in sync.
+   */
+  readonly recommendedOptions?: Record<string, unknown> | undefined;
 }): RuleMeta => ({
   type: opts.type,
   ...(opts.fixable !== undefined ? { fixable: opts.fixable } : {}),
   ...(opts.hasSuggestions !== undefined ? { hasSuggestions: opts.hasSuggestions } : {}),
   ...(opts.messages !== undefined ? { messages: opts.messages } : {}),
+  ...(opts.schema !== undefined ? { schema: opts.schema } : {}),
+  ...(opts.defaultOptions !== undefined ? { defaultOptions: opts.defaultOptions } : {}),
   docs: {
     description: opts.description,
     effectVersion: opts.effectVersion ?? "both",
+    ...(opts.recommendedOptions !== undefined
+      ? { recommendedOptions: opts.recommendedOptions }
+      : {}),
     ...opts.docs,
   },
 });

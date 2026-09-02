@@ -21,6 +21,9 @@ import { Testing } from "../src/vendor/effect-oxlint/index.js";
 describe("recommended preset", () => {
   test("enables the complete maintained rule set at error severity", () => {
     expect(recommended).toEqual({
+      complexity: ["error", { max: 21 }],
+      "effect/maxCognitiveComplexity": ["error", { max: 21 }],
+      "effect/maxHalsteadDifficulty": ["error", { max: 79 }],
       "effect/noAs": "error",
       "effect/noAsyncFunction": "error",
       "effect/noChainedTypeAssertions": "error",

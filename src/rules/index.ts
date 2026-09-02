@@ -9,6 +9,8 @@ export { noEffectBind } from "./no-effect-bind.js";
 export { noEffectDo } from "./no-effect-do.js";
 
 // --- AST pattern rules ---
+export { maxCognitiveComplexity } from "./max-cognitive-complexity.js";
+export { maxHalsteadDifficulty } from "./max-halstead-difficulty.js";
 export { noAs } from "./no-as.js";
 export { noAsyncFunction } from "./no-async-function.js";
 export { noChainedTypeAssertions } from "./no-chained-type-assertions.js";

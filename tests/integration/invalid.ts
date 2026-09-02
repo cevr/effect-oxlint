@@ -161,3 +161,68 @@ export const eventLabelSequentialIf = () => {
   if (event._tag === "Updated") return "updated";
   if (event._tag === "Deleted") return "deleted";
 };
+
+export const deeplyBranchedScore = (
+  flags: ReadonlyArray<boolean>,
+  weights: ReadonlyArray<number>,
+) => {
+  let score = 0;
+  for (const flag of flags) {
+    if (flag) {
+      for (const weight of weights) {
+        if (weight > 1) {
+          if (weight > 2) {
+            score += weight;
+          } else {
+            score -= weight;
+            if (weight < 0) score = 0;
+          }
+        }
+      }
+    }
+  }
+  if (score > 10 && flags.length > 0) score = 10;
+  if (score < -10) score = -10;
+  while (score % 2 !== 0) score += 1;
+  return score;
+};
+
+export const cyclomaticLadder = (step: number) => {
+  if (step === 1) return "one";
+  if (step === 2) return "two";
+  if (step === 3) return "three";
+  if (step === 4) return "four";
+  if (step === 5) return "five";
+  if (step === 6) return "six";
+  if (step === 7) return "seven";
+  if (step === 8) return "eight";
+  if (step === 9) return "nine";
+  if (step === 10) return "ten";
+  if (step === 11) return "eleven";
+  if (step === 12) return "twelve";
+  if (step === 13) return "thirteen";
+  if (step === 14) return "fourteen";
+  if (step === 15) return "fifteen";
+  if (step === 16) return "sixteen";
+  if (step === 17) return "seventeen";
+  if (step === 18) return "eighteen";
+  if (step === 19) return "nineteen";
+  if (step === 20) return "twenty";
+  if (step === 21) return "twenty-one";
+  if (step === 22) return "twenty-two";
+  return "many";
+};
+
+export const halsteadMixer = (a: number, b: number) => {
+  let x = a;
+  let y = b;
+  x = (x ^ y) + (x << 1) - (y >> 1);
+  y = (y ^ x) * (x | y) - (x & y);
+  x = x + y * x - y / x + (x % y);
+  y = y - x * y + x / y - (y % x);
+  x = x + y * x - y / x + (x % y);
+  y = y - x * y + x / y - (y % x);
+  x = (x ^ y) + (x << 1) - (y >> 1);
+  y = (y ^ x) * (x | y) - (x & y);
+  return x + y;
+};

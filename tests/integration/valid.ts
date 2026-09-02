@@ -85,3 +85,16 @@ const isExpectedFailure = (error: { readonly _tag: string }) => error._tag === "
 export const recoveredWithNamedPredicate = Effect.fail({ _tag: "ExpectedFailure" }).pipe(
   Effect.catchIf(isExpectedFailure, () => Effect.void),
 );
+
+export const moderateScore = (flags: ReadonlyArray<boolean>) => {
+  let score = 0;
+  for (const flag of flags) {
+    if (flag) {
+      score += 1;
+    } else {
+      score -= 1;
+    }
+  }
+  if (score > 10) score = 10;
+  return score;
+};
