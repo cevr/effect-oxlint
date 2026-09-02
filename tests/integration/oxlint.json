@@ -1,6 +1,9 @@
 {
   "jsPlugins": ["../../dist/plugin.js"],
   "rules": {
+    "complexity": ["error", { "max": 21 }],
+    "effect/maxCognitiveComplexity": ["error", { "max": 21 }],
+    "effect/maxHalsteadDifficulty": ["error", { "max": 79 }],
     "effect/noAs": "error",
     "effect/noAsyncFunction": "error",
     "effect/noDynamicImports": "error",

@@ -21,7 +21,7 @@ export default {
 };
 ```
 
-If the project uses JSON configuration, copy the exported rule map into `rules`; every recommended rule has `error` severity.
+If the project uses JSON configuration, copy the exported rule map into `rules`; every recommended rule has `error` severity. The complexity rules carry their limit as an option, `["error", { "max": 21 }]`.
 
 ## Recommended Rules
 
@@ -79,6 +79,31 @@ The recommended preset also includes these rules from
 See `THIRD_PARTY_NOTICES.md` for the source revision and license.
 
 The preset intentionally allows `Effect.as`, `Option.as`, `Effect.never`, `Effect.async`, simple `_tag` guards, partial or stateful `switch` statements, and runtime runners at explicit application boundaries.
+
+## Complexity Rules
+
+The recommended preset caps three complexity metrics for every function. Each nested function is measured as its own unit, so a heavy `Effect.gen` body is reported on the generator, not on the surrounding pipeline.
+
+| Rule                            | Metric                                     | Limit |
+| ------------------------------- | ------------------------------------------ | ----- |
+| `complexity` (native oxlint)    | Cyclomatic complexity                      | 21    |
+| `effect/maxCognitiveComplexity` | Cognitive complexity (SonarSource)         | 21    |
+| `effect/maxHalsteadDifficulty`  | Halstead difficulty `(η1 / 2) × (N2 / η2)` | 79    |
+
+Cognitive complexity charges one for every `if`, loop, `switch`, `catch`, and ternary, plus one for each level of nesting the structure sits in. `else` and `else if` charge one without nesting. Each run of like logical operators (`&&`, `||`, `??`) charges one, and so does a labelled `break` or `continue`.
+
+Halstead difficulty treats every name and literal as an operand and every piece of syntax that acts on them as an operator: calls, member access, keywords, declarations, and arithmetic, logical, and assignment operators. Type annotations and type-only declarations never count.
+
+Tighten or relax a limit per project or per file by passing a different `max`:
+
+```json
+{
+  "rules": {
+    "effect/maxCognitiveComplexity": ["error", { "max": 15 }],
+    "effect/maxHalsteadDifficulty": ["error", { "max": 60 }]
+  }
+}
+```
 
 ## Platform Boundaries
 
