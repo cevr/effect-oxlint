@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.12.1
+
+### Patch Changes
+
+- [#28](https://github.com/cevr/effect-oxlint/pull/28) [`4a0fafa`](https://github.com/cevr/effect-oxlint/commit/4a0fafac26116417c20ba755d7e609c49369a8a0) Thanks [@cevr](https://github.com/cevr)! - Allow `null` as the prototype argument in `Object.create(null)`.
+
 ## 0.12.0
 
 ### Minor Changes
