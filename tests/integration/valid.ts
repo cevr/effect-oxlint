@@ -21,6 +21,7 @@ export const validProgram = Effect.gen(function* () {
 });
 
 export const validPolicy = { enabled: true } satisfies { enabled: boolean };
+export const prototypeFreeDictionary = Object.create(null);
 const testHarness = {
   mock: () => Effect.void,
   spyOn: () => Effect.void,

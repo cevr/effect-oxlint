@@ -95,6 +95,29 @@ describe("unconditional syntax", () => {
     ).toHaveLength(0);
   });
 
+  test("allows null only as the Object.create prototype", () => {
+    const nullPrototype = {
+      type: "Literal",
+      value: null,
+    } as const;
+    const call = Testing.callOfMember("Object", "create", [nullPrototype]);
+    Object.assign(nullPrototype, { parent: call });
+
+    expect(Testing.runRule(noNullish, "Literal", nullPrototype as never)).toHaveLength(0);
+
+    const propertyValue = {
+      type: "Literal",
+      value: null,
+    } as const;
+    const callWithProperties = Testing.callOfMember("Object", "create", [
+      Testing.strLiteral("prototype"),
+      propertyValue,
+    ]);
+    Object.assign(propertyValue, { parent: callWithProperties });
+
+    expect(Testing.runRule(noNullish, "Literal", propertyValue as never)).toHaveLength(1);
+  });
+
   test("rejects as assertions and allows satisfies expressions", () => {
     expect(
       Testing.runRule(noAs, "TSAsExpression", Testing.tsAsExpr("TSTypeReference")),

@@ -7,6 +7,16 @@ import * as Option from "effect/Option";
 const message =
   "Avoid null and undefined. Use Option for presence or absence. Use a domain enum when the state has more than two cases.";
 
+const isNullPrototypeArgument = (node: ESTree.Node): boolean => {
+  const parent = node.parent;
+  return (
+    parent?.type === "CallExpression" &&
+    parent.arguments[0] === node &&
+    parent.callee.type === "MemberExpression" &&
+    AST.isMember(parent.callee, "Object", "create")
+  );
+};
+
 export const noNullish = Rule.define({
   name: "no-nullish",
   meta: Rule.meta({
@@ -35,7 +45,11 @@ export const noNullish = Rule.define({
         Option.match(AST.narrow(node, "Literal"), {
           onNone: () => Effect.void,
           onSome: (literal) =>
-            literal.value === null && !("regex" in literal) ? report(literal) : Effect.void,
+            literal.value === null &&
+            !("regex" in literal) &&
+            !isNullPrototypeArgument(literal)
+              ? report(literal)
+              : Effect.void,
         }),
       TSNullKeyword: (node) =>
         Option.match(AST.narrow(node, "TSNullKeyword"), {
