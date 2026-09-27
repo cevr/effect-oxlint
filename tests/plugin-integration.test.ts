@@ -79,7 +79,7 @@ describe("compiled oxlint plugin", () => {
     ]) {
       expect(output).toContain(`effect(${rule})`);
     }
-    expect(output.match(/effect\(noAs\)/g)).toHaveLength(2);
+    expect(output.match(/effect\(noAs\)/g)).toHaveLength(1);
     expect(output.match(/effect\(noNullish\)/g)).toHaveLength(5);
     expect(output.match(/effect\(noModuleMocks\)/g)).toHaveLength(2);
     expect(output.match(/effect\(preferCatchTag\)/g)).toHaveLength(4);

@@ -119,8 +119,14 @@ describe("unconditional syntax", () => {
   });
 
   test("rejects as assertions and allows satisfies expressions", () => {
+    const asExpression = {
+      type: "TSAsExpression",
+      expression: Testing.id("value"),
+      typeAnnotation: Testing.tsTypeRef("Expected"),
+    } as never;
+    expect(Testing.runRule(noAs, "TSAsExpression", asExpression)).toHaveLength(1);
     expect(
-      Testing.runRule(noAs, "TSAsExpression", Testing.tsAsExpr("TSTypeReference")),
+      Testing.runRule(noAs, "TSAsExpression", Testing.tsAsExpr("TSUnknownKeyword")),
     ).toHaveLength(1);
 
     const satisfiesExpression = {
@@ -129,6 +135,22 @@ describe("unconditional syntax", () => {
       typeAnnotation: Testing.tsTypeRef("Expected"),
     } as never;
     expect(Testing.runRule(noAs, "TSSatisfiesExpression", satisfiesExpression)).toHaveLength(0);
+  });
+
+  test("allows as const, which narrows a literal and asserts nothing", () => {
+    const constAssertion = {
+      type: "TSAsExpression",
+      expression: Testing.id("value"),
+      typeAnnotation: Testing.tsTypeRef("const"),
+    } as never;
+    expect(Testing.runRule(noAs, "TSAsExpression", constAssertion)).toHaveLength(0);
+
+    const namedAssertion = {
+      type: "TSAsExpression",
+      expression: Testing.id("value"),
+      typeAnnotation: Testing.tsTypeRef("Constant"),
+    } as never;
+    expect(Testing.runRule(noAs, "TSAsExpression", namedAssertion)).toHaveLength(1);
   });
 
   test("rejects test lifecycle hooks", () => {

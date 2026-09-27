@@ -99,3 +99,5 @@ export const moderateScore = (flags: ReadonlyArray<boolean>) => {
   if (score > 10) score = 10;
   return score;
 };
+
+export const sides = [-1, 1] as const;
