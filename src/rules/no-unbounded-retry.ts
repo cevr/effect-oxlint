@@ -6,6 +6,7 @@ import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { expressionArgument, staticProperties } from "./_call-arguments.js";
+import { constResolver, type ResolveConst } from "./_const-bindings.js";
 import {
   importedNamespaces,
   isStaticCall,
@@ -24,9 +25,12 @@ const staticPropertyName = (node: ESTree.Expression): Option.Option<string> => {
 };
 
 const isBoundedOperation = (
-  node: ESTree.Argument,
+  argument: ESTree.Argument,
   scheduleNamespaces: ReadonlySet<string>,
+  resolve: ResolveConst,
 ): boolean => {
+  if (argument.type === "SpreadElement") return false;
+  const node = resolve(argument);
   if (node.type !== "CallExpression" || node.callee.type === "Super") return false;
   const callee = node.callee;
   const isBoundedCombinator = Option.exists(
@@ -37,31 +41,32 @@ const isBoundedOperation = (
   if (isBoundedCombinator) return true;
   if (!isStaticMember(callee, scheduleNamespaces, "both")) return false;
   return Option.exists(expressionArgument(node, 0), (bound) =>
-    isStaticCall(bound, scheduleNamespaces, "recurs"),
+    isStaticCall(resolve(bound), scheduleNamespaces, "recurs"),
   );
 };
 
-const unboundedSchedule = (
-  node: ESTree.Expression,
+const isUnboundedSchedule = (
+  expression: ESTree.Expression,
   scheduleNamespaces: ReadonlySet<string>,
-): Option.Option<ESTree.Node> => {
+  resolve: ResolveConst,
+): boolean => {
+  const node = resolve(expression);
   if (node.type === "MemberExpression" && isStaticMember(node, scheduleNamespaces, "forever")) {
-    return Option.some(node);
+    return true;
   }
-  if (node.type !== "CallExpression" || node.callee.type === "Super") return Option.none();
+  if (node.type !== "CallExpression" || node.callee.type === "Super") return false;
   const callee = node.callee;
   const property = staticPropertyName(callee);
   const isUnboundedConstructor = Option.exists(
     property,
     (name) => unboundedConstructors.has(name) && isStaticMember(callee, scheduleNamespaces, name),
   );
-  if (isUnboundedConstructor) return Option.some(node);
-  if (!Option.contains(property, "pipe") || callee.type !== "MemberExpression") {
-    return Option.none();
-  }
-  return Option.filter(
-    unboundedSchedule(callee.object, scheduleNamespaces),
-    () => !node.arguments.some((operation) => isBoundedOperation(operation, scheduleNamespaces)),
+  if (isUnboundedConstructor) return true;
+  if (!Option.contains(property, "pipe") || callee.type !== "MemberExpression") return false;
+  if (callee.object.type === "Super") return false;
+  return (
+    isUnboundedSchedule(callee.object, scheduleNamespaces, resolve) &&
+    !node.arguments.some((operation) => isBoundedOperation(operation, scheduleNamespaces, resolve))
   );
 };
 
@@ -95,8 +100,12 @@ const policyArgument = (
 };
 
 /** The schedule a policy argument retries on, unless it sets `times`. */
-const policySchedule = (policy: ESTree.Argument): Option.Option<ESTree.Expression> => {
-  if (policy.type === "SpreadElement") return Option.none();
+const policySchedule = (
+  argument: ESTree.Argument,
+  resolve: ResolveConst,
+): Option.Option<ESTree.Expression> => {
+  if (argument.type === "SpreadElement") return Option.none();
+  const policy = resolve(argument);
   if (policy.type !== "ObjectExpression") return Option.some(policy);
   if (Arr.isReadonlyArrayNonEmpty(staticProperties(policy, "times"))) return Option.none();
   return Option.map(Arr.head(staticProperties(policy, "schedule")), (property) => property.value);
@@ -107,12 +116,13 @@ const retryPolicy = (
   effectNamespaces: ReadonlySet<string>,
   streamNamespaces: ReadonlySet<string>,
   httpClientNamespaces: ReadonlySet<string>,
+  resolve: ResolveConst,
 ): Option.Option<ESTree.Expression> => {
   if (node.callee.type === "Super") return Option.none();
   const arity = retryArity(node.callee, effectNamespaces, streamNamespaces, httpClientNamespaces);
   return Option.flatMap(
     Option.flatMap(arity, (count) => policyArgument(node, count)),
-    policySchedule,
+    (policy) => policySchedule(policy, resolve),
   );
 };
 
@@ -128,6 +138,8 @@ export const noUnboundedRetry = Rule.define({
     const httpClientNamespaces = new Set(["HttpClient"]);
     const scheduleNamespaces = new Set(["Schedule"]);
     const streamNamespaces = new Set(["Stream"]);
+
+    const resolve = constResolver(ctx);
 
     return {
       ImportDeclaration: (node) => {
@@ -157,21 +169,21 @@ export const noUnboundedRetry = Rule.define({
           visibleNamespaces(ctx, node, effectNamespaces),
           visibleNamespaces(ctx, node, streamNamespaces),
           visibleNamespaces(ctx, node, httpClientNamespaces),
+          resolve,
         );
-        const unbounded = Option.flatMap(policy, (schedule) =>
-          unboundedSchedule(schedule, visibleNamespaces(ctx, node, scheduleNamespaces)),
+        const scheduleNamespacesInScope = visibleNamespaces(ctx, node, scheduleNamespaces);
+        const unbounded = Option.exists(policy, (schedule) =>
+          isUnboundedSchedule(schedule, scheduleNamespacesInScope, resolve),
         );
-        return Option.match(unbounded, {
-          onNone: () => Effect.void,
-          onSome: (schedule) =>
-            ctx.report(
-              Diagnostic.make({
-                node: schedule,
-                message:
-                  "Bound retry attempts or elapsed time. Add times or compose the schedule with Schedule.recurs or Schedule.take.",
-              }),
-            ),
-        });
+        if (!unbounded) return Effect.void;
+        // Report the retry call, so a suppression sits above the call whatever the schedule's shape.
+        return ctx.report(
+          Diagnostic.make({
+            node,
+            message:
+              "Bound retry attempts or elapsed time. Add times or compose the schedule with Schedule.recurs or Schedule.take.",
+          }),
+        );
       },
     };
   },

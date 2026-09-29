@@ -54,11 +54,44 @@ describe("options objects", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
-  test("report the unbounded concurrency value, not its property", () => {
-    const findings = lintFixtures("noUnboundedConcurrency", {
-      "run.ts": withImports('Effect.forEach(items, run, {\n  concurrency:\n    "unbounded",\n});'),
+  test("follow options and concurrency values held in const bindings", () => {
+    const results = lintCases("noUnboundedConcurrency", {
+      valid: [
+        withImports("const options = { concurrency: 4 };\nEffect.forEach(items, run, options);"),
+        withImports(
+          'let options = { concurrency: "unbounded" };\noptions = { concurrency: 4 };\nEffect.forEach(items, run, options);',
+        ),
+        withImports(
+          "const runAll = (options: { concurrency: number }) => Effect.forEach(items, run, options);",
+        ),
+      ],
+      invalid: [
+        withImports(
+          'const options = { concurrency: "unbounded" } as const;\nEffect.forEach(items, run, options);',
+        ),
+        withImports(
+          'const unbounded = "unbounded";\nEffect.all(effects, { concurrency: unbounded });',
+        ),
+      ],
     });
-    expect(reportedLines(findings, "run.ts")).toEqual([8]);
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("report the call, so a suppression above the call applies", () => {
+    const findings = lintFixtures("noUnboundedConcurrency", {
+      "run.ts": withImports(
+        [
+          "Effect.forEach(items, run, {",
+          '  concurrency: "unbounded",',
+          "});",
+          "// oxlint-disable-next-line effect/noUnboundedConcurrency -- the caller caps items",
+          "Effect.forEach(items, run, {",
+          '  concurrency: "unbounded",',
+          "});",
+        ].join("\n"),
+      ),
+    });
+    expect(reportedLines(findings, "run.ts")).toEqual([6]);
   });
 });
 

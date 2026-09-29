@@ -5,6 +5,7 @@ import { noUnboundedConcurrency } from "../src/rules/no-unbounded-concurrency.js
 import { noUnboundedRetry } from "../src/rules/no-unbounded-retry.js";
 import { preferServiceOf } from "../src/rules/prefer-service-of.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
+import { lintCases, lintFixtures, reportedLines } from "./support/lint-fixtures.js";
 
 describe("service implementation checks", () => {
   test("requires Service.of for an inline Layer implementation", () => {
@@ -68,6 +69,50 @@ describe("bounded retry", () => {
     };
     const retry = Testing.callOfMember("Effect", "retry", [Testing.id("request"), schedule]);
     expect(Testing.runRule(noUnboundedRetry, "CallExpression", retry)).toHaveLength(0);
+  });
+});
+
+describe("retry schedules held in named values", () => {
+  const header = 'import { Effect, Schedule } from "effect";\n';
+
+  test("checks a const schedule, a const pipe base, and a const policy like inline values", () => {
+    const results = lintCases("noUnboundedRetry", {
+      valid: [
+        `${header}const policy = Schedule.spaced("1 second").pipe(Schedule.take(3));\nEffect.retry(request, policy);`,
+        `${header}const bound = Schedule.recurs(3);\nEffect.retry(request, Schedule.both(Schedule.spaced("1 second"), bound));`,
+        `${header}const base = Schedule.spaced("1 second");\nconst bound = Schedule.take(3);\nEffect.retry(request, base.pipe(bound));`,
+        `${header}const options = { schedule: Schedule.spaced("1 second"), times: 3 };\nEffect.retry(request, options);`,
+        `${header}const retryWith = (schedule: Schedule.Schedule<number>) => Effect.retry(request, schedule);`,
+        `${header}let policy = Schedule.spaced("1 second");\npolicy = policy.pipe(Schedule.take(3));\nEffect.retry(request, policy);`,
+      ],
+      invalid: [
+        `${header}const policy = Schedule.spaced("1 second");\nEffect.retry(request, policy);`,
+        `${header}const base = Schedule.exponential("10 millis");\nconst policy = base.pipe(Schedule.jittered);\nEffect.retry(request, policy);`,
+        `${header}const options = { schedule: Schedule.spaced("1 second") };\nrequest.pipe(Effect.retry(options));`,
+        `${header}const policy = Schedule.forever;\nconst alias = policy;\nEffect.retry(request, alias);`,
+        `${header}const options = { schedule: Schedule.spaced("1 second") } satisfies Effect.Retry.Options<unknown>;\nEffect.retry(request, options);`,
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("reports the retry call so a suppression above the call applies", () => {
+    const source = [
+      header.trimEnd(),
+      "request.pipe(",
+      "  Effect.retry({",
+      '    schedule: Schedule.spaced("1 second"),',
+      "  }),",
+      ");",
+      "request.pipe(",
+      "  // oxlint-disable-next-line effect/noUnboundedRetry -- the caller interrupts this retry",
+      "  Effect.retry({",
+      '    schedule: Schedule.spaced("1 second"),',
+      "  }),",
+      ");",
+    ].join("\n");
+    const findings = lintFixtures("noUnboundedRetry", { "retry.ts": source });
+    expect(reportedLines(findings, "retry.ts")).toEqual([3]);
   });
 });
 

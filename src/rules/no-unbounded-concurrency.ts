@@ -6,18 +6,17 @@ import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { expressionArgument, staticProperties } from "./_call-arguments.js";
+import { constResolver, type ResolveConst } from "./_const-bindings.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
 
-/** The first `concurrency: "unbounded"` value in an options object literal. */
-const unboundedConcurrency = (node: ESTree.Expression): Option.Option<ESTree.Node> => {
-  if (node.type !== "ObjectExpression") return Option.none();
-  return Option.map(
-    Arr.findFirst(
-      staticProperties(node, "concurrency"),
-      (property) => property.value.type === "Literal" && property.value.value === "unbounded",
-    ),
-    (property) => property.value,
-  );
+/** Whether an options object, inline or held in a const, sets `concurrency: "unbounded"`. */
+const isUnboundedConcurrency = (argument: ESTree.Expression, resolve: ResolveConst): boolean => {
+  const options = resolve(argument);
+  if (options.type !== "ObjectExpression") return false;
+  return staticProperties(options, "concurrency").some((property) => {
+    const value = resolve(property.value);
+    return value.type === "Literal" && value.value === "unbounded";
+  });
 };
 
 const fixedCollection = (node: ESTree.Argument): boolean =>
@@ -42,6 +41,7 @@ export const noUnboundedConcurrency = Rule.define({
   create: function* () {
     const ctx = yield* RuleContext;
     const effectNamespaces = new Set(["Effect"]);
+    const resolve = constResolver(ctx);
 
     return {
       ImportDeclaration: (node) => {
@@ -55,20 +55,20 @@ export const noUnboundedConcurrency = Rule.define({
         if (node.type !== "CallExpression" || node.callee.type === "Super") return Effect.void;
         const namespaces = visibleNamespaces(ctx, node, effectNamespaces);
         if (Option.exists(Arr.head(node.arguments), fixedCollection)) return Effect.void;
-        const unbounded = Option.flatMap(optionsIndex(node.callee, namespaces), (index) =>
-          Option.flatMap(expressionArgument(node, index), unboundedConcurrency),
+        const unbounded = Option.exists(optionsIndex(node.callee, namespaces), (index) =>
+          Option.exists(expressionArgument(node, index), (options) =>
+            isUnboundedConcurrency(options, resolve),
+          ),
         );
-        return Option.match(unbounded, {
-          onNone: () => Effect.void,
-          onSome: (value) =>
-            ctx.report(
-              Diagnostic.make({
-                node: value,
-                message:
-                  "Bound concurrency for a collection that can grow. Use a finite concurrency value.",
-              }),
-            ),
-        });
+        if (!unbounded) return Effect.void;
+        // Report the call, so a suppression sits above the call whatever the options' shape.
+        return ctx.report(
+          Diagnostic.make({
+            node,
+            message:
+              "Bound concurrency for a collection that can grow. Use a finite concurrency value.",
+          }),
+        );
       },
     };
   },
