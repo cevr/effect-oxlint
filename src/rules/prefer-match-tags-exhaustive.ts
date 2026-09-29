@@ -6,6 +6,7 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { isEffectPackageImport } from "./_effect-namespaces.js";
 import {
   hasOneTaggedSubject,
   isInsideCatchAllHandler,
@@ -109,9 +110,19 @@ export const preferMatchTagsExhaustive = Rule.define({
   }),
   create: function* () {
     const context = yield* RuleContext;
+    // Match is only a fix where the file already uses Effect. Imports precede code.
+    const effectImports = new Set<string>();
     return {
+      ImportDeclaration: (node: ESTree.ImportDeclaration) => {
+        if (isEffectPackageImport(node)) effectImports.add(node.source.value);
+        return Effect.void;
+      },
       SwitchStatement: (node: ESTree.SwitchStatement) => {
-        if (!isCompleteSwitchTransformation(node) || isInsideCatchAllHandler(node)) {
+        if (
+          effectImports.size === 0 ||
+          !isCompleteSwitchTransformation(node) ||
+          isInsideCatchAllHandler(node)
+        ) {
           return Effect.void;
         }
         return context.report(
@@ -124,6 +135,7 @@ export const preferMatchTagsExhaustive = Rule.define({
       },
       IfStatement: (node: ESTree.IfStatement) => {
         if (
+          effectImports.size === 0 ||
           (!isCompleteIfTransformation(node) && !isCompleteSequentialIfTransformation(node)) ||
           isInsideCatchAllHandler(node)
         ) {

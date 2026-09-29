@@ -65,3 +65,9 @@ export const isStaticCall = (
   node.type === "CallExpression" &&
   node.callee.type !== "Super" &&
   isStaticMember(node.callee, namespaces, property);
+
+/** Whether an import loads the effect package, one of its subpaths, or an @effect package. */
+export const isEffectPackageImport = (node: ESTree.ImportDeclaration): boolean => {
+  const source = node.source.value;
+  return source === "effect" || source.startsWith("effect/") || source.startsWith("@effect/");
+};

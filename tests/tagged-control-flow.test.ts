@@ -10,6 +10,25 @@ import { lintCases } from "./support/lint-fixtures.js";
 const tagEquals = (subject: string, tag: string) =>
   Testing.binaryExpr("===", Testing.memberExpr(subject, "_tag"), Testing.strLiteral(tag));
 
+/** The two tagged-flow rules report only in files that import Effect. */
+const effectImport = {
+  type: "ImportDeclaration",
+  source: Testing.strLiteral("effect"),
+  specifiers: [],
+};
+
+const runInEffectFile = (
+  rule: typeof preferPredicateIsTagged,
+  visitor: string,
+  node: Parameters<typeof Testing.runRule>[2],
+): ReturnType<typeof Testing.runRule> =>
+  Testing.runRuleMulti(rule, [
+    ["ImportDeclaration", effectImport],
+    [visitor, node],
+  ]);
+
+const inEffectFile = (source: string): string => `import { Match } from "effect";\n${source}`;
+
 const or = (left: ESTree.Expression, right: ESTree.Expression) => ({
   type: "LogicalExpression",
   operator: "||",
@@ -49,17 +68,17 @@ const returningIfChain = (...fallback: [] | [ESTree.Statement]) =>
 describe("tagged value predicates", () => {
   test("nudges combined tag comparisons toward Predicate.isTagged", () => {
     const expression = or(tagEquals("event", "Created"), tagEquals("event", "Updated"));
-    expect(Testing.runRule(preferPredicateIsTagged, "LogicalExpression", expression)).toHaveLength(
+    expect(runInEffectFile(preferPredicateIsTagged, "LogicalExpression", expression)).toHaveLength(
       1,
     );
   });
 
   test("allows a simple local tag guard and comparisons on different values", () => {
     expect(
-      Testing.runRule(preferPredicateIsTagged, "BinaryExpression", tagEquals("event", "Created")),
+      runInEffectFile(preferPredicateIsTagged, "BinaryExpression", tagEquals("event", "Created")),
     ).toHaveLength(0);
     expect(
-      Testing.runRule(
+      runInEffectFile(
         preferPredicateIsTagged,
         "LogicalExpression",
         or(tagEquals("left", "Created"), tagEquals("right", "Updated")),
@@ -71,13 +90,13 @@ describe("tagged value predicates", () => {
 describe("closed tagged union transformations", () => {
   test("nudges return-only tag switches toward Match.tagsExhaustive", () => {
     expect(
-      Testing.runRule(preferMatchTagsExhaustive, "SwitchStatement", returningSwitch()),
+      runInEffectFile(preferMatchTagsExhaustive, "SwitchStatement", returningSwitch()),
     ).toHaveLength(1);
   });
 
   test("nudges terminal return-only tag if chains toward Match.tagsExhaustive", () => {
     expect(
-      Testing.runRule(preferMatchTagsExhaustive, "IfStatement", returningIfChain()),
+      runInEffectFile(preferMatchTagsExhaustive, "IfStatement", returningIfChain()),
     ).toHaveLength(1);
   });
 
@@ -94,18 +113,24 @@ describe("closed tagged union transformations", () => {
     Object.defineProperty(first, "parent", { value: block });
     Object.defineProperty(second, "parent", { value: block });
 
-    expect(Testing.runRule(preferMatchTagsExhaustive, "IfStatement", first)).toHaveLength(1);
-    expect(Testing.runRule(preferMatchTagsExhaustive, "IfStatement", second)).toHaveLength(0);
+    expect(runInEffectFile(preferMatchTagsExhaustive, "IfStatement", first)).toHaveLength(1);
+    expect(runInEffectFile(preferMatchTagsExhaustive, "IfStatement", second)).toHaveLength(0);
   });
 
   test("allows partial switches and stateful switches", () => {
     const results = lintCases("preferMatchTagsExhaustive", {
       valid: [
-        'const label = (state: State) => { switch (state._tag) { case "Idle": return "idle"; case "Running": return "running"; default: return "unknown"; } };',
-        'const record = (state: State) => { switch (state._tag) { case "Idle": break; case "Running": break; } };',
+        inEffectFile(
+          'const label = (state: State) => { switch (state._tag) { case "Idle": return "idle"; case "Running": return "running"; default: return "unknown"; } };',
+        ),
+        inEffectFile(
+          'const record = (state: State) => { switch (state._tag) { case "Idle": break; case "Running": break; } };',
+        ),
       ],
       invalid: [
-        'const label = (state: State) => { switch (state._tag) { case "Idle": return "idle"; case "Running": return "running"; } };',
+        inEffectFile(
+          'const label = (state: State) => { switch (state._tag) { case "Idle": return "idle"; case "Running": return "running"; } };',
+        ),
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
@@ -116,10 +141,10 @@ describe("closed tagged union transformations", () => {
       tagEquals("state", "Idle"),
       Testing.returnStmt(Testing.strLiteral("idle")),
     );
-    expect(Testing.runRule(preferMatchTagsExhaustive, "IfStatement", localGuard)).toHaveLength(0);
+    expect(runInEffectFile(preferMatchTagsExhaustive, "IfStatement", localGuard)).toHaveLength(0);
 
     expect(
-      Testing.runRule(
+      runInEffectFile(
         preferMatchTagsExhaustive,
         "IfStatement",
         returningIfChain(Testing.returnStmt(Testing.strLiteral("unknown"))),
@@ -133,7 +158,7 @@ describe("closed tagged union transformations", () => {
     ]);
     Object.defineProperty(nonterminalChain, "parent", { value: block });
     expect(
-      Testing.runRule(preferMatchTagsExhaustive, "IfStatement", nonterminalChain),
+      runInEffectFile(preferMatchTagsExhaustive, "IfStatement", nonterminalChain),
     ).toHaveLength(0);
 
     const firstGuard = Testing.ifStmt(
@@ -150,7 +175,7 @@ describe("closed tagged union transformations", () => {
       Testing.returnStmt(Testing.strLiteral("unknown")),
     ]);
     Object.defineProperty(firstGuard, "parent", { value: guardsWithFallback });
-    expect(Testing.runRule(preferMatchTagsExhaustive, "IfStatement", firstGuard)).toHaveLength(0);
+    expect(runInEffectFile(preferMatchTagsExhaustive, "IfStatement", firstGuard)).toHaveLength(0);
 
     const stateful = Testing.ifStmt(
       tagEquals("state", "Idle"),
@@ -160,7 +185,28 @@ describe("closed tagged union transformations", () => {
         Testing.blockStmt([Testing.exprStmt(Testing.callExpr("recordRunning"))]),
       ),
     );
-    expect(Testing.runRule(preferMatchTagsExhaustive, "IfStatement", stateful)).toHaveLength(0);
+    expect(runInEffectFile(preferMatchTagsExhaustive, "IfStatement", stateful)).toHaveLength(0);
+  });
+});
+
+describe("tagged flow outside Effect files", () => {
+  test("leaves tag comparisons alone in a file that does not import Effect", () => {
+    expect(
+      lintCases("preferPredicateIsTagged", {
+        valid: [
+          'const isKnown = (event: Event) => event._tag === "Created" || event._tag === "Updated";',
+        ],
+        invalid: [],
+      }),
+    ).toEqual({ reportedValid: [], missedInvalid: [] });
+    expect(
+      lintCases("preferMatchTagsExhaustive", {
+        valid: [
+          'const label = (state: State) => { switch (state._tag) { case "Idle": return "idle"; case "Running": return "running"; } };',
+        ],
+        invalid: [],
+      }),
+    ).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 });
 
@@ -234,10 +280,14 @@ describe("tag comparisons in parsed source", () => {
   test("read either operand order and member-path subjects", () => {
     const results = lintCases("preferPredicateIsTagged", {
       valid: [
-        'const isKnown = (event: Event) => event.payload._tag === "Created" || other._tag === "Updated";',
+        inEffectFile(
+          'const isKnown = (event: Event) => event.payload._tag === "Created" || other._tag === "Updated";',
+        ),
       ],
       invalid: [
-        'const isKnown = (event: Event) => "Created" === event.payload._tag || event.payload._tag === "Updated";',
+        inEffectFile(
+          'const isKnown = (event: Event) => "Created" === event.payload._tag || event.payload._tag === "Updated";',
+        ),
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
@@ -246,10 +296,14 @@ describe("tag comparisons in parsed source", () => {
   test("require distinct tags and accept block-bodied returns", () => {
     const results = lintCases("preferMatchTagsExhaustive", {
       valid: [
-        'function label(state: State) { if (state._tag === "Idle") { return 1; } else if (state._tag === "Idle") { return 2; } }',
+        inEffectFile(
+          'function label(state: State) { if (state._tag === "Idle") { return 1; } else if (state._tag === "Idle") { return 2; } }',
+        ),
       ],
       invalid: [
-        'function label(state: State) { if (state._tag === "Idle") { return 1; } else if (state._tag === "Running") { return 2; } }',
+        inEffectFile(
+          'function label(state: State) { if (state._tag === "Idle") { return 1; } else if (state._tag === "Running") { return 2; } }',
+        ),
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });

@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { isEffectPackageImport } from "./_effect-namespaces.js";
 import {
   effectCallbackLocation,
   hasOneTaggedSubject,
@@ -25,9 +26,15 @@ export const preferPredicateIsTagged = Rule.define({
   }),
   create: function* () {
     const context = yield* RuleContext;
+    // Predicate.isTagged is only a fix where the file already uses Effect. Imports precede code.
+    const effectImports = new Set<string>();
     return {
+      ImportDeclaration: (node: ESTree.ImportDeclaration) => {
+        if (isEffectPackageImport(node)) effectImports.add(node.source.value);
+        return Effect.void;
+      },
       LogicalExpression: (node: ESTree.LogicalExpression) => {
-        if (node.operator !== "||") return Effect.void;
+        if (effectImports.size === 0 || node.operator !== "||") return Effect.void;
         if (node.parent?.type === "LogicalExpression" && node.parent.operator === "||") {
           return Effect.void;
         }
