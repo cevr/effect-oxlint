@@ -7,7 +7,6 @@ const baseline = [
   "effect/noAs",
   "effect/noGlobals",
   "effect/noNullish",
-  "effect/noRuntimeTypeof",
   "effect/noTernary",
 ] as const;
 

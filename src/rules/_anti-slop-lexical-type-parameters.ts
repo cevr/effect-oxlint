@@ -3,14 +3,13 @@
  * c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b.
  */
 import type { ESTree } from "@oxlint/plugins";
-import { childNodesAt } from "./_ast-children.js";
+import { childNodesAt, isAstNode } from "./_ast-children.js";
 
 type VisitorKeys = Readonly<Record<string, readonly string[]>>;
 
+// Local change: the node test is the shared isAstNode instead of runtime typeof checks.
 function isNode(value: unknown): value is ESTree.Node {
-  return (
-    typeof value === "object" && value !== null && "type" in value && typeof value.type === "string"
-  );
+  return isAstNode(value);
 }
 
 function collectInferTypeParameterNames(

@@ -1,6 +1,7 @@
 /** Use explicit sequencing when Effect.all discards a serial result. */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
@@ -19,9 +20,9 @@ const propertyLiteral = (
       const value = property.value.value;
       if (
         value === null ||
-        typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean"
+        Predicate.isString(value) ||
+        Predicate.isNumber(value) ||
+        Predicate.isBoolean(value)
       ) {
         return value;
       }

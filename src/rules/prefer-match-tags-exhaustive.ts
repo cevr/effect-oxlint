@@ -1,6 +1,7 @@
 /** Prefer exhaustive Match transformations for closed tagged unions. */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import {
@@ -27,7 +28,7 @@ const isCompleteSwitchTransformation = (node: ESTree.SwitchStatement): boolean =
   if (node.cases.length < 2 || taggedSwitchSubject(node) === null) return false;
   for (const switchCase of node.cases) {
     if (switchCase.test === null || switchCase.test.type !== "Literal") return false;
-    if (typeof switchCase.test.value !== "string" || !caseReturns(switchCase)) return false;
+    if (!Predicate.isString(switchCase.test.value) || !caseReturns(switchCase)) return false;
   }
   return true;
 };

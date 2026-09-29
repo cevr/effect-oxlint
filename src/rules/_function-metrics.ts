@@ -15,7 +15,9 @@
  * and every name or literal is an operand.
  */
 import type { ESTree } from "@oxlint/plugins";
-import { childNodesAt } from "./_ast-children.js";
+import * as Predicate from "effect/Predicate";
+
+import { childNodesAt, isAstNode } from "./_ast-children.js";
 
 export type FunctionNode = ESTree.ArrowFunctionExpression | ESTree.Function;
 
@@ -49,8 +51,7 @@ interface AnyNode {
   readonly property?: unknown;
 }
 
-const isNode = (value: unknown): value is AnyNode =>
-  typeof value === "object" && value !== null && "type" in value && typeof value.type === "string";
+const isNode = (value: unknown): value is AnyNode => isAstNode(value);
 
 const isFunctionType = (type: string): boolean =>
   type === "ArrowFunctionExpression" ||
@@ -247,16 +248,16 @@ const functionOperator = (node: AnyNode): string => {
 };
 
 const literalOperand = (node: AnyNode): string => {
-  if (typeof node.raw === "string") return node.raw;
-  if (typeof node.bigint === "string") return `${node.bigint}n`;
+  if (Predicate.isString(node.raw)) return node.raw;
+  if (Predicate.isString(node.bigint)) return `${node.bigint}n`;
   return String(node.value);
 };
 
 const templateOperand = (node: AnyNode): string | null => {
   const value = node.value;
-  if (typeof value !== "object" || value === null) return null;
-  const raw = (value as { raw?: unknown }).raw;
-  return typeof raw === "string" && raw.length > 0 ? raw : null;
+  if (!Predicate.hasProperty(value, "raw")) return null;
+  const raw = value.raw;
+  return Predicate.isString(raw) && raw.length > 0 ? raw : null;
 };
 
 /** Node types that always stand for the same operator tokens. */

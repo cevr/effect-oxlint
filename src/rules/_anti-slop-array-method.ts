@@ -3,6 +3,7 @@
  * c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b.
  */
 import type { ESTree, Scope, SourceCode, Variable } from "@oxlint/plugins";
+import * as Predicate from "effect/Predicate";
 
 /** Unwrap syntax-only wrappers when inspecting array methods and accumulator references. */
 export function unwrapArrayExpression(node: ESTree.Node): ESTree.Node {
@@ -42,7 +43,8 @@ export function arrayMethodTarget(
   if (!node.computed && property.type === "Identifier") {
     return { name: property.name, object: node.object };
   }
-  if (node.computed && property.type === "Literal" && typeof property.value === "string") {
+  // Local change: Predicate.isString replaces a runtime typeof check.
+  if (node.computed && property.type === "Literal" && Predicate.isString(property.value)) {
     return { name: property.value, object: node.object };
   }
   return null;

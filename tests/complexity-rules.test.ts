@@ -139,6 +139,29 @@ describe("halstead", () => {
     expect(halsteadDifficulty(halstead(outer))).toBe(0);
   });
 
+  test("counts literals by source text and template chunks by raw text", () => {
+    const chunk = (raw: string, tail: boolean) => ({
+      type: "TemplateElement",
+      value: { raw, cooked: raw },
+      tail,
+    });
+    const template = {
+      type: "TemplateLiteral",
+      quasis: [chunk("a", false), chunk("", true)],
+      expressions: [Testing.id("x")],
+    };
+    // `(x) => 1 + (1.0 + `a${x}`)`: `1` and `1.0` are distinct operands, and the empty chunk is none.
+    const fn = Testing.arrowFn(
+      Testing.binaryExpr(
+        "+",
+        { ...Testing.numLiteral(1), raw: "1" },
+        Testing.binaryExpr("+", { ...Testing.numLiteral(1), raw: "1.0" }, template),
+      ),
+      [Testing.id("x")],
+    );
+    expect(halstead(fn).distinctOperands).toBe(4);
+  });
+
   test("ignores type annotations", () => {
     const typed = Testing.arrowFn(
       { ...Testing.id("x"), typeAnnotation: Testing.tsTypeRef("Wide") },

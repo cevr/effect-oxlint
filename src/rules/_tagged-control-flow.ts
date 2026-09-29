@@ -1,4 +1,5 @@
 import type { ESTree } from "@oxlint/plugins";
+import * as Predicate from "effect/Predicate";
 
 export interface TagComparison {
   readonly subject: string;
@@ -18,7 +19,7 @@ const expressionKey = (node: ESTree.Expression): string | null => {
 
 const stringLiteral = (node: ESTree.Expression): string | null => {
   if (node.type !== "Literal") return null;
-  if (typeof node.value !== "string") return null;
+  if (!Predicate.isString(node.value)) return null;
   return node.value;
 };
 

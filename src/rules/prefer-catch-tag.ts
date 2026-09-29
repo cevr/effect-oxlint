@@ -1,6 +1,7 @@
 /** Prefer Effect's tagged failure recovery over manual tag predicates. */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { isEffectCall, tagComparisonsInOr, taggedSwitchSubject } from "./_tagged-control-flow.js";
@@ -44,7 +45,7 @@ const hasTagSwitch = (node: ESTree.SwitchStatement, parameter: string): boolean 
   if (taggedSwitchSubject(node) !== parameter) return false;
   return node.cases.some(
     (switchCase) =>
-      switchCase.test?.type === "Literal" && typeof switchCase.test.value === "string",
+      switchCase.test?.type === "Literal" && Predicate.isString(switchCase.test.value),
   );
 };
 
