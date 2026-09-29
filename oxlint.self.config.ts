@@ -1,9 +1,6 @@
 // Lints this repo with its own built plugin (`bun run build` first).
-// Every recommended rule is on except the baseline below: rules that still
-// report on this codebase. Fix a rule's findings, then delete its line.
+// Every recommended rule is on.
 import { recommended } from "./dist/presets/recommended.js";
-
-const baseline = ["effect/noNullish", "effect/noTernary"] as const;
 
 export default {
   jsPlugins: ["./dist/plugin.js"],
@@ -14,10 +11,7 @@ export default {
     "src/vendor/**",
     "tests/integration/**",
   ],
-  rules: {
-    ...recommended,
-    ...Object.fromEntries(baseline.map((rule) => [rule, "off"])),
-  },
+  rules: recommended,
   overrides: [
     {
       // Build scripts and the test harness are host adapters, not Effect programs:
