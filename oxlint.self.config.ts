@@ -5,11 +5,9 @@ import { recommended } from "./dist/presets/recommended.js";
 
 const baseline = [
   "effect/noAs",
-  "effect/noAsyncFunction",
   "effect/noGlobals",
   "effect/noNullish",
   "effect/noRuntimeTypeof",
-  "effect/noShapeInSymbolNames",
   "effect/noTernary",
 ] as const;
 

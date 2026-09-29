@@ -20,6 +20,7 @@ function isBorrowedMemberName(node: ESTree.Node): boolean {
 }
 
 /** Ban the case-insensitive substring "shape" in every JavaScript and TypeScript symbol name. */
+// oxlint-disable-next-line effect/noShapeInSymbolNames -- the export name is the public rule id `effect/noShapeInSymbolNames`
 export const noShapeInSymbolNames = Rule.define({
   name: "no-shape-in-symbol-names",
   meta: Rule.meta({

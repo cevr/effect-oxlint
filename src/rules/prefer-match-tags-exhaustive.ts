@@ -23,7 +23,7 @@ const caseReturns = (switchCase: ESTree.SwitchCase): boolean => {
   return statementReturns(last);
 };
 
-const isCompleteTransformationShape = (node: ESTree.SwitchStatement): boolean => {
+const isCompleteSwitchTransformation = (node: ESTree.SwitchStatement): boolean => {
   if (node.cases.length < 2 || taggedSwitchSubject(node) === null) return false;
   for (const switchCase of node.cases) {
     if (switchCase.test === null || switchCase.test.type !== "Literal") return false;
@@ -40,7 +40,7 @@ const isTerminalStatement = (node: ESTree.IfStatement): boolean => {
   return node.parent.body.at(-1) === node;
 };
 
-const isCompleteIfTransformationShape = (node: ESTree.IfStatement): boolean => {
+const isCompleteIfTransformation = (node: ESTree.IfStatement): boolean => {
   if (isElseIf(node) || !isTerminalStatement(node)) return false;
 
   let current = node;
@@ -66,7 +66,7 @@ const isCompleteIfTransformationShape = (node: ESTree.IfStatement): boolean => {
   return branchCount >= 2;
 };
 
-const isCompleteSequentialIfTransformationShape = (node: ESTree.IfStatement): boolean => {
+const isCompleteSequentialIfTransformation = (node: ESTree.IfStatement): boolean => {
   if (node.alternate !== null || node.parent?.type !== "BlockStatement") return false;
   const statements = node.parent.body;
   const index = statements.indexOf(node);
@@ -114,7 +114,7 @@ export const preferMatchTagsExhaustive = Rule.define({
     const context = yield* RuleContext;
     return {
       SwitchStatement: (node: ESTree.SwitchStatement) => {
-        if (!isCompleteTransformationShape(node) || isInsideCatchAllHandler(node)) {
+        if (!isCompleteSwitchTransformation(node) || isInsideCatchAllHandler(node)) {
           return Effect.void;
         }
         return context.report(
@@ -127,8 +127,7 @@ export const preferMatchTagsExhaustive = Rule.define({
       },
       IfStatement: (node: ESTree.IfStatement) => {
         if (
-          (!isCompleteIfTransformationShape(node) &&
-            !isCompleteSequentialIfTransformationShape(node)) ||
+          (!isCompleteIfTransformation(node) && !isCompleteSequentialIfTransformation(node)) ||
           isInsideCatchAllHandler(node)
         ) {
           return Effect.void;
