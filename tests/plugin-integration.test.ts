@@ -140,4 +140,14 @@ describe("compiled oxlint plugin", () => {
       expect(output).toContain(`effect(${rule})`);
     }
   });
+
+  test("reports widen-then-assert through unknown, record, and aliased bindings", () => {
+    const result = runAntiSlopFixture("tests/integration/widen-then-assert.ts");
+    const lines = new TextDecoder()
+      .decode(result.stdout)
+      .split("\n")
+      .filter((line) => line.includes("effect(noWidenThenAssert)"))
+      .map((line) => line.split(":")[1]);
+    expect(lines).toEqual(["2", "5", "9"]);
+  });
 });
