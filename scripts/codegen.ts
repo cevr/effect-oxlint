@@ -8,6 +8,7 @@
  * Usage: bun run scripts/codegen.ts
  */
 import type { CreateRule } from "@oxlint/plugins";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -77,34 +78,40 @@ const files = readdirSync(RULES_DIR)
   .filter((f) => f.endsWith(".ts") && !f.startsWith("_") && f !== "index.ts")
   .sort();
 
-const loadRecommendedOptions = async (
-  file: string,
-  exportName: string,
-): Promise<RecommendedOptions> => {
-  const module: Record<string, CreateRule> = await import(join(RULES_DIR, file));
-  return Schema.decodeUnknownSync(RecommendedOptions)(
-    module[exportName]?.meta?.docs?.recommendedOptions,
+const loadRecommendedOptions = (file: string, exportName: string) =>
+  Effect.promise((): Promise<Record<string, CreateRule>> => import(join(RULES_DIR, file))).pipe(
+    Effect.flatMap((module) =>
+      Schema.decodeUnknownEffect(RecommendedOptions)(
+        module[exportName]?.meta?.docs?.recommendedOptions,
+      ),
+    ),
+    Effect.orDie,
   );
-};
 
-const loadEntry = async (file: string): Promise<RuleEntry | null> => {
+const loadEntry = (file: string) => {
   const content = readFileSync(join(RULES_DIR, file), "utf-8");
   const exportName = extractExportName(content);
   if (!exportName) {
     console.warn(`⚠ No export found in ${file}, skipping`);
-    return null;
+    return Effect.succeed<ReadonlyArray<RuleEntry>>([]);
   }
-  return {
-    fileName: file.replace(".ts", ""),
-    exportName,
-    category: detectCategory(content, file),
-    recommendedOptions: await loadRecommendedOptions(file, exportName),
-  };
+  return loadRecommendedOptions(file, exportName).pipe(
+    Effect.map(
+      (recommendedOptions): ReadonlyArray<RuleEntry> => [
+        {
+          fileName: file.replace(".ts", ""),
+          exportName,
+          category: detectCategory(content, file),
+          recommendedOptions,
+        },
+      ],
+    ),
+  );
 };
 
-const entries: RuleEntry[] = (await Promise.all(files.map(loadEntry))).filter(
-  (entry): entry is RuleEntry => entry !== null,
-);
+const entries = (
+  await Effect.runPromise(Effect.forEach(files, loadEntry, { concurrency: 8 }))
+).flat();
 
 /** Render a flat options object the way oxfmt formats it: `{ max: 21 }`. */
 const formatOptions = (options: NonNullable<RecommendedOptions>): string => {

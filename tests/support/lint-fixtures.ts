@@ -36,6 +36,7 @@ export const lintFixtures = (
   );
   rmSync(directory, { force: true, recursive: true });
   if (result.exitCode !== 0 && result.exitCode !== 1) {
+    // oxlint-disable-next-line effect/noThrowStatement, effect/noNewError -- bun:test harness: a crashed oxlint must fail the calling test
     throw new Error(`oxlint failed: ${new TextDecoder().decode(result.stderr)}`);
   }
   const output = new TextDecoder().decode(result.stdout);

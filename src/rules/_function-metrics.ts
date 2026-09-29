@@ -268,36 +268,36 @@ const templateOperand = (node: AnyNode): string | null => {
 };
 
 /** Node types that always stand for the same operator tokens. */
-const fixedOperators: Readonly<Record<string, ReadonlyArray<string>>> = {
-  ForStatement: ["for"],
-  ForInStatement: ["for-in"],
-  WhileStatement: ["while"],
-  DoWhileStatement: ["do-while"],
-  SwitchStatement: ["switch"],
-  ReturnStatement: ["return"],
-  ThrowStatement: ["throw"],
-  CatchClause: ["catch"],
-  BreakStatement: ["break"],
-  ContinueStatement: ["continue"],
-  LabeledStatement: [":"],
-  DebuggerStatement: ["debugger"],
-  WithStatement: ["with"],
-  AssignmentPattern: ["="],
-  NewExpression: ["new"],
-  ArrayExpression: ["[]"],
-  ArrayPattern: ["[]"],
-  ObjectExpression: ["{}"],
-  ObjectPattern: ["{}"],
-  SpreadElement: ["..."],
-  RestElement: ["..."],
-  ConditionalExpression: ["?:"],
-  SequenceExpression: [","],
-  AwaitExpression: ["await"],
-  ImportExpression: ["import()"],
-  TemplateLiteral: ["`"],
-  JSXElement: ["<>"],
-  JSXFragment: ["<>"],
-};
+const fixedOperators = new Map<string, ReadonlyArray<string>>([
+  ["ForStatement", ["for"]],
+  ["ForInStatement", ["for-in"]],
+  ["WhileStatement", ["while"]],
+  ["DoWhileStatement", ["do-while"]],
+  ["SwitchStatement", ["switch"]],
+  ["ReturnStatement", ["return"]],
+  ["ThrowStatement", ["throw"]],
+  ["CatchClause", ["catch"]],
+  ["BreakStatement", ["break"]],
+  ["ContinueStatement", ["continue"]],
+  ["LabeledStatement", [":"]],
+  ["DebuggerStatement", ["debugger"]],
+  ["WithStatement", ["with"]],
+  ["AssignmentPattern", ["="]],
+  ["NewExpression", ["new"]],
+  ["ArrayExpression", ["[]"]],
+  ["ArrayPattern", ["[]"]],
+  ["ObjectExpression", ["{}"]],
+  ["ObjectPattern", ["{}"]],
+  ["SpreadElement", ["..."]],
+  ["RestElement", ["..."]],
+  ["ConditionalExpression", ["?:"]],
+  ["SequenceExpression", [","]],
+  ["AwaitExpression", ["await"]],
+  ["ImportExpression", ["import()"]],
+  ["TemplateLiteral", ["`"]],
+  ["JSXElement", ["<>"]],
+  ["JSXFragment", ["<>"]],
+]);
 
 /** Node types whose operator token carries the operator itself. */
 const operatorCarriers = new Set([
@@ -361,7 +361,7 @@ const expressionOperators = (node: AnyNode): ReadonlyArray<string> => {
 
 /** Every operator token a node stands for. */
 const operatorsOf = (node: AnyNode): ReadonlyArray<string> => [
-  ...(fixedOperators[node.type] ?? []),
+  ...(fixedOperators.get(node.type) ?? []),
   ...statementOperators(node),
   ...expressionOperators(node),
 ];
