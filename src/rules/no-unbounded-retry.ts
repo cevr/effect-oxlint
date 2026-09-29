@@ -90,6 +90,24 @@ const unboundedSchedule = (
   return root;
 };
 
+/** Arguments a data-last retry call takes; one more means the data-first form. */
+const retryArity = (
+  callee: ESTree.Expression,
+  effectNamespaces: ReadonlySet<string>,
+  streamNamespaces: ReadonlySet<string>,
+  httpClientNamespaces: ReadonlySet<string>,
+): number | undefined => {
+  if (isStaticMember(callee, effectNamespaces, "retryOrElse")) return 2;
+  if (
+    isStaticMember(callee, effectNamespaces, "retry") ||
+    isStaticMember(callee, streamNamespaces, "retry") ||
+    isStaticMember(callee, httpClientNamespaces, "retryTransient")
+  ) {
+    return 1;
+  }
+  return undefined;
+};
+
 const retryPolicy = (
   node: ESTree.CallExpression,
   effectNamespaces: ReadonlySet<string>,
@@ -97,24 +115,9 @@ const retryPolicy = (
   httpClientNamespaces: ReadonlySet<string>,
 ): ESTree.Expression | undefined => {
   if (node.callee.type === "Super") return undefined;
-  let policyIndex: number | undefined;
-  if (isStaticMember(node.callee, effectNamespaces, "retry")) {
-    if (node.arguments.length === 1) policyIndex = 0;
-    if (node.arguments.length >= 2) policyIndex = 1;
-  }
-  if (isStaticMember(node.callee, effectNamespaces, "retryOrElse")) {
-    if (node.arguments.length === 2) policyIndex = 0;
-    if (node.arguments.length >= 3) policyIndex = 1;
-  }
-  if (isStaticMember(node.callee, streamNamespaces, "retry")) {
-    if (node.arguments.length === 1) policyIndex = 0;
-    if (node.arguments.length >= 2) policyIndex = 1;
-  }
-  if (isStaticMember(node.callee, httpClientNamespaces, "retryTransient")) {
-    if (node.arguments.length === 1) policyIndex = 0;
-    if (node.arguments.length >= 2) policyIndex = 1;
-  }
-  if (policyIndex === undefined) return undefined;
+  const arity = retryArity(node.callee, effectNamespaces, streamNamespaces, httpClientNamespaces);
+  if (arity === undefined || node.arguments.length < arity) return undefined;
+  const policyIndex = node.arguments.length === arity ? 0 : 1;
   const policy = node.arguments[policyIndex];
   if (policy?.type === "SpreadElement") return undefined;
   if (policy?.type !== "ObjectExpression") return policy;

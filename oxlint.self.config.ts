@@ -4,8 +4,6 @@
 import { recommended } from "./dist/presets/recommended.js";
 
 const baseline = [
-  "complexity",
-  "effect/maxCognitiveComplexity",
   "effect/noAs",
   "effect/noAsyncFunction",
   "effect/noGlobals",
@@ -13,7 +11,6 @@ const baseline = [
   "effect/noRuntimeTypeof",
   "effect/noShapeInSymbolNames",
   "effect/noTernary",
-  "effect/noUnknownParameters",
 ] as const;
 
 export default {

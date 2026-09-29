@@ -198,7 +198,18 @@ function unsafeDirectValue(
       ? (unsafeMembers[0] ?? null)
       : null;
   }
-  if (unwrapped.type !== "TSTypeReference") return null;
+  // Local change: type references resolve in unsafeReferenceValue to keep this function small.
+  return unwrapped.type === "TSTypeReference"
+    ? unsafeReferenceValue(unwrapped, environment, substitutions, resolvingAliases)
+    : null;
+}
+
+function unsafeReferenceValue(
+  unwrapped: ESTree.TSTypeReference,
+  environment: TypeEnvironment,
+  substitutions: TypeAliasEnvironment,
+  resolvingAliases: ReadonlySet<string>,
+): UnsafeDictionary["unsafeValue"] | null {
   const name = typeReferenceName(unwrapped);
   if (name === null) return null;
   if (TRANSPARENT_WRAPPERS.has(name) && isBuiltIn(name, unwrapped, environment)) {
@@ -248,7 +259,18 @@ function dictionaryValueTypes(
       : [{ type: unwrapped.typeAnnotation, substitutions }];
   }
 
-  if (unwrapped.type !== "TSTypeReference") return [];
+  // Local change: type references resolve in referenceValueTypes to keep this function small.
+  return unwrapped.type === "TSTypeReference"
+    ? referenceValueTypes(unwrapped, environment, substitutions, resolvingAliases)
+    : [];
+}
+
+function referenceValueTypes(
+  unwrapped: ESTree.TSTypeReference,
+  environment: TypeEnvironment,
+  substitutions: TypeAliasEnvironment,
+  resolvingAliases: ReadonlySet<string>,
+): readonly ResolvedType[] {
   const name = typeReferenceName(unwrapped);
   if (name === null) return [];
 
@@ -338,8 +360,17 @@ export function classifyWideningTarget(
       ? { kind: "open dictionary" }
       : null;
   }
+  // Local change: alias targets classify in classifyWideningAlias to keep this function small.
   const alias = visibleTypeAlias(name, unwrapped, environment.typeAliases);
-  if (alias === null) return null;
+  return alias === null ? null : classifyWideningAlias(alias, unwrapped, name, environment);
+}
+
+function classifyWideningAlias(
+  alias: ESTree.TSTypeAliasDeclaration,
+  unwrapped: ESTree.TSTypeReference,
+  name: string,
+  environment: TypeEnvironment,
+): WideningTarget | null {
   if ((alias.typeParameters?.params.length ?? 0) > 0) {
     const substitutions = aliasSubstitution(alias, unwrapped, new Map());
     const resolved =
@@ -432,7 +463,18 @@ function classifyAliasBroadTarget(
       ? { kind: "open dictionary" }
       : null;
   }
-  if (unwrapped.type !== "TSTypeReference") return null;
+  // Local change: type references classify in classifyReferenceBroadTarget to keep this function small.
+  return unwrapped.type === "TSTypeReference"
+    ? classifyReferenceBroadTarget(unwrapped, environment, substitutions, resolvingAliases)
+    : null;
+}
+
+function classifyReferenceBroadTarget(
+  unwrapped: ESTree.TSTypeReference,
+  environment: TypeEnvironment,
+  substitutions: TypeAliasEnvironment,
+  resolvingAliases: ReadonlySet<string>,
+): WideningTarget | null {
   const name = typeReferenceName(unwrapped);
   if (name === null) return null;
   const substitution = substitutions.get(name);

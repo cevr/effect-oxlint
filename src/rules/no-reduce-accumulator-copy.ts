@@ -27,31 +27,37 @@ interface Reducer {
   readonly initialValue: ESTree.Argument | undefined;
 }
 
+function reducerForCallback(
+  callback: ESTree.ArrowFunctionExpression | ESTree.Function,
+): Reducer | null {
+  let owner: ESTree.Node | null = callback.parent;
+  while (owner !== null && unwrapArrayExpression(owner) === callback) owner = owner.parent;
+  if (owner?.type !== "CallExpression") return null;
+  const method = arrayMethodTarget(owner.callee);
+  const firstArgument = owner.arguments[0];
+  if (
+    method === null ||
+    (method.name !== "reduce" && method.name !== "reduceRight") ||
+    owner.arguments.length > 2 ||
+    firstArgument === undefined ||
+    unwrapArrayExpression(firstArgument) !== callback
+  ) {
+    return null;
+  }
+  const firstParameter = callback.params[0];
+  const accumulator =
+    firstParameter?.type === "AssignmentPattern" ? firstParameter.left : firstParameter;
+  if (accumulator?.type !== "Identifier") return null;
+  return { callback, accumulator, initialValue: owner.arguments[1] };
+}
+
 function enclosingReducer(node: ESTree.Node): Reducer | null {
   let parent = node.parent;
   while (parent !== null) {
     if (parent.type === "FunctionDeclaration") return null;
+    // Local change: the nearest callback is checked in reducerForCallback to keep this loop small.
     if (parent.type === "ArrowFunctionExpression" || parent.type === "FunctionExpression") {
-      const callback = parent;
-      let owner: ESTree.Node | null = callback.parent;
-      while (owner !== null && unwrapArrayExpression(owner) === callback) owner = owner.parent;
-      if (owner?.type !== "CallExpression") return null;
-      const method = arrayMethodTarget(owner.callee);
-      const firstArgument = owner.arguments[0];
-      if (
-        method === null ||
-        (method.name !== "reduce" && method.name !== "reduceRight") ||
-        owner.arguments.length > 2 ||
-        firstArgument === undefined ||
-        unwrapArrayExpression(firstArgument) !== callback
-      ) {
-        return null;
-      }
-      const firstParameter = callback.params[0];
-      const accumulator =
-        firstParameter?.type === "AssignmentPattern" ? firstParameter.left : firstParameter;
-      if (accumulator?.type !== "Identifier") return null;
-      return { callback, accumulator, initialValue: owner.arguments[1] };
+      return reducerForCallback(parent);
     }
     parent = parent.parent;
   }

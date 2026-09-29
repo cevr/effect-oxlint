@@ -1,3 +1,4 @@
+import type { ESTree } from "@oxlint/plugins";
 import { describe, expect, test } from "bun:test";
 
 import { preferCatchTag } from "../src/rules/prefer-catch-tag.js";
@@ -8,7 +9,7 @@ import { Testing } from "../src/vendor/effect-oxlint/index.js";
 const tagEquals = (subject: string, tag: string) =>
   Testing.binaryExpr("===", Testing.memberExpr(subject, "_tag"), Testing.strLiteral(tag));
 
-const or = (left: unknown, right: unknown) =>
+const or = (left: ESTree.Expression, right: ESTree.Expression) =>
   ({ type: "LogicalExpression", operator: "||", left, right }) as never;
 
 const returningSwitch = (withDefault = false, subject = "state") => ({
