@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import recommendedJson from "../presets/recommended.json";
 import { recommended } from "../src/presets/recommended.js";
 import {
   noAs,
@@ -18,6 +19,7 @@ import {
 } from "../src/rules/index.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
 import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
+import { runCommand } from "./support/run-command.js";
 
 describe("recommended preset", () => {
   test("enables the complete maintained rule set at error severity", () => {
@@ -76,6 +78,28 @@ describe("recommended preset", () => {
       "effect/requireNamedEffectFn": "error",
       "effect/requireSuppressionReason": "error",
     });
+  });
+
+  test("ships the same rules as a JSON preset that loads the plugin", () => {
+    expect<unknown>(recommendedJson).toEqual({
+      jsPlugins: ["oxlint-plugin-effect/plugin"],
+      rules: recommended,
+    });
+  });
+
+  test("applies the JSON preset to a config that extends it", () => {
+    const result = runCommand([
+      "bunx",
+      "oxlint",
+      "--format",
+      "unix",
+      "--config",
+      "tests/integration/preset-oxlint.json",
+      "tests/integration/invalid.ts",
+    ]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("effect(noAsyncFunction)");
+    expect(result.stdout).toContain("eslint(complexity)");
   });
 });
 

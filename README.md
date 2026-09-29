@@ -21,7 +21,19 @@ export default {
 };
 ```
 
-If the project uses JSON configuration, copy the exported rule map into `rules`; every recommended rule has `error` severity. The complexity rules carry their limit as an option, `["error", { "max": 21 }]`.
+A JSON configuration extends the generated preset file. It loads the plugin and enables every recommended rule, so new rules arrive with each release:
+
+```jsonc
+{
+  "extends": ["./node_modules/oxlint-plugin-effect/presets/recommended.json"],
+  "rules": {
+    // Local choices override the preset.
+    "effect/noTernary": "off",
+  },
+}
+```
+
+Every recommended rule has `error` severity. The complexity rules carry their limit as an option, `["error", { "max": 21 }]`.
 
 ## Recommended Rules
 
@@ -204,7 +216,7 @@ bun run codegen
 bun run add-rule -- no-example --dry-run
 ```
 
-`bun run codegen` owns both the rule export barrel and the recommended preset.
+`bun run codegen` owns the rule export barrel and both forms of the recommended preset: `src/presets/recommended.ts` and `presets/recommended.json`.
 `bun run gate` fails when either generated file is stale.
 
 ## License

@@ -9,6 +9,7 @@
   },
   "files": [
     "dist",
+    "presets",
     "THIRD_PARTY_NOTICES.md"
   ],
   "type": "module",
@@ -31,6 +32,7 @@
         "default": "./dist/vendor/effect-oxlint/index.js"
       }
     },
+    "./presets/recommended.json": "./presets/recommended.json",
     "./presets/*": {
       "import": {
         "types": "./dist/presets/*.d.ts",

@@ -17,6 +17,7 @@ import { join } from "node:path";
 const RULES_DIR = join(import.meta.dir, "../src/rules");
 const INDEX_PATH = join(RULES_DIR, "index.ts");
 const RECOMMENDED_PATH = join(import.meta.dir, "../src/presets/recommended.ts");
+const RECOMMENDED_JSON_PATH = join(import.meta.dir, "../presets/recommended.json");
 const check = process.argv.includes("--check");
 
 /**
@@ -140,6 +141,18 @@ const presetEntry = (name: string, options: RecommendedOptions): string =>
     onSome: (ruleOptions) => `  ${presetKey(name)}: ["error", ${formatOptions(ruleOptions)}],`,
   });
 
+/** One JSON preset entry, laid out as oxfmt formats it. */
+const jsonPresetEntry = (name: string, options: RecommendedOptions): string =>
+  Option.match(options, {
+    onNone: () => `    ${JSON.stringify(name)}: "error"`,
+    onSome: (ruleOptions) => {
+      const fields = Object.entries(ruleOptions).map(
+        ([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`,
+      );
+      return `    ${JSON.stringify(name)}: ["error", { ${fields.join(", ")} }]`;
+    },
+  });
+
 const main = Effect.gen(function* () {
   const entries = (yield* Effect.forEach(files, loadEntry, { concurrency: 8 })).flat();
 
@@ -185,9 +198,27 @@ const main = Effect.gen(function* () {
     "",
   ].join("\n");
 
+  // JSON oxlint configs cannot import the TypeScript preset, so they extend this file.
+  // It loads the plugin by package name, which resolves from the consumer's node_modules.
+  const recommendedJsonOutput = [
+    "{",
+    '  "jsPlugins": ["oxlint-plugin-effect/plugin"],',
+    '  "rules": {',
+    [
+      ...nativeRules.map(([name, options]) => jsonPresetEntry(name, options)),
+      ...entries.map((entry) =>
+        jsonPresetEntry(`effect/${entry.exportName}`, entry.recommendedOptions),
+      ),
+    ].join(",\n"),
+    "  }",
+    "}",
+    "",
+  ].join("\n");
+
   const generatedFiles = [
     [INDEX_PATH, indexOutput],
     [RECOMMENDED_PATH, recommendedOutput],
+    [RECOMMENDED_JSON_PATH, recommendedJsonOutput],
   ] as const;
 
   if (check) {
