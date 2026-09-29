@@ -3,6 +3,7 @@
  * c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b.
  */
 import type { ESTree } from "@oxlint/plugins";
+import { childNodesAt } from "./_ast-children.js";
 
 type VisitorKeys = Readonly<Record<string, readonly string[]>>;
 
@@ -18,16 +19,10 @@ function collectInferTypeParameterNames(
   names: Set<string>,
 ): void {
   if (node.type === "TSInferType") names.add(node.typeParameter.name.name);
-  const record = node as unknown as Readonly<Record<string, unknown>>;
+  // Local change: children are read through childNodesAt instead of a dictionary cast.
   for (const key of visitorKeys[node.type] ?? []) {
-    const value = record[key];
-    if (isNode(value)) {
-      collectInferTypeParameterNames(value, visitorKeys, names);
-      continue;
-    }
-    if (!Array.isArray(value)) continue;
-    for (const child of value) {
-      if (isNode(child)) collectInferTypeParameterNames(child, visitorKeys, names);
+    for (const child of childNodesAt(node, key, isNode)) {
+      collectInferTypeParameterNames(child, visitorKeys, names);
     }
   }
 }

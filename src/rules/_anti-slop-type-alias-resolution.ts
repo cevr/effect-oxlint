@@ -3,6 +3,7 @@
  * c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b.
  */
 import type { ESTree } from "@oxlint/plugins";
+import { childNodesAt } from "./_ast-children.js";
 
 import { lexicalTypeParameterNames } from "./_anti-slop-lexical-type-parameters.js";
 
@@ -97,19 +98,10 @@ function collectTypeBindings(
     if (declared.alias !== null) aliases.push(declared.alias);
   }
 
-  // SAFETY: Oxlint's visitor keys identify only ESTree child-node properties.
-  const fields = node as unknown as Readonly<Record<string, unknown>>;
+  // Local change: children are read through childNodesAt instead of a dictionary cast.
   for (const key of visitorKeys[node.type] ?? []) {
-    const value = fields[key];
-    if (isNode(value)) {
-      collectTypeBindings(value, visitorKeys, bindingsByName, aliases);
-      continue;
-    }
-    if (!Array.isArray(value)) continue;
-    for (const child of value) {
-      if (isNode(child)) {
-        collectTypeBindings(child, visitorKeys, bindingsByName, aliases);
-      }
+    for (const child of childNodesAt(node, key, isNode)) {
+      collectTypeBindings(child, visitorKeys, bindingsByName, aliases);
     }
   }
 }
