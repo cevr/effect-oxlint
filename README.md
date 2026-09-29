@@ -34,10 +34,13 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 | `effect/noThrowStatement`              | Bans every throw statement                                                                |
 | `effect/noNewPromise`                  | Bans new Promise, Promise calls, and Promise static APIs                                  |
 | `effect/noNewError`                    | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die |
-| `effect/noNullish`                     | Bans null and undefined; permits `Object.create(null)` for prototype-free dictionaries   |
+| `effect/noNullish`                     | Bans null and undefined; permits `Object.create(null)` for prototype-free dictionaries    |
 | `effect/noModuleMocks`                 | Bans Vitest and Jest module mocks and method spies; use Effect service test layers        |
 | `effect/noTernary`                     | Bans conditional expressions while allowing ordinary if statements                        |
 | `effect/noManagedRuntimeInEffect`      | Keeps ManagedRuntime construction at non-Effect host boundaries                           |
+| `effect/noModuleLevelMutableState`     | Bans module-level `let` and `var` outside tests; hold shared state in a Layer-owned `Ref` |
+| `effect/noEagerAcquire`                | Bans `acquireRelease` acquires that build or capture the resource before acquire runs     |
+| `effect/noEffectRunInTests`            | Bans `Effect.run*` and `ManagedRuntime.make` in tests; use `it.effect` or `it.layer`      |
 | `effect/noInlineProvide`               | Keeps dependency provisioning at explicit composition boundaries                          |
 | `effect/noNestedEffectGen`             | Flattens directly yielded nested generators                                               |
 | `effect/noPerCallCacheConstruction`    | Constructs shared caches once in their owning layer                                       |
