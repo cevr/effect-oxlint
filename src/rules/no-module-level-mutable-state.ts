@@ -1,8 +1,11 @@
 /** Keep request-shared state out of module-level `let` and `var` bindings. */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { ancestors } from "./_ast-ancestors.js";
 import { isTestFile, skipFile } from "./_test-files.js";
 
 /** Nodes that start a new `var` scope, so a `var` below them is not module state. */
@@ -15,14 +18,14 @@ const functionScopeBoundaries = new Set([
   "TSModuleBlock",
 ]);
 
-const isModuleScopedVar = (node: ESTree.VariableDeclaration): boolean => {
-  let current: ESTree.Node | null = node.parent;
-  while (current !== null && current.type !== "Program") {
-    if (functionScopeBoundaries.has(current.type)) return false;
-    current = current.parent;
-  }
-  return current !== null;
-};
+const isModuleScopedVar = (node: ESTree.VariableDeclaration): boolean =>
+  Option.exists(
+    Arr.findFirst(
+      ancestors(node),
+      (ancestor) => ancestor.type === "Program" || functionScopeBoundaries.has(ancestor.type),
+    ),
+    (boundary) => boundary.type === "Program",
+  );
 
 export const noModuleLevelMutableState = Rule.define({
   name: "no-module-level-mutable-state",

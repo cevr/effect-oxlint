@@ -1,8 +1,12 @@
 /** Require Service.of for inline Layer implementations. */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { expressionArgument } from "./_call-arguments.js";
 import {
   importedNamespaces,
   isStaticCall,
@@ -10,52 +14,71 @@ import {
   visibleNamespaces,
 } from "./_effect-namespaces.js";
 
-const returnedObject = (
-  node: ESTree.CallExpression["arguments"][number] | undefined,
-): ESTree.ObjectExpression | undefined => {
-  if (node?.type !== "ArrowFunctionExpression" && node?.type !== "FunctionExpression") {
-    return undefined;
+const isObjectExpression = (node: ESTree.Argument): node is ESTree.ObjectExpression =>
+  node.type === "ObjectExpression";
+
+const returnedObjectStatement = (
+  statement: ESTree.Statement,
+): Option.Option<ESTree.ObjectExpression> => {
+  if (statement.type !== "ReturnStatement" || statement.argument?.type !== "ObjectExpression") {
+    return Option.none();
   }
-  if (node.body === null) return undefined;
-  if (node.body.type === "ObjectExpression") return node.body;
-  if (node.body.type !== "BlockStatement") return undefined;
-  for (const statement of node.body.body) {
-    if (statement.type === "ReturnStatement" && statement.argument?.type === "ObjectExpression") {
-      return statement.argument;
-    }
+  return Option.some(statement.argument);
+};
+
+/** The object a function argument returns: its expression body or its first returned object. */
+const returnedObject = (node: ESTree.Argument): Option.Option<ESTree.ObjectExpression> => {
+  if (node.type !== "ArrowFunctionExpression" && node.type !== "FunctionExpression") {
+    return Option.none();
   }
-  return undefined;
+  const body = node.body;
+  if (Predicate.isNull(body)) return Option.none();
+  if (body.type === "ObjectExpression") return Option.some(body);
+  if (body.type !== "BlockStatement") return Option.none();
+  return Arr.findFirst(body.body, returnedObjectStatement);
+};
+
+/** The object an `Effect.succeed(...)` or `Effect.gen(...)` implementation produces. */
+const effectImplementationObject = (
+  implementation: ESTree.Expression,
+  effectNamespaces: ReadonlySet<string>,
+): Option.Option<ESTree.ObjectExpression> => {
+  if (implementation.type !== "CallExpression" || implementation.callee.type === "Super") {
+    return Option.none();
+  }
+  if (isStaticMember(implementation.callee, effectNamespaces, "succeed")) {
+    return Option.filter(Arr.head(implementation.arguments), isObjectExpression);
+  }
+  if (isStaticCall(implementation, effectNamespaces, "gen")) {
+    return Option.flatMap(Arr.head(implementation.arguments), returnedObject);
+  }
+  return Option.none();
+};
+
+const layerImplementationObject = (
+  callee: ESTree.Expression,
+  implementation: ESTree.Expression,
+  layerNamespaces: ReadonlySet<string>,
+  effectNamespaces: ReadonlySet<string>,
+): Option.Option<ESTree.ObjectExpression> => {
+  if (isStaticMember(callee, layerNamespaces, "succeed")) {
+    return Option.liftPredicate(implementation, isObjectExpression);
+  }
+  if (isStaticMember(callee, layerNamespaces, "sync")) return returnedObject(implementation);
+  if (!isStaticMember(callee, layerNamespaces, "effect")) return Option.none();
+  return effectImplementationObject(implementation, effectNamespaces);
 };
 
 const implementationObject = (
   node: ESTree.CallExpression,
   layerNamespaces: ReadonlySet<string>,
   effectNamespaces: ReadonlySet<string>,
-): ESTree.ObjectExpression | undefined => {
-  if (node.callee.type === "Super" || node.arguments.length < 2) return undefined;
-  const implementation = node.arguments[1];
-  if (implementation === undefined || implementation.type === "SpreadElement") return undefined;
-
-  if (isStaticMember(node.callee, layerNamespaces, "succeed")) {
-    if (implementation.type === "ObjectExpression") return implementation;
-    return undefined;
-  }
-  if (isStaticMember(node.callee, layerNamespaces, "sync")) {
-    return returnedObject(implementation);
-  }
-  if (!isStaticMember(node.callee, layerNamespaces, "effect")) return undefined;
-  if (implementation.type !== "CallExpression" || implementation.callee.type === "Super") {
-    return undefined;
-  }
-  if (isStaticMember(implementation.callee, effectNamespaces, "succeed")) {
-    const value = implementation.arguments[0];
-    if (value?.type === "ObjectExpression") return value;
-    return undefined;
-  }
-  if (isStaticCall(implementation, effectNamespaces, "gen")) {
-    return returnedObject(implementation.arguments[0]);
-  }
-  return undefined;
+): Option.Option<ESTree.ObjectExpression> => {
+  const callee = node.callee;
+  if (callee.type === "Super") return Option.none();
+  return Option.flatMap(expressionArgument(node, 1), (implementation) =>
+    layerImplementationObject(callee, implementation, layerNamespaces, effectNamespaces),
+  );
 };
 
 export const preferServiceOf = Rule.define({
@@ -90,13 +113,16 @@ export const preferServiceOf = Rule.define({
           visibleNamespaces(ctx, node, layerNamespaces),
           visibleNamespaces(ctx, node, effectNamespaces),
         );
-        if (implementation === undefined) return Effect.void;
-        return ctx.report(
-          Diagnostic.make({
-            node: implementation,
-            message: `Wrap this implementation with ${service.name}.of(...) so it stays checked against the service interface.`,
-          }),
-        );
+        return Option.match(implementation, {
+          onNone: () => Effect.void,
+          onSome: (object) =>
+            ctx.report(
+              Diagnostic.make({
+                node: object,
+                message: `Wrap this implementation with ${service.name}.of(...) so it stays checked against the service interface.`,
+              }),
+            ),
+        });
       },
     };
   },

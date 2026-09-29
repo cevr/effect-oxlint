@@ -1,6 +1,8 @@
 /** Run test Effects through the test runner's Effect integration, not by hand. */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
@@ -34,11 +36,11 @@ export const noEffectRunInTests = Rule.define({
     const effectNamespaces = new Set(["Effect"]);
     const managedRuntimeNamespaces = new Set(["ManagedRuntime"]);
 
-    const runnerName = (node: ESTree.MemberExpression): string | undefined => {
+    const runnerName = (node: ESTree.MemberExpression): Option.Option<string> => {
       const runtimes = visibleNamespaces(ctx, node, managedRuntimeNamespaces);
-      if (isStaticMember(node, runtimes, "make")) return "ManagedRuntime.make";
+      if (isStaticMember(node, runtimes, "make")) return Option.some("ManagedRuntime.make");
       const effects = visibleNamespaces(ctx, node, effectNamespaces);
-      return effectRunners.find((runner) => isStaticMember(node, effects, runner));
+      return Arr.findFirst(effectRunners, (runner) => isStaticMember(node, effects, runner));
     };
 
     return {
@@ -52,14 +54,16 @@ export const noEffectRunInTests = Rule.define({
         return Effect.void;
       },
       MemberExpression: (node: ESTree.MemberExpression) => {
-        const runner = runnerName(node);
-        if (runner === undefined) return Effect.void;
-        return ctx.report(
-          Diagnostic.make({
-            node,
-            message: `Do not run Effects by hand in tests (${runner}). Use the test runner's Effect integration: it.effect(...) or it.layer(layer)(...) from @effect/vitest or effect-bun-test.`,
-          }),
-        );
+        return Option.match(runnerName(node), {
+          onNone: () => Effect.void,
+          onSome: (runner) =>
+            ctx.report(
+              Diagnostic.make({
+                node,
+                message: `Do not run Effects by hand in tests (${runner}). Use the test runner's Effect integration: it.effect(...) or it.layer(layer)(...) from @effect/vitest or effect-bun-test.`,
+              }),
+            ),
+        });
       },
     };
   },

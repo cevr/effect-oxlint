@@ -1,29 +1,37 @@
 /** Require finite concurrency for collections that can grow. */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { expressionArgument, staticProperties } from "./_call-arguments.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
 
-const unboundedConcurrency = (
-  node: ESTree.CallExpression["arguments"][number] | undefined,
-): ESTree.Node | undefined => {
-  if (node?.type !== "ObjectExpression") return undefined;
-  for (const property of node.properties) {
-    if (property.type !== "Property" || property.computed) continue;
-    const isConcurrency =
-      (property.key.type === "Identifier" && property.key.name === "concurrency") ||
-      (property.key.type === "Literal" && property.key.value === "concurrency");
-    if (!isConcurrency) continue;
-    if (property.value.type === "Literal" && property.value.value === "unbounded") {
-      return property.value;
-    }
-  }
-  return undefined;
+/** The first `concurrency: "unbounded"` value in an options object literal. */
+const unboundedConcurrency = (node: ESTree.Expression): Option.Option<ESTree.Node> => {
+  if (node.type !== "ObjectExpression") return Option.none();
+  return Option.map(
+    Arr.findFirst(
+      staticProperties(node, "concurrency"),
+      (property) => property.value.type === "Literal" && property.value.value === "unbounded",
+    ),
+    (property) => property.value,
+  );
 };
 
-const fixedCollection = (node: ESTree.CallExpression["arguments"][number] | undefined): boolean =>
-  node?.type === "ArrayExpression" || node?.type === "ObjectExpression";
+const fixedCollection = (node: ESTree.Argument): boolean =>
+  node.type === "ArrayExpression" || node.type === "ObjectExpression";
+
+/** Where `Effect.all` and `Effect.forEach` take their options. */
+const optionsIndex = (
+  callee: ESTree.Expression,
+  effectNamespaces: ReadonlySet<string>,
+): Option.Option<number> => {
+  if (isStaticMember(callee, effectNamespaces, "forEach")) return Option.some(2);
+  if (isStaticMember(callee, effectNamespaces, "all")) return Option.some(1);
+  return Option.none();
+};
 
 export const noUnboundedConcurrency = Rule.define({
   name: "no-unbounded-concurrency",
@@ -46,19 +54,21 @@ export const noUnboundedConcurrency = Rule.define({
       CallExpression: (node) => {
         if (node.type !== "CallExpression" || node.callee.type === "Super") return Effect.void;
         const namespaces = visibleNamespaces(ctx, node, effectNamespaces);
-        let optionsIndex: number | undefined;
-        if (isStaticMember(node.callee, namespaces, "all")) optionsIndex = 1;
-        if (isStaticMember(node.callee, namespaces, "forEach")) optionsIndex = 2;
-        if (optionsIndex === undefined || fixedCollection(node.arguments[0])) return Effect.void;
-        const unbounded = unboundedConcurrency(node.arguments[optionsIndex]);
-        if (unbounded === undefined) return Effect.void;
-        return ctx.report(
-          Diagnostic.make({
-            node: unbounded,
-            message:
-              "Bound concurrency for a collection that can grow. Use a finite concurrency value.",
-          }),
+        if (Option.exists(Arr.head(node.arguments), fixedCollection)) return Effect.void;
+        const unbounded = Option.flatMap(optionsIndex(node.callee, namespaces), (index) =>
+          Option.flatMap(expressionArgument(node, index), unboundedConcurrency),
         );
+        return Option.match(unbounded, {
+          onNone: () => Effect.void,
+          onSome: (value) =>
+            ctx.report(
+              Diagnostic.make({
+                node: value,
+                message:
+                  "Bound concurrency for a collection that can grow. Use a finite concurrency value.",
+              }),
+            ),
+        });
       },
     };
   },

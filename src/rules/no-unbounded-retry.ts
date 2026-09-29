@@ -1,8 +1,11 @@
 /** Require an explicit bound on retry schedules. */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { expressionArgument, staticProperties } from "./_call-arguments.js";
 import {
   importedNamespaces,
   isStaticCall,
@@ -13,81 +16,53 @@ import {
 const unboundedConstructors = new Set(["exponential", "fibonacci", "spaced"]);
 const boundedCombinators = new Set(["take"]);
 
-const staticPropertyName = (node: ESTree.Expression): string | undefined => {
+const staticPropertyName = (node: ESTree.Expression): Option.Option<string> => {
   if (node.type !== "MemberExpression" || node.computed || node.property.type !== "Identifier") {
-    return undefined;
+    return Option.none();
   }
-  return node.property.name;
-};
-
-const hasOwnProperty = (node: ESTree.ObjectExpression, name: string): boolean => {
-  for (const property of node.properties) {
-    if (property.type !== "Property" || property.computed) continue;
-    if (property.key.type === "Identifier" && property.key.name === name) return true;
-    if (property.key.type === "Literal" && property.key.value === name) return true;
-  }
-  return false;
-};
-
-const propertyValue = (
-  node: ESTree.ObjectExpression,
-  name: string,
-): ESTree.Expression | undefined => {
-  for (const property of node.properties) {
-    if (property.type !== "Property" || property.computed) continue;
-    const matches =
-      (property.key.type === "Identifier" && property.key.name === name) ||
-      (property.key.type === "Literal" && property.key.value === name);
-    if (matches) return property.value;
-  }
-  return undefined;
+  return Option.some(node.property.name);
 };
 
 const isBoundedOperation = (
-  node: ESTree.CallExpression["arguments"][number],
+  node: ESTree.Argument,
   scheduleNamespaces: ReadonlySet<string>,
 ): boolean => {
   if (node.type !== "CallExpression" || node.callee.type === "Super") return false;
-  const property = staticPropertyName(node.callee);
-  if (property === undefined) return false;
-  if (
-    boundedCombinators.has(property) &&
-    isStaticMember(node.callee, scheduleNamespaces, property)
-  ) {
-    return true;
-  }
-  if (!isStaticMember(node.callee, scheduleNamespaces, "both")) return false;
-  const bound = node.arguments[0];
-  return (
-    bound !== undefined &&
-    bound.type !== "SpreadElement" &&
-    isStaticCall(bound, scheduleNamespaces, "recurs")
+  const callee = node.callee;
+  const isBoundedCombinator = Option.exists(
+    staticPropertyName(callee),
+    (property) =>
+      boundedCombinators.has(property) && isStaticMember(callee, scheduleNamespaces, property),
+  );
+  if (isBoundedCombinator) return true;
+  if (!isStaticMember(callee, scheduleNamespaces, "both")) return false;
+  return Option.exists(expressionArgument(node, 0), (bound) =>
+    isStaticCall(bound, scheduleNamespaces, "recurs"),
   );
 };
 
 const unboundedSchedule = (
   node: ESTree.Expression,
   scheduleNamespaces: ReadonlySet<string>,
-): ESTree.Node | undefined => {
+): Option.Option<ESTree.Node> => {
   if (node.type === "MemberExpression" && isStaticMember(node, scheduleNamespaces, "forever")) {
-    return node;
+    return Option.some(node);
   }
-  if (node.type !== "CallExpression" || node.callee.type === "Super") return undefined;
-  const property = staticPropertyName(node.callee);
-  if (
-    property !== undefined &&
-    unboundedConstructors.has(property) &&
-    isStaticMember(node.callee, scheduleNamespaces, property)
-  ) {
-    return node;
+  if (node.type !== "CallExpression" || node.callee.type === "Super") return Option.none();
+  const callee = node.callee;
+  const property = staticPropertyName(callee);
+  const isUnboundedConstructor = Option.exists(
+    property,
+    (name) => unboundedConstructors.has(name) && isStaticMember(callee, scheduleNamespaces, name),
+  );
+  if (isUnboundedConstructor) return Option.some(node);
+  if (!Option.contains(property, "pipe") || callee.type !== "MemberExpression") {
+    return Option.none();
   }
-  if (property !== "pipe" || node.callee.type !== "MemberExpression") return undefined;
-  const root = unboundedSchedule(node.callee.object, scheduleNamespaces);
-  if (root === undefined) return undefined;
-  for (const operation of node.arguments) {
-    if (isBoundedOperation(operation, scheduleNamespaces)) return undefined;
-  }
-  return root;
+  return Option.filter(
+    unboundedSchedule(callee.object, scheduleNamespaces),
+    () => !node.arguments.some((operation) => isBoundedOperation(operation, scheduleNamespaces)),
+  );
 };
 
 /** Arguments a data-last retry call takes; one more means the data-first form. */
@@ -96,16 +71,35 @@ const retryArity = (
   effectNamespaces: ReadonlySet<string>,
   streamNamespaces: ReadonlySet<string>,
   httpClientNamespaces: ReadonlySet<string>,
-): number | undefined => {
-  if (isStaticMember(callee, effectNamespaces, "retryOrElse")) return 2;
+): Option.Option<number> => {
+  if (isStaticMember(callee, effectNamespaces, "retryOrElse")) return Option.some(2);
   if (
     isStaticMember(callee, effectNamespaces, "retry") ||
     isStaticMember(callee, streamNamespaces, "retry") ||
     isStaticMember(callee, httpClientNamespaces, "retryTransient")
   ) {
-    return 1;
+    return Option.some(1);
   }
-  return undefined;
+  return Option.none();
+};
+
+/** The policy argument: first in the data-last form, second in the data-first form. */
+const policyArgument = (
+  node: ESTree.CallExpression,
+  arity: number,
+): Option.Option<ESTree.Argument> => {
+  if (node.arguments.length < arity) return Option.none();
+  let policyIndex = 1;
+  if (node.arguments.length === arity) policyIndex = 0;
+  return Arr.get(node.arguments, policyIndex);
+};
+
+/** The schedule a policy argument retries on, unless it sets `times`. */
+const policySchedule = (policy: ESTree.Argument): Option.Option<ESTree.Expression> => {
+  if (policy.type === "SpreadElement") return Option.none();
+  if (policy.type !== "ObjectExpression") return Option.some(policy);
+  if (Arr.isReadonlyArrayNonEmpty(staticProperties(policy, "times"))) return Option.none();
+  return Option.map(Arr.head(staticProperties(policy, "schedule")), (property) => property.value);
 };
 
 const retryPolicy = (
@@ -113,16 +107,13 @@ const retryPolicy = (
   effectNamespaces: ReadonlySet<string>,
   streamNamespaces: ReadonlySet<string>,
   httpClientNamespaces: ReadonlySet<string>,
-): ESTree.Expression | undefined => {
-  if (node.callee.type === "Super") return undefined;
+): Option.Option<ESTree.Expression> => {
+  if (node.callee.type === "Super") return Option.none();
   const arity = retryArity(node.callee, effectNamespaces, streamNamespaces, httpClientNamespaces);
-  if (arity === undefined || node.arguments.length < arity) return undefined;
-  const policyIndex = node.arguments.length === arity ? 0 : 1;
-  const policy = node.arguments[policyIndex];
-  if (policy?.type === "SpreadElement") return undefined;
-  if (policy?.type !== "ObjectExpression") return policy;
-  if (hasOwnProperty(policy, "times")) return undefined;
-  return propertyValue(policy, "schedule");
+  return Option.flatMap(
+    Option.flatMap(arity, (count) => policyArgument(node, count)),
+    policySchedule,
+  );
 };
 
 export const noUnboundedRetry = Rule.define({
@@ -167,19 +158,20 @@ export const noUnboundedRetry = Rule.define({
           visibleNamespaces(ctx, node, streamNamespaces),
           visibleNamespaces(ctx, node, httpClientNamespaces),
         );
-        if (policy === undefined) return Effect.void;
-        const unbounded = unboundedSchedule(
-          policy,
-          visibleNamespaces(ctx, node, scheduleNamespaces),
+        const unbounded = Option.flatMap(policy, (schedule) =>
+          unboundedSchedule(schedule, visibleNamespaces(ctx, node, scheduleNamespaces)),
         );
-        if (unbounded === undefined) return Effect.void;
-        return ctx.report(
-          Diagnostic.make({
-            node: unbounded,
-            message:
-              "Bound retry attempts or elapsed time. Add times or compose the schedule with Schedule.recurs or Schedule.take.",
-          }),
-        );
+        return Option.match(unbounded, {
+          onNone: () => Effect.void,
+          onSome: (schedule) =>
+            ctx.report(
+              Diagnostic.make({
+                node: schedule,
+                message:
+                  "Bound retry attempts or elapsed time. Add times or compose the schedule with Schedule.recurs or Schedule.take.",
+              }),
+            ),
+        });
       },
     };
   },

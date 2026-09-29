@@ -1,12 +1,14 @@
 /** Require stable operation names for Effect.fn. */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
 
-const isFunction = (node: ESTree.CallExpression["arguments"][number] | undefined): boolean =>
-  node?.type === "ArrowFunctionExpression" || node?.type === "FunctionExpression";
+const isFunction = (node: ESTree.CallExpression["arguments"][number]): boolean =>
+  node.type === "ArrowFunctionExpression" || node.type === "FunctionExpression";
 
 export const requireNamedEffectFn = Rule.define({
   name: "require-named-effect-fn",
@@ -30,7 +32,8 @@ export const requireNamedEffectFn = Rule.define({
         if (node.type !== "CallExpression" || node.callee.type === "Super") return Effect.void;
         const namespaces = visibleNamespaces(ctx, node, effectNamespaces);
         const isOperation = isStaticMember(node.callee, namespaces, "fn");
-        if (!isOperation || !isFunction(node.arguments[0])) return Effect.void;
+        if (!isOperation || !Option.exists(Arr.head(node.arguments), isFunction))
+          return Effect.void;
         return ctx.report(
           Diagnostic.make({
             node,
