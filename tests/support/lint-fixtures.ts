@@ -52,3 +52,44 @@ export const reportedLines = (
   findings: ReadonlyMap<string, ReadonlyArray<Finding>>,
   file: string,
 ): ReadonlyArray<number> => (findings.get(file) ?? []).map((finding) => finding.line);
+
+export interface CaseResults {
+  /** Valid cases that were reported, with their findings. */
+  readonly reportedValid: ReadonlyArray<
+    readonly [source: string, findings: ReadonlyArray<Finding>]
+  >;
+  /** Invalid cases that were not reported. */
+  readonly missedInvalid: ReadonlyArray<string>;
+}
+
+/**
+ * Lint each case as its own file with one rule enabled, in a single oxlint run.
+ *
+ * Every valid case must produce no finding and every invalid case at least one.
+ * Pass `extension` for cases that need a different file kind, such as `test.ts`.
+ */
+export const lintCases = (
+  rule: string,
+  cases: {
+    readonly valid: ReadonlyArray<string>;
+    readonly invalid: ReadonlyArray<string>;
+    readonly extension?: string;
+  },
+): CaseResults => {
+  const extension = cases.extension ?? "ts";
+  const valid = cases.valid.map(
+    (source, index) => [`valid-${index}.${extension}`, source] as const,
+  );
+  const invalid = cases.invalid.map(
+    (source, index) => [`invalid-${index}.${extension}`, source] as const,
+  );
+  const findings = lintFixtures(rule, Object.fromEntries([...valid, ...invalid]));
+  return {
+    reportedValid: valid
+      .map(([file, source]) => [source, findings.get(file) ?? []] as const)
+      .filter(([, reported]) => reported.length > 0),
+    missedInvalid: invalid
+      .filter(([file]) => (findings.get(file) ?? []).length === 0)
+      .map(([, source]) => source),
+  };
+};

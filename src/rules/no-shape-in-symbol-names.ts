@@ -1,6 +1,6 @@
 /**
  * Ported from dmmulroy/anti-slop at
- * b5d2288db1f00469a1d5f2e3b0e265e5a5676fd0.
+ * c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b.
  */
 import type { ESTree } from "@oxlint/plugins";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
@@ -10,6 +10,13 @@ const forbiddenSymbolName = "shape";
 
 function containsForbiddenSymbolName(name: string): boolean {
   return name.toLowerCase().includes(forbiddenSymbolName);
+}
+
+/** Return whether an identifier names a statically accessed member owned by another value. */
+function isBorrowedMemberName(node: ESTree.Node): boolean {
+  const parent = node.parent;
+  if (parent === null || parent.type !== "MemberExpression") return false;
+  return parent.property === node && !parent.computed;
 }
 
 /** Ban the case-insensitive substring "shape" in every JavaScript and TypeScript symbol name. */
@@ -27,7 +34,7 @@ export const noShapeInSymbolNames = Rule.define({
   create: function* () {
     const context = yield* RuleContext;
     const reportForbiddenSymbolName = (node: ESTree.Node & { name: string }) =>
-      containsForbiddenSymbolName(node.name)
+      containsForbiddenSymbolName(node.name) && !isBorrowedMemberName(node)
         ? context.report(
             Diagnostic.fromId({
               node,

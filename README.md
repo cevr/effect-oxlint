@@ -69,18 +69,18 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 The recommended preset also includes these rules from
 [`dmmulroy/anti-slop`](https://github.com/dmmulroy/anti-slop):
 
-| Rule                                    | Contract                                                           |
-| --------------------------------------- | ------------------------------------------------------------------ |
-| `effect/noChainedTypeAssertions`        | Bans nested type assertions that invent type evidence              |
-| `effect/noConditionalEmptyObjectSpread` | Bans conditional spreads that use an empty object to omit fields   |
-| `effect/noKnownValueWidening`           | Bans broad target types that discard known value evidence          |
-| `effect/noObjectParameters`             | Bans the broad `object` type on function inputs                    |
-| `effect/noRuntimeTypeof`                | Requires boundary parsing instead of runtime `typeof` narrowing    |
-| `effect/noShapeInSymbolNames`           | Bans `shape` in symbol names                                       |
-| `effect/noUnknownParameters`            | Bans `unknown` inputs except an input named `cause`                |
-| `effect/noUnknownTypeAliases`           | Bans aliases that only hide `unknown`                              |
-| `effect/noUnsafeDictionaryType`         | Bans dictionaries with unsafe broad value types                    |
-| `effect/noWidenThenAssert`              | Bans local flows that widen known values and then assert them back |
+| Rule                                    | Contract                                                                         |
+| --------------------------------------- | -------------------------------------------------------------------------------- |
+| `effect/noChainedTypeAssertions`        | Bans nested type assertions that invent type evidence                            |
+| `effect/noConditionalEmptyObjectSpread` | Bans conditional spreads that use an empty object to omit fields                 |
+| `effect/noKnownValueWidening`           | Bans broad target types that discard known value evidence                        |
+| `effect/noObjectParameters`             | Bans the broad `object` type on function inputs                                  |
+| `effect/noRuntimeTypeof`                | Requires boundary parsing instead of `typeof` narrowing; allows existence probes |
+| `effect/noShapeInSymbolNames`           | Bans `shape` in symbol names                                                     |
+| `effect/noUnknownParameters`            | Bans `unknown` inputs except `cause`, type guards, and rejection reasons         |
+| `effect/noUnknownTypeAliases`           | Bans aliases that only hide `unknown`                                            |
+| `effect/noUnsafeDictionaryType`         | Bans dictionaries with unsafe broad value types                                  |
+| `effect/noWidenThenAssert`              | Bans local flows that widen known values and then assert them back               |
 
 See `THIRD_PARTY_NOTICES.md` for the source revision and license.
 
