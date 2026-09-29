@@ -5,6 +5,7 @@
 import type { ESTree } from "@oxlint/plugins";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import {
   createTypeAliasEnvironment,
   resolvedTypeMatches,
@@ -25,31 +26,33 @@ export const noUnknownTypeAliases = Rule.define({
   }),
   create: function* () {
     const context = yield* RuleContext;
-    let environment: TypeAliasEnvironment | null = null;
+    // Local change: the environment is an Option until Program sets it.
+    let environment: Option.Option<TypeAliasEnvironment> = Option.none();
 
     const resolvesToUnknown = (type: ESTree.TSType): boolean =>
-      environment !== null &&
-      resolvedTypeMatches(type, environment, (resolved, matches) => {
-        if (resolved.type === "TSUnknownKeyword") return true;
-        if (resolved.type === "TSParenthesizedType") return matches(resolved.typeAnnotation);
-        return resolved.type === "TSUnionType" && resolved.types.some(matches);
-      });
+      Option.exists(environment, (present) =>
+        resolvedTypeMatches(type, present, (resolved, matches) => {
+          if (resolved.type === "TSUnknownKeyword") return true;
+          if (resolved.type === "TSParenthesizedType") return matches(resolved.typeAnnotation);
+          return resolved.type === "TSUnionType" && resolved.types.some(matches);
+        }),
+      );
 
     return {
       Program: (node: ESTree.Program) => {
-        environment = createTypeAliasEnvironment(node, context.sourceCode.visitorKeys);
+        environment = Option.some(createTypeAliasEnvironment(node, context.sourceCode.visitorKeys));
         return Effect.void;
       },
-      TSTypeAliasDeclaration: (node: ESTree.TSTypeAliasDeclaration) =>
-        resolvesToUnknown(node.typeAnnotation)
-          ? context.report(
-              Diagnostic.fromId({
-                node: node.id,
-                messageId: "unknownAlias",
-                data: { alias: node.id.name },
-              }),
-            )
-          : Effect.void,
+      TSTypeAliasDeclaration: (node: ESTree.TSTypeAliasDeclaration) => {
+        if (!resolvesToUnknown(node.typeAnnotation)) return Effect.void;
+        return context.report(
+          Diagnostic.fromId({
+            node: node.id,
+            messageId: "unknownAlias",
+            data: { alias: node.id.name },
+          }),
+        );
+      },
     };
   },
 });

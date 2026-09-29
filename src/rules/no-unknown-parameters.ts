@@ -6,6 +6,7 @@
 import type { ESTree } from "@oxlint/plugins";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import {
   containsUnknownType,
   functionParameterBindingName,
@@ -72,8 +73,9 @@ export const noUnknownParameters = Rule.define({
         node.params,
         (parameter) => {
           const annotation = functionParameterTypeAnnotation(parameter);
-          if (annotation === null || annotation === undefined) return Effect.void;
-          if (!containsUnknownType(annotation.typeAnnotation)) return Effect.void;
+          if (Option.isNone(annotation)) return Effect.void;
+          const type = annotation.value.typeAnnotation;
+          if (!containsUnknownType(type)) return Effect.void;
           const name = functionParameterBindingName(parameter, context.sourceCode);
           if (
             name === "cause" ||
@@ -84,7 +86,7 @@ export const noUnknownParameters = Rule.define({
           }
           return context.report(
             Diagnostic.fromId({
-              node: annotation.typeAnnotation,
+              node: type,
               messageId: "unknownParameter",
               data: { parameter: name },
             }),

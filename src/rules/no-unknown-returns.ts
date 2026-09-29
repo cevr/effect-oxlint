@@ -4,12 +4,16 @@
  */
 import type { ESTree } from "@oxlint/plugins";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import {
   createTypeAliasEnvironment,
   resolvedTypeMatches,
   type TypeAliasEnvironment,
 } from "./_anti-slop-type-alias-resolution.js";
+import { ancestors } from "./_ast-ancestors.js";
 
 type FunctionWithReturnType =
   | ESTree.ArrowFunctionExpression
@@ -26,14 +30,13 @@ type FunctionWithReturnType =
  * `(...args: never[]) => unknown` matches any function; it promises nothing.
  * (Local change: upstream reports these.)
  */
+// Local change: walks ancestors() instead of a nullable parent loop.
 function isInsideTypePattern(node: ESTree.Node): boolean {
   let child: ESTree.Node = node;
-  let parent: ESTree.Node | null = node.parent;
-  while (parent !== null && parent.type !== "Program") {
+  for (const parent of ancestors(node)) {
     if (parent.type === "TSConditionalType" && parent.extendsType === child) return true;
     if (parent.type === "TSTypeParameter" && parent.constraint === child) return true;
     child = parent;
-    parent = parent.parent;
   }
   return false;
 }
@@ -52,28 +55,29 @@ export const noUnknownReturns = Rule.define({
   }),
   create: function* () {
     const context = yield* RuleContext;
-    let environment: TypeAliasEnvironment | null = null;
+    // Local change: the environment is an Option until Program sets it.
+    let environment: Option.Option<TypeAliasEnvironment> = Option.none();
 
     const resolvesToUnknown = (type: ESTree.TSType): boolean =>
-      environment !== null &&
-      resolvedTypeMatches(type, environment, (resolved, matches) => {
-        if (resolved.type === "TSUnknownKeyword") return true;
-        if (resolved.type === "TSParenthesizedType") return matches(resolved.typeAnnotation);
-        if (resolved.type === "TSUnionType") return resolved.types.some(matches);
-        if (
-          resolved.type !== "TSTypeReference" ||
-          resolved.typeName.type !== "Identifier" ||
-          (resolved.typeName.name !== "Promise" && resolved.typeName.name !== "PromiseLike")
-        ) {
-          return false;
-        }
-        const value = resolved.typeArguments?.params[0];
-        return value !== undefined && matches(value);
-      });
+      Option.exists(environment, (present) =>
+        resolvedTypeMatches(type, present, (resolved, matches) => {
+          if (resolved.type === "TSUnknownKeyword") return true;
+          if (resolved.type === "TSParenthesizedType") return matches(resolved.typeAnnotation);
+          if (resolved.type === "TSUnionType") return resolved.types.some(matches);
+          if (
+            resolved.type !== "TSTypeReference" ||
+            resolved.typeName.type !== "Identifier" ||
+            (resolved.typeName.name !== "Promise" && resolved.typeName.name !== "PromiseLike")
+          ) {
+            return false;
+          }
+          return Option.exists(Arr.head(resolved.typeArguments?.params ?? []), matches);
+        }),
+      );
 
     const checkReturnType = (node: FunctionWithReturnType) => {
       const annotation = node.returnType;
-      if (annotation === null || annotation === undefined) return Effect.void;
+      if (Predicate.isNullish(annotation)) return Effect.void;
       if (!resolvesToUnknown(annotation.typeAnnotation)) return Effect.void;
       if (isInsideTypePattern(node)) return Effect.void;
       return context.report(
@@ -83,7 +87,7 @@ export const noUnknownReturns = Rule.define({
 
     return {
       Program: (node: ESTree.Program) => {
-        environment = createTypeAliasEnvironment(node, context.sourceCode.visitorKeys);
+        environment = Option.some(createTypeAliasEnvironment(node, context.sourceCode.visitorKeys));
         return Effect.void;
       },
       ArrowFunctionExpression: checkReturnType,

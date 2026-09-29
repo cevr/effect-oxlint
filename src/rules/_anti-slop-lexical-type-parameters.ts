@@ -3,6 +3,7 @@
  * c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b.
  */
 import type { ESTree } from "@oxlint/plugins";
+import { ancestors } from "./_ast-ancestors.js";
 import { childNodesAt, isAstNode } from "./_ast-children.js";
 
 type VisitorKeys = Readonly<Record<string, readonly string[]>>;
@@ -27,14 +28,15 @@ function collectInferTypeParameterNames(
 }
 
 /** Collect type binders that are in scope at a node and can shadow module aliases. */
+// Local change: walks the node and its ancestors() instead of a nullable parent loop.
 export function lexicalTypeParameterNames(
   node: ESTree.Node,
   visitorKeys: VisitorKeys,
 ): ReadonlySet<string> {
   const names = new Set<string>();
   let descendant: ESTree.Node = node;
-  let current: ESTree.Node | null = node;
-  while (current !== null && current.type !== "Program") {
+  for (const current of [node, ...ancestors(node)]) {
+    if (current.type === "Program") break;
     if ("typeParameters" in current) {
       for (const parameter of current.typeParameters?.params ?? []) {
         names.add(parameter.name.name);
@@ -50,7 +52,6 @@ export function lexicalTypeParameterNames(
       collectInferTypeParameterNames(current.extendsType, visitorKeys, names);
     }
     descendant = current;
-    current = current.parent;
   }
   return names;
 }
