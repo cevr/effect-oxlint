@@ -1,33 +1,32 @@
 /** Prefer exhaustive Match transformations for closed tagged unions. */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import {
+  hasOneTaggedSubject,
   isInsideCatchAllHandler,
   tagComparison,
   taggedSwitchSubject,
+  type TagComparison,
 } from "./_tagged-control-flow.js";
 
 const statementReturns = (statement: ESTree.Statement): boolean => {
   if (statement.type === "ReturnStatement") return true;
   if (statement.type !== "BlockStatement") return false;
-  const last = statement.body.at(-1);
-  if (last === undefined) return false;
-  return statementReturns(last);
+  return Option.exists(Arr.last(statement.body), statementReturns);
 };
 
-const caseReturns = (switchCase: ESTree.SwitchCase): boolean => {
-  const last = switchCase.consequent.at(-1);
-  if (last === undefined) return false;
-  return statementReturns(last);
-};
+const caseReturns = (switchCase: ESTree.SwitchCase): boolean =>
+  Option.exists(Arr.last(switchCase.consequent), statementReturns);
 
 const isCompleteSwitchTransformation = (node: ESTree.SwitchStatement): boolean => {
-  if (node.cases.length < 2 || taggedSwitchSubject(node) === null) return false;
+  if (node.cases.length < 2 || Option.isNone(taggedSwitchSubject(node))) return false;
   for (const switchCase of node.cases) {
-    if (switchCase.test === null || switchCase.test.type !== "Literal") return false;
+    if (switchCase.test?.type !== "Literal") return false;
     if (!Predicate.isString(switchCase.test.value) || !caseReturns(switchCase)) return false;
   }
   return true;
@@ -41,68 +40,65 @@ const isTerminalStatement = (node: ESTree.IfStatement): boolean => {
   return node.parent.body.at(-1) === node;
 };
 
-const isCompleteIfTransformation = (node: ESTree.IfStatement): boolean => {
-  if (isElseIf(node) || !isTerminalStatement(node)) return false;
+const isPlainIf = (statement: ESTree.Statement): statement is ESTree.IfStatement =>
+  statement.type === "IfStatement" && Predicate.isNull(statement.alternate);
 
+/** The tag a branch compares, when the branch always returns. */
+const returningTagComparison = (branch: ESTree.IfStatement): Option.Option<TagComparison> =>
+  Option.filter(tagComparison(branch.test), () => statementReturns(branch.consequent));
+
+/** Whether at least two returning branches each compare one subject against a distinct tag. */
+const isDistinctTagDispatch = (branches: ReadonlyArray<ESTree.IfStatement>): boolean =>
+  Option.exists(
+    Option.all(branches.map(returningTagComparison)),
+    (comparisons) =>
+      hasOneTaggedSubject(comparisons) &&
+      new Set(comparisons.map((comparison) => comparison.tag)).size === comparisons.length,
+  );
+
+/** The if statement and each `else if` after it; none when the chain ends in a plain else. */
+const elseIfChain = (
+  node: ESTree.IfStatement,
+): Option.Option<ReadonlyArray<ESTree.IfStatement>> => {
+  const chain = [node];
   let current = node;
-  let subject: string | undefined;
-  const tags = new Set<string>();
-  let branchCount = 0;
-
-  while (true) {
-    const comparison = tagComparison(current.test);
-    if (comparison === null || !statementReturns(current.consequent)) return false;
-    if (subject !== undefined && comparison.subject !== subject) return false;
-    if (tags.has(comparison.tag)) return false;
-
-    subject = comparison.subject;
-    tags.add(comparison.tag);
-    branchCount += 1;
-
-    if (current.alternate === null) break;
-    if (current.alternate.type !== "IfStatement") return false;
+  while (current.alternate?.type === "IfStatement") {
     current = current.alternate;
+    chain.push(current);
   }
-
-  return branchCount >= 2;
+  if (Predicate.isNotNull(current.alternate)) return Option.none();
+  return Option.some(chain);
 };
 
+const isCompleteIfTransformation = (node: ESTree.IfStatement): boolean => {
+  if (isElseIf(node) || !isTerminalStatement(node)) return false;
+  return Option.exists(elseIfChain(node), isDistinctTagDispatch);
+};
+
+/** Whether `previous` is a returning tag check on the same subject, so `node` does not start a run. */
+const continuesRun = (
+  previous: Option.Option<ESTree.Statement>,
+  node: ESTree.IfStatement,
+): boolean =>
+  Option.exists(
+    previous,
+    (statement) =>
+      isPlainIf(statement) &&
+      statementReturns(statement.consequent) &&
+      Option.exists(
+        Option.all([tagComparison(statement.test), tagComparison(node.test)]),
+        ([before, current]) => before.subject === current.subject,
+      ),
+  );
+
 const isCompleteSequentialIfTransformation = (node: ESTree.IfStatement): boolean => {
-  if (node.alternate !== null || node.parent?.type !== "BlockStatement") return false;
+  if (!isPlainIf(node) || node.parent?.type !== "BlockStatement") return false;
   const statements = node.parent.body;
   const index = statements.indexOf(node);
   if (index < 0) return false;
-
-  const comparison = tagComparison(node.test);
-  if (comparison === null || !statementReturns(node.consequent)) return false;
-
-  const previous = statements[index - 1];
-  if (previous?.type === "IfStatement" && previous.alternate === null) {
-    const previousComparison = tagComparison(previous.test);
-    if (
-      previousComparison?.subject === comparison.subject &&
-      statementReturns(previous.consequent)
-    ) {
-      return false;
-    }
-  }
-
-  const tags = new Set([comparison.tag]);
-  for (const statement of statements.slice(index + 1)) {
-    if (statement.type !== "IfStatement" || statement.alternate !== null) return false;
-    const next = tagComparison(statement.test);
-    if (
-      next === null ||
-      next.subject !== comparison.subject ||
-      tags.has(next.tag) ||
-      !statementReturns(statement.consequent)
-    ) {
-      return false;
-    }
-    tags.add(next.tag);
-  }
-
-  return tags.size >= 2;
+  const run = statements.slice(index);
+  if (!run.every(isPlainIf) || continuesRun(Arr.get(statements, index - 1), node)) return false;
+  return isDistinctTagDispatch(run);
 };
 
 export const preferMatchTagsExhaustive = Rule.define({

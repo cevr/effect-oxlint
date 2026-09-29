@@ -1,6 +1,7 @@
 /** Prefer reusable Effect predicates for combined tagged-value narrowing. */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import {
@@ -9,13 +10,12 @@ import {
   tagComparisonsInOr,
 } from "./_tagged-control-flow.js";
 
-const isCatchIfPredicate = (node: ESTree.LogicalExpression): boolean => {
-  const location = effectCallbackLocation(node, "catchIf");
-  if (location === null) return false;
-  let predicateIndex = 1;
-  if (location.argumentCount === 2) predicateIndex = 0;
-  return location.index === predicateIndex;
-};
+const isCatchIfPredicate = (node: ESTree.LogicalExpression): boolean =>
+  Option.exists(effectCallbackLocation(node, "catchIf"), (location) => {
+    let predicateIndex = 1;
+    if (location.argumentCount === 2) predicateIndex = 0;
+    return location.index === predicateIndex;
+  });
 
 export const preferPredicateIsTagged = Rule.define({
   name: "prefer-predicate-is-tagged",
@@ -32,8 +32,7 @@ export const preferPredicateIsTagged = Rule.define({
           return Effect.void;
         }
         if (isCatchIfPredicate(node)) return Effect.void;
-        const comparisons = tagComparisonsInOr(node);
-        if (comparisons === null || !hasOneTaggedSubject(comparisons)) return Effect.void;
+        if (!Option.exists(tagComparisonsInOr(node), hasOneTaggedSubject)) return Effect.void;
         return context.report(
           Diagnostic.make({
             node,

@@ -5,6 +5,7 @@ import { preferCatchTag } from "../src/rules/prefer-catch-tag.js";
 import { preferMatchTagsExhaustive } from "../src/rules/prefer-match-tags-exhaustive.js";
 import { preferPredicateIsTagged } from "../src/rules/prefer-predicate-is-tagged.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
+import { lintCases } from "./support/lint-fixtures.js";
 
 const tagEquals = (subject: string, tag: string) =>
   Testing.binaryExpr("===", Testing.memberExpr(subject, "_tag"), Testing.strLiteral(tag));
@@ -16,7 +17,7 @@ const or = (left: ESTree.Expression, right: ESTree.Expression) => ({
   right,
 });
 
-const returningSwitch = (withDefault = false, subject = "state") => ({
+const returningSwitch = (subject = "state") => ({
   type: "SwitchStatement",
   discriminant: Testing.memberExpr(subject, "_tag"),
   cases: [
@@ -30,26 +31,18 @@ const returningSwitch = (withDefault = false, subject = "state") => ({
       test: Testing.strLiteral("Running"),
       consequent: [Testing.returnStmt(Testing.strLiteral("running"))],
     },
-    ...(withDefault
-      ? [
-          {
-            type: "SwitchCase",
-            test: null,
-            consequent: [Testing.returnStmt(Testing.strLiteral("unknown"))],
-          },
-        ]
-      : []),
   ],
 });
 
-const returningIfChain = (withFallback = false) =>
+/** `if (Idle) return; else if (Running) return;`, with an optional final `else` branch. */
+const returningIfChain = (...fallback: [] | [ESTree.Statement]) =>
   Testing.ifStmt(
     tagEquals("state", "Idle"),
     Testing.returnStmt(Testing.strLiteral("idle")),
     Testing.ifStmt(
       tagEquals("state", "Running"),
       Testing.returnStmt(Testing.strLiteral("running")),
-      withFallback ? Testing.returnStmt(Testing.strLiteral("unknown")) : undefined,
+      ...fallback,
     ),
   );
 
@@ -106,26 +99,16 @@ describe("closed tagged union transformations", () => {
   });
 
   test("allows partial switches and stateful switches", () => {
-    expect(
-      Testing.runRule(preferMatchTagsExhaustive, "SwitchStatement", returningSwitch(true)),
-    ).toHaveLength(0);
-
-    const stateful = {
-      ...returningSwitch(),
-      cases: [
-        {
-          type: "SwitchCase",
-          test: Testing.strLiteral("Idle"),
-          consequent: [{ type: "BreakStatement", label: null }],
-        },
-        {
-          type: "SwitchCase",
-          test: Testing.strLiteral("Running"),
-          consequent: [{ type: "BreakStatement", label: null }],
-        },
+    const results = lintCases("preferMatchTagsExhaustive", {
+      valid: [
+        'const label = (state: State) => { switch (state._tag) { case "Idle": return "idle"; case "Running": return "running"; default: return "unknown"; } };',
+        'const record = (state: State) => { switch (state._tag) { case "Idle": break; case "Running": break; } };',
       ],
-    };
-    expect(Testing.runRule(preferMatchTagsExhaustive, "SwitchStatement", stateful)).toHaveLength(0);
+      invalid: [
+        'const label = (state: State) => { switch (state._tag) { case "Idle": return "idle"; case "Running": return "running"; } };',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
   test("allows a local tag guard and tag if chains with a fallback or stateful branch", () => {
@@ -136,7 +119,11 @@ describe("closed tagged union transformations", () => {
     expect(Testing.runRule(preferMatchTagsExhaustive, "IfStatement", localGuard)).toHaveLength(0);
 
     expect(
-      Testing.runRule(preferMatchTagsExhaustive, "IfStatement", returningIfChain(true)),
+      Testing.runRule(
+        preferMatchTagsExhaustive,
+        "IfStatement",
+        returningIfChain(Testing.returnStmt(Testing.strLiteral("unknown"))),
+      ),
     ).toHaveLength(0);
 
     const nonterminalChain = returningIfChain();
@@ -193,7 +180,7 @@ describe("typed Effect failure recovery", () => {
   });
 
   test("nudges catchAll tag switches and if chains toward tagged recovery", () => {
-    const switchHandler = Testing.arrowFn(Testing.blockStmt([returningSwitch(false, "error")]), [
+    const switchHandler = Testing.arrowFn(Testing.blockStmt([returningSwitch("error")]), [
       Testing.id("error"),
     ]);
     const ifHandler = Testing.arrowFn(
@@ -223,7 +210,7 @@ describe("typed Effect failure recovery", () => {
   });
 
   test("allows named catchAll handlers and tag dispatch on unrelated values", () => {
-    const unrelatedHandler = Testing.arrowFn(Testing.blockStmt([returningSwitch(false, "state")]), [
+    const unrelatedHandler = Testing.arrowFn(Testing.blockStmt([returningSwitch("state")]), [
       Testing.id("error"),
     ]);
     expect(
@@ -240,5 +227,43 @@ describe("typed Effect failure recovery", () => {
         Testing.callOfMember("Effect", "catchAll", [unrelatedHandler]),
       ),
     ).toHaveLength(0);
+  });
+});
+
+describe("tag comparisons in parsed source", () => {
+  test("read either operand order and member-path subjects", () => {
+    const results = lintCases("preferPredicateIsTagged", {
+      valid: [
+        'const isKnown = (event: Event) => event.payload._tag === "Created" || other._tag === "Updated";',
+      ],
+      invalid: [
+        'const isKnown = (event: Event) => "Created" === event.payload._tag || event.payload._tag === "Updated";',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("require distinct tags and accept block-bodied returns", () => {
+    const results = lintCases("preferMatchTagsExhaustive", {
+      valid: [
+        'function label(state: State) { if (state._tag === "Idle") { return 1; } else if (state._tag === "Idle") { return 2; } }',
+      ],
+      invalid: [
+        'function label(state: State) { if (state._tag === "Idle") { return 1; } else if (state._tag === "Running") { return 2; } }',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("read a catchIf predicate that returns from a block", () => {
+    const results = lintCases("preferCatchTag", {
+      valid: [
+        'Effect.catchIf(effect, (error) => { return error._tag === "NotFound"; log(error); }, recover);',
+      ],
+      invalid: [
+        'Effect.catchIf(effect, (error) => { return error._tag === "NotFound"; }, recover);',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 });
