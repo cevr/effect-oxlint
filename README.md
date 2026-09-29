@@ -58,8 +58,11 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 | `effect/preferPredicateIsTagged`       | Replaces combined `_tag` comparisons with a named `Predicate` refinement                  |
 | `effect/preferServiceOf`               | Checks inline Layer implementations through `Service.of`                                  |
 | `effect/requireNamedEffectFn`          | Requires stable names for `Effect.fn` operations                                          |
+| `effect/requireSuppressionReason`      | Requires lint, Effect, and TS suppressions to name their target and give a `--` reason    |
 | `effect/noGlobals`                     | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`    |
 | `effect/noNodeBuiltinImport`           | Bans fully replaced Node modules and replaced operations from partial modules             |
+
+`effect/requireSuppressionReason` also rejects `@effect-diagnostics effect/name:off`: @effect/tsgo ignores the `effect/` prefix, so write the bare rule name. A blanket directive that covers its own line, such as a bare `// oxlint-disable-line` or a file-leading `/* eslint-disable */`, suppresses this rule's report too; oxlint applies the directive before the rule can report it.
 
 ## Anti-Slop Rules
 

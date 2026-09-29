@@ -67,6 +67,7 @@ describe("recommended preset", () => {
       "effect/preferPredicateIsTagged": "error",
       "effect/preferServiceOf": "error",
       "effect/requireNamedEffectFn": "error",
+      "effect/requireSuppressionReason": "error",
     });
   });
 });

@@ -52,3 +52,4 @@ export { preferMatchTagsExhaustive } from "./prefer-match-tags-exhaustive.js";
 export { preferPredicateIsTagged } from "./prefer-predicate-is-tagged.js";
 export { preferServiceOf } from "./prefer-service-of.js";
 export { requireNamedEffectFn } from "./require-named-effect-fn.js";
+export { requireSuppressionReason } from "./require-suppression-reason.js";

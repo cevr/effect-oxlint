@@ -50,4 +50,5 @@ export const recommended = {
   "effect/preferPredicateIsTagged": "error",
   "effect/preferServiceOf": "error",
   "effect/requireNamedEffectFn": "error",
+  "effect/requireSuppressionReason": "error",
 } as const;
