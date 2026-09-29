@@ -1,5 +1,13 @@
 # oxlint-plugin-effect
 
+## 0.17.0
+
+### Minor Changes
+
+- [`884e8f7`](https://github.com/cevr/effect-oxlint/commit/884e8f78b6ef63a66f50412e05f85049da5ef4e6) Thanks [@cevr](https://github.com/cevr)! - `noUnboundedRetry` and `noUnboundedConcurrency` now follow values held in `const` bindings, through `as const`, `satisfies`, and `!`. A schedule, a retry policy, a `Schedule.take` or `Schedule.recurs` bound, an options object, or a `"unbounded"` value in a named const is checked like the inline value. Parameters and `let` bindings stay unreported.
+
+  Both rules now report the whole retry or collection call, not the schedule or `"unbounded"` value inside it. A `// oxlint-disable-next-line` comment goes above the call line, whatever the shape of its arguments. Move existing suppressions that sit inside a multi-line options object.
+
 ## 0.16.1
 
 ### Patch Changes
