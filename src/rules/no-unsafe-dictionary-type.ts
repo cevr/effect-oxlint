@@ -8,10 +8,15 @@ import {
   classifyUnsafeDictionaryValue,
   createTypeEnvironment,
   type TypeEnvironment,
+  type UnsafeDictionary,
 } from "./_anti-slop-dictionary-types.js";
 import { visibleTypeAlias } from "./_anti-slop-type-alias-resolution.js";
+import { ancestors } from "./_ast-ancestors.js";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 
 const typeNodeKinds: ReadonlySet<string> = new Set([
   "JSDocNonNullableType",
@@ -57,51 +62,50 @@ function isTypeNode(node: ESTree.Node): node is ESTree.TSType {
   return typeNodeKinds.has(node.type);
 }
 
-function typeReferenceName(type: ESTree.TSTypeReference): string | null {
-  return type.typeName.type === "Identifier" ? type.typeName.name : null;
+// Local change: returns Option instead of null.
+function typeReferenceName(type: ESTree.TSTypeReference): Option.Option<string> {
+  if (type.typeName.type !== "Identifier") return Option.none();
+  return Option.some(type.typeName.name);
 }
 
+// Local change: searches ancestors() instead of a nullable parent loop.
 function isInsideTypeAliasDeclaration(node: ESTree.Node): boolean {
-  let current: ESTree.Node | null = node.parent;
-  while (current !== null && current.type !== "Program") {
-    if (current.type === "TSTypeAliasDeclaration") return true;
-    current = current.parent;
-  }
-  return false;
-}
-
-function isPlainAliasConsumerUse(node: ESTree.TSType, environment: TypeEnvironment): boolean {
-  if (node.type !== "TSTypeReference" || node.typeArguments?.params.length) return false;
-  const name = typeReferenceName(node);
-  return (
-    name !== null &&
-    visibleTypeAlias(name, node, environment.typeAliases) !== null &&
-    !isInsideTypeAliasDeclaration(node)
+  return Option.isSome(
+    Arr.findFirst(ancestors(node), (ancestor) => ancestor.type === "TSTypeAliasDeclaration"),
   );
 }
 
+// Local change: reads the Option-returning name and alias lookups.
+function isPlainAliasConsumerUse(node: ESTree.TSType, environment: TypeEnvironment): boolean {
+  if (node.type !== "TSTypeReference" || node.typeArguments?.params.length) return false;
+  return (
+    Option.exists(typeReferenceName(node), (name) =>
+      Option.isSome(visibleTypeAlias(name, node, environment.typeAliases)),
+    ) && !isInsideTypeAliasDeclaration(node)
+  );
+}
+
+// Local change: walks ancestors() instead of a nullable parent loop.
 function isInsideTypeParameterConstraint(node: ESTree.TSType): boolean {
   let child: ESTree.Node = node;
-  let parent: ESTree.Node | null = child.parent;
-  while (parent !== null && parent.type !== "Program") {
+  for (const parent of ancestors(node)) {
     if (parent.type === "TSTypeParameter" && parent.constraint === child) return true;
     child = parent;
-    parent = child.parent;
   }
   return false;
 }
 
+// Local change: searches ancestors() for an unsafe enclosing type instead of a parent loop.
 function shouldReportType(node: ESTree.TSType, environment: TypeEnvironment): boolean {
   if (isInsideTypeParameterConstraint(node)) return false;
   if (isPlainAliasConsumerUse(node, environment)) return false;
-  if (classifyUnsafeDictionary(node, environment) === null) return false;
-  let current: ESTree.Node | null = node.parent;
-  while (current !== null && current.type !== "Program") {
-    if (isTypeNode(current) && classifyUnsafeDictionary(current, environment) !== null)
-      return false;
-    current = current.parent;
-  }
-  return true;
+  if (Option.isNone(classifyUnsafeDictionary(node, environment))) return false;
+  const unsafeAncestor = Arr.findFirst(
+    ancestors(node),
+    (ancestor) =>
+      isTypeNode(ancestor) && Option.isSome(classifyUnsafeDictionary(ancestor, environment)),
+  );
+  return Option.isNone(unsafeAncestor);
 }
 
 /** Disallow object-dictionary contracts whose direct value type is an unsafe escape hatch. */
@@ -118,17 +122,24 @@ export const noUnsafeDictionaryType = Rule.define({
   }),
   create: function* () {
     const context = yield* RuleContext;
-    let environment: TypeEnvironment | null = null;
+    // Local change: the environment is an Option until Program sets it.
+    let environment: Option.Option<TypeEnvironment> = Option.none();
     const report = (node: ESTree.Node, value: string) =>
       context.report(Diagnostic.fromId({ node, messageId: "unsafeDictionary", data: { value } }));
+    const reportUnsafe = (node: ESTree.Node, unsafe: Option.Option<UnsafeDictionary>) =>
+      Option.match(unsafe, {
+        onNone: () => Effect.void,
+        onSome: (found) => report(node, found.unsafeValue),
+      });
     const reportIfUnsafe = (node: ESTree.TSType) => {
-      if (environment === null || !shouldReportType(node, environment)) return Effect.void;
-      const unsafe = classifyUnsafeDictionary(node, environment);
-      return unsafe === null ? Effect.void : report(node, unsafe.unsafeValue);
+      if (Option.isNone(environment) || !shouldReportType(node, environment.value)) {
+        return Effect.void;
+      }
+      return reportUnsafe(node, classifyUnsafeDictionary(node, environment.value));
     };
     return {
       Program: (node: ESTree.Program) => {
-        environment = createTypeEnvironment(node, context.sourceCode.visitorKeys);
+        environment = Option.some(createTypeEnvironment(node, context.sourceCode.visitorKeys));
         return Effect.void;
       },
       TSTypeReference: reportIfUnsafe,
@@ -136,17 +147,16 @@ export const noUnsafeDictionaryType = Rule.define({
       TSMappedType: reportIfUnsafe,
       TSIndexSignature: (node: ESTree.TSIndexSignature) => {
         if (
-          environment === null ||
-          node.typeAnnotation === null ||
+          Option.isNone(environment) ||
+          Predicate.isNull(node.typeAnnotation) ||
           node.parent?.type === "TSTypeLiteral"
         ) {
           return Effect.void;
         }
-        const unsafe = classifyUnsafeDictionaryValue(
-          node.typeAnnotation.typeAnnotation,
-          environment,
+        return reportUnsafe(
+          node,
+          classifyUnsafeDictionaryValue(node.typeAnnotation.typeAnnotation, environment.value),
         );
-        return unsafe === null ? Effect.void : report(node, unsafe.unsafeValue);
       },
     };
   },
