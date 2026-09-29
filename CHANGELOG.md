@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.16.0
+
+### Minor Changes
+
+- [`afdd060`](https://github.com/cevr/effect-oxlint/commit/afdd06093923bbc832f749a5714079472903cd06) Thanks [@cevr](https://github.com/cevr)! - Ship the recommended preset as `presets/recommended.json`. JSON oxlint configurations extend it instead of copying the rule map, so new rules reach them with each release.
+
 ## 0.15.0
 
 ### Minor Changes
