@@ -13,7 +13,6 @@ import { vi as testDouble } from "vitest";
 beforeEach(() => Effect.void);
 testDouble.mock("./lazy-module.js");
 testDouble.spyOn(Effect, "runSync");
-globalThis.invalidTestState = Effect.void;
 export const localTestDoubleIsAllowed = () => {
   // oxlint-disable-next-line no-shadow -- verifies imported test API shadowing
   const testDouble = {

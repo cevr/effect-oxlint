@@ -67,6 +67,7 @@ describe("noModuleMocks", () => {
 describe("noTestGlobals", () => {
   test("reports writes to global objects and process.env", () => {
     const results = lintCases("noTestGlobals", {
+      extension: "test.ts",
       valid: [
         "const current = window.location.href;",
         "const window = {}; window.x = 1;",
@@ -96,6 +97,7 @@ describe("noTestGlobals", () => {
 
   test("reports Reflect and Object calls that mutate a global object", () => {
     const results = lintCases("noTestGlobals", {
+      extension: "test.ts",
       valid: [
         "Object.assign({}, window.location);",
         "const target = {}; Reflect.set(target, 'a', 1);",
@@ -118,6 +120,7 @@ describe("noTestGlobals", () => {
 
   test("reports global and environment stubbing helpers", () => {
     const results = lintCases("noTestGlobals", {
+      extension: "test.ts",
       valid: [
         'const vi = { stubGlobal: () => 1 }; vi.stubGlobal("fetch", fake);',
         'import { vi } from "vitest"; vi.useFakeTimers();',
@@ -136,6 +139,7 @@ describe("noTestGlobals", () => {
 
   test("reports runner globals that no import provides", () => {
     const results = lintCases("noTestGlobals", {
+      extension: "test.ts",
       valid: [
         'import { describe, expect, it } from "bun:test"; describe("x", () => { it("y", () => { expect(1).toBe(1); }); });',
         'import { it } from "effect-bun-test"; it.effect("y", () => program);',
@@ -185,5 +189,16 @@ describe("noTestGlobals", () => {
         message: "Import describe from your test library instead of using the runner global.",
       },
     ]);
+  });
+});
+
+describe("noTestGlobals scope", () => {
+  test("skips application modules", () => {
+    const findings = lintFixtures("noTestGlobals", {
+      "bootstrap.ts": 'window.__STATE__ = {};\ndescribe("x", () => {});',
+      "bootstrap.test.ts": "window.__STATE__ = {};",
+    });
+    expect(findings.get("bootstrap.ts")).toEqual([]);
+    expect(findings.get("bootstrap.test.ts")).toHaveLength(1);
   });
 });
