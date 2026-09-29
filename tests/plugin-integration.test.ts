@@ -121,13 +121,18 @@ describe("compiled oxlint plugin", () => {
     const output = new TextDecoder().decode(result.stdout);
     expect(result.exitCode).toBe(1);
     for (const rule of [
+      "noArrayFilterMap",
       "noChainedTypeAssertions",
       "noConditionalEmptyObjectSpread",
       "noKnownValueWidening",
       "noObjectParameters",
+      "noReduceAccumulatorCopy",
+      "noReflectApply",
+      "noReflectGet",
       "noRuntimeTypeof",
       "noShapeInSymbolNames",
       "noUnknownParameters",
+      "noUnknownReturns",
       "noUnknownTypeAliases",
       "noUnsafeDictionaryType",
       "noWidenThenAssert",

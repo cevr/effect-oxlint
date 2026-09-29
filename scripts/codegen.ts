@@ -8,6 +8,7 @@
  * Usage: bun run scripts/codegen.ts
  */
 import type { CreateRule } from "@oxlint/plugins";
+import * as Schema from "effect/Schema";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -22,7 +23,13 @@ const check = process.argv.includes("--check");
  * Cyclomatic complexity ships with oxlint, so the preset configures it
  * instead of re-implementing it. Its limit matches the cognitive limit.
  */
-const nativeRules: ReadonlyArray<readonly [name: string, options: unknown]> = [
+/** Rule options the preset can carry: a flat object of JSON scalars, such as `{ max: 21 }`. */
+const RecommendedOptions = Schema.UndefinedOr(
+  Schema.Record(Schema.String, Schema.Union([Schema.Number, Schema.String, Schema.Boolean])),
+);
+type RecommendedOptions = typeof RecommendedOptions.Type;
+
+const nativeRules: ReadonlyArray<readonly [name: string, options: RecommendedOptions]> = [
   ["complexity", { max: 21 }],
 ];
 
@@ -30,7 +37,7 @@ interface RuleEntry {
   fileName: string;
   exportName: string;
   category: string;
-  recommendedOptions: unknown;
+  recommendedOptions: RecommendedOptions;
 }
 
 const categoryOrder = [
@@ -70,9 +77,14 @@ const files = readdirSync(RULES_DIR)
   .filter((f) => f.endsWith(".ts") && !f.startsWith("_") && f !== "index.ts")
   .sort();
 
-const loadRecommendedOptions = async (file: string, exportName: string): Promise<unknown> => {
+const loadRecommendedOptions = async (
+  file: string,
+  exportName: string,
+): Promise<RecommendedOptions> => {
   const module: Record<string, CreateRule> = await import(join(RULES_DIR, file));
-  return module[exportName]?.meta?.docs?.recommendedOptions;
+  return Schema.decodeUnknownSync(RecommendedOptions)(
+    module[exportName]?.meta?.docs?.recommendedOptions,
+  );
 };
 
 const loadEntry = async (file: string): Promise<RuleEntry | null> => {
@@ -95,8 +107,7 @@ const entries: RuleEntry[] = (await Promise.all(files.map(loadEntry))).filter(
 );
 
 /** Render a flat options object the way oxfmt formats it: `{ max: 21 }`. */
-const formatOptions = (options: unknown): string => {
-  if (typeof options !== "object" || options === null) return JSON.stringify(options);
+const formatOptions = (options: NonNullable<RecommendedOptions>): string => {
   const fields = Object.entries(options).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
   return `{ ${fields.join(", ")} }`;
 };
@@ -104,7 +115,7 @@ const formatOptions = (options: unknown): string => {
 /** Quote a preset key only when oxfmt would: plugin-prefixed names need quotes, bare names do not. */
 const presetKey = (name: string): string => (/^[A-Za-z_$][\w$]*$/u.test(name) ? name : `"${name}"`);
 
-const presetEntry = (name: string, options: unknown): string =>
+const presetEntry = (name: string, options: RecommendedOptions): string =>
   options === undefined
     ? `  ${presetKey(name)}: "error",`
     : `  ${presetKey(name)}: ["error", ${formatOptions(options)}],`;
@@ -157,9 +168,9 @@ const generatedFiles = [
 ] as const;
 
 if (check) {
-  const staleFiles = generatedFiles
-    .filter(([path, expected]) => readFileSync(path, "utf-8") !== expected)
-    .map(([path]) => path);
+  const staleFiles = generatedFiles.flatMap(([path, expected]) =>
+    readFileSync(path, "utf-8") === expected ? [] : [path],
+  );
   if (staleFiles.length > 0) {
     console.error(`Generated files are stale:\n${staleFiles.join("\n")}`);
     process.exit(1);

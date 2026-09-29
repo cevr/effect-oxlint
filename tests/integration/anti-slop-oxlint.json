@@ -1,13 +1,18 @@
 {
   "jsPlugins": ["../../dist/plugin.js"],
   "rules": {
+    "effect/noArrayFilterMap": "error",
     "effect/noChainedTypeAssertions": "error",
     "effect/noConditionalEmptyObjectSpread": "error",
     "effect/noKnownValueWidening": "error",
     "effect/noObjectParameters": "error",
+    "effect/noReduceAccumulatorCopy": "error",
+    "effect/noReflectApply": "error",
+    "effect/noReflectGet": "error",
     "effect/noRuntimeTypeof": "error",
     "effect/noShapeInSymbolNames": "error",
     "effect/noUnknownParameters": "error",
+    "effect/noUnknownReturns": "error",
     "effect/noUnknownTypeAliases": "error",
     "effect/noUnsafeDictionaryType": "error",
     "effect/noWidenThenAssert": "error"

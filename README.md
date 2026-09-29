@@ -71,13 +71,18 @@ The recommended preset also includes these rules from
 
 | Rule                                    | Contract                                                                         |
 | --------------------------------------- | -------------------------------------------------------------------------------- |
+| `effect/noArrayFilterMap`               | Bans adjacent array `filter`/`map` passes over a known array                     |
 | `effect/noChainedTypeAssertions`        | Bans nested type assertions that invent type evidence                            |
 | `effect/noConditionalEmptyObjectSpread` | Bans conditional spreads that use an empty object to omit fields                 |
 | `effect/noKnownValueWidening`           | Bans broad target types that discard known value evidence                        |
 | `effect/noObjectParameters`             | Bans the broad `object` type on function inputs                                  |
+| `effect/noReduceAccumulatorCopy`        | Bans copying a reducer accumulator on every iteration                            |
+| `effect/noReflectApply`                 | Bans `Reflect.apply`; call typed functions directly                              |
+| `effect/noReflectGet`                   | Bans `Reflect.get`; use typed property access                                    |
 | `effect/noRuntimeTypeof`                | Requires boundary parsing instead of `typeof` narrowing; allows existence probes |
 | `effect/noShapeInSymbolNames`           | Bans `shape` in symbol names                                                     |
 | `effect/noUnknownParameters`            | Bans `unknown` inputs except `cause`, type guards, and rejection reasons         |
+| `effect/noUnknownReturns`               | Bans return contracts of `unknown` or `Promise<unknown>`                         |
 | `effect/noUnknownTypeAliases`           | Bans aliases that only hide `unknown`                                            |
 | `effect/noUnsafeDictionaryType`         | Bans dictionaries with unsafe broad value types                                  |
 | `effect/noWidenThenAssert`              | Bans local flows that widen known values and then assert them back               |
