@@ -2,6 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { runCommand } from "./run-command.js";
+
 const pluginPath = new URL("../../dist/plugin.js", import.meta.url).pathname;
 
 export interface Finding {
@@ -30,17 +32,18 @@ export const lintFixtures = (
     join(directory, "oxlint.json"),
     JSON.stringify({ jsPlugins: [pluginPath], rules: { [`effect/${rule}`]: "error" } }),
   );
-  const result = Bun.spawnSync(
+  const result = runCommand(
     ["bunx", "oxlint", "--format", "unix", "--config", "oxlint.json", ...Object.keys(fixtures)],
-    { cwd: directory, env: process.env, stderr: "pipe", stdout: "pipe" },
+    directory,
   );
   rmSync(directory, { force: true, recursive: true });
   if (result.exitCode !== 0 && result.exitCode !== 1) {
     // oxlint-disable-next-line effect/noThrowStatement, effect/noNewError -- bun:test harness: a crashed oxlint must fail the calling test
-    throw new Error(`oxlint failed: ${new TextDecoder().decode(result.stderr)}`);
+    throw new Error(`oxlint failed: ${result.stderr}`);
   }
-  const output = new TextDecoder().decode(result.stdout);
-  for (const match of output.matchAll(/^(.+?):(\d+):\d+: (.+) \[Error\/effect\((\w+)\)\]$/gmu)) {
+  for (const match of result.stdout.matchAll(
+    /^(.+?):(\d+):\d+: (.+) \[Error\/effect\((\w+)\)\]$/gmu,
+  )) {
     const [, file = "", line = "0", message = "", reported = ""] = match;
     if (reported !== rule) continue;
     findings.get(file)?.push({ line: Number(line), message });

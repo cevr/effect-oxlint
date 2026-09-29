@@ -1,18 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-const packageRoot = new URL("..", import.meta.url).pathname;
+import { runCommand } from "./support/run-command.js";
 
 const runAddRule = (...args: ReadonlyArray<string>) =>
-  Bun.spawnSync(["bun", "run", "scripts/add-rule.ts", ...args], {
-    cwd: packageRoot,
-    stderr: "pipe",
-    stdout: "pipe",
-  });
+  runCommand(["bun", "run", "scripts/add-rule.ts", ...args]);
 
 describe("rule authoring tools", () => {
   test("prints a compiling Effect-first rule template without changing files", () => {
     const result = runAddRule("no-example", "--dry-run");
-    const output = new TextDecoder().decode(result.stdout);
+    const output = result.stdout;
 
     expect(result.exitCode).toBe(0);
     expect(output).toContain("export const noExample = Rule.define");
