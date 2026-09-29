@@ -1,3 +1,4 @@
+import type { ESTree } from "@oxlint/plugins";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -8,10 +9,10 @@ import {
 import { maxCognitiveComplexity, maxHalsteadDifficulty } from "../src/rules/index.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
 
-const logical = (operator: "&&" | "||" | "??", left: unknown, right: unknown) =>
+const logical = (operator: "&&" | "||" | "??", left: ESTree.Expression, right: ESTree.Expression) =>
   ({ type: "LogicalExpression", operator, left, right }) as never;
 
-const forOf = (body: unknown) =>
+const forOf = (body: ESTree.Statement) =>
   ({
     type: "ForOfStatement",
     await: false,
@@ -23,8 +24,11 @@ const forOf = (body: unknown) =>
 const labelledBreak = () =>
   ({ type: "BreakStatement", label: { type: "Identifier", name: "outer" } }) as never;
 
-const conditional = (condition: unknown, consequent: unknown, alternate: unknown) =>
-  ({ type: "ConditionalExpression", test: condition, consequent, alternate }) as never;
+const conditional = (
+  condition: ESTree.Expression,
+  consequent: ESTree.Expression,
+  alternate: ESTree.Expression,
+) => ({ type: "ConditionalExpression", test: condition, consequent, alternate }) as never;
 
 const returnOne = () => Testing.returnStmt(Testing.numLiteral(1));
 

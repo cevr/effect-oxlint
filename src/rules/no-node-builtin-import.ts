@@ -57,6 +57,12 @@ const memberPath = (node: ESTree.MemberExpression): ReadonlyArray<string> | unde
   return parentPath === undefined ? undefined : [...parentPath, node.property.name];
 };
 
+const cryptoReplacement = (operation: string, path: ReadonlyArray<string>): string | undefined => {
+  if (cryptoOperations.has(operation) && path.length === 2) return "Crypto";
+  if (path.at(-2) === "webcrypto" && cryptoOperations.has(operation)) return "Crypto";
+  return operation === "digest" && path.at(-2) === "subtle" ? "Crypto.digest" : undefined;
+};
+
 const partialReplacement = (
   module: PartialModule,
   path: ReadonlyArray<string>,
@@ -76,9 +82,7 @@ const partialReplacement = (
     if (cryptoOperations.has(operation) && path.length === 2) return "Crypto";
     return operation === "digest" && path.at(-2) === "subtle" ? "Crypto.digest" : undefined;
   }
-  if (cryptoOperations.has(operation) && path.length === 2) return "Crypto";
-  if (path.at(-2) === "webcrypto" && cryptoOperations.has(operation)) return "Crypto";
-  return operation === "digest" && path.at(-2) === "subtle" ? "Crypto.digest" : undefined;
+  return cryptoReplacement(operation, path);
 };
 
 export const noNodeBuiltinImport = Rule.define({
