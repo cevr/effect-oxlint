@@ -41,6 +41,12 @@ export const lintFixtures = (
     // oxlint-disable-next-line effect/noThrowStatement, effect/noNewError -- bun:test harness: a crashed oxlint must fail the calling test
     throw new Error(`oxlint failed: ${result.stderr}`);
   }
+  // oxlint reports a JS plugin rule that throws as an empty warning at 0:0.
+  const crashed = result.stdout.match(/^(.+?):0:0: +\[Warning\]$/mu);
+  if (crashed) {
+    // oxlint-disable-next-line effect/noThrowStatement, effect/noNewError -- bun:test harness: a crashed rule must fail the calling test
+    throw new Error(`effect/${rule} crashed on ${crashed[1]}`);
+  }
   for (const match of result.stdout.matchAll(
     /^(.+?):(\d+):\d+: (.+) \[Error\/effect\((\w+)\)\]$/gmu,
   )) {
