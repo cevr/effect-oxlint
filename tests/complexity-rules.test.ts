@@ -172,6 +172,95 @@ describe("halstead", () => {
     expect(halstead(fn).distinctOperands).toBe(4);
   });
 
+  test("tells operator tokens apart by node shape", () => {
+    const member = (computed: boolean, optional: boolean) => ({
+      type: "MemberExpression",
+      object: Testing.id("a"),
+      property: Testing.id("b"),
+      computed,
+      optional,
+    });
+    const call = (optional: boolean) => ({
+      type: "CallExpression",
+      callee: Testing.id("f"),
+      arguments: [],
+      optional,
+    });
+    const sequence = (...expressions: ReadonlyArray<PartialNode>) => ({
+      type: "SequenceExpression",
+      expressions,
+    });
+    const operators = (body: PartialNode) => halstead(Testing.arrowFn(body)).distinctOperators;
+
+    // ,  .  ?.  []  ()  ?.()  (the unit's own `=>` is not counted)
+    expect(
+      operators(
+        sequence(
+          member(false, false),
+          member(false, true),
+          member(true, false),
+          call(false),
+          call(true),
+        ),
+      ),
+    ).toBe(6);
+
+    const fn = (generator: boolean) => ({
+      type: "FunctionExpression",
+      generator,
+      async: false,
+      params: [],
+      body: Testing.blockStmt([]),
+    });
+    const yieldOf = (delegate: boolean) => ({
+      type: "YieldExpression",
+      argument: Testing.id("a"),
+      delegate,
+    });
+    // ,  function  function*  yield  yield*
+    expect(operators(sequence(fn(false), fn(true), yieldOf(false), yieldOf(true)))).toBe(5);
+
+    const forOfLoop = (isAwait: boolean) => ({
+      type: "ForOfStatement",
+      await: isAwait,
+      left: Testing.id("item"),
+      right: Testing.id("items"),
+      body: Testing.blockStmt([]),
+    });
+    const switchStatement = {
+      type: "SwitchStatement",
+      discriminant: Testing.id("a"),
+      cases: [
+        { type: "SwitchCase", test: Testing.id("b"), consequent: [] },
+        { type: "SwitchCase", consequent: [] },
+      ],
+    };
+    // for-of  for-await-of  switch  case  default
+    expect(operators(Testing.blockStmt([forOfLoop(false), forOfLoop(true), switchStatement]))).toBe(
+      5,
+    );
+  });
+
+  test("reads meta properties and non-blank JSX text as operands", () => {
+    const metaProperty = (meta: string, property: string) => ({
+      type: "MetaProperty",
+      meta: Testing.id(meta),
+      property: Testing.id(property),
+    });
+    const jsxText = (value: string) => ({ type: "JSXText", value });
+    const fn = Testing.arrowFn({
+      type: "SequenceExpression",
+      expressions: [
+        metaProperty("import", "meta"),
+        metaProperty("new", "target"),
+        jsxText(" hello "),
+        jsxText("   "),
+      ],
+    });
+    // import.meta, new.target, hello
+    expect(halstead(fn).distinctOperands).toBe(3);
+  });
+
   test("ignores type annotations", () => {
     const typed = Testing.arrowFn(
       { ...Testing.id("x"), typeAnnotation: Testing.tsTypeRef("Wide") },

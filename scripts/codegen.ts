@@ -9,6 +9,7 @@
  */
 import type { CreateRule } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -25,13 +26,18 @@ const check = process.argv.includes("--check");
  * instead of re-implementing it. Its limit matches the cognitive limit.
  */
 /** Rule options the preset can carry: a flat object of JSON scalars, such as `{ max: 21 }`. */
-const RecommendedOptions = Schema.UndefinedOr(
-  Schema.Record(Schema.String, Schema.Union([Schema.Number, Schema.String, Schema.Boolean])),
+const RuleOptions = Schema.Record(
+  Schema.String,
+  Schema.Union([Schema.Number, Schema.String, Schema.Boolean]),
 );
+type RuleOptions = typeof RuleOptions.Type;
+
+/** A rule's `meta.docs.recommendedOptions`: absent when the preset enables it without options. */
+const RecommendedOptions = Schema.OptionFromUndefinedOr(RuleOptions);
 type RecommendedOptions = typeof RecommendedOptions.Type;
 
 const nativeRules: ReadonlyArray<readonly [name: string, options: RecommendedOptions]> = [
-  ["complexity", { max: 21 }],
+  ["complexity", Option.some({ max: 21 })],
 ];
 
 interface RuleEntry {
@@ -69,9 +75,8 @@ function detectCategory(content: string, fileName: string): string {
   return "AST pattern rules";
 }
 
-function extractExportName(content: string): string | null {
-  const match = content.match(/export const (\w+)/);
-  return match?.[1] ?? null;
+function extractExportName(content: string): Option.Option<string> {
+  return Option.fromNullishOr(content.match(/export const (\w+)/)?.[1]);
 }
 
 const files = readdirSync(RULES_DIR)
@@ -96,38 +101,44 @@ const loadRecommendedOptions = (file: string, exportName: string) =>
 
 const loadEntry = (file: string) => {
   const content = readFileSync(join(RULES_DIR, file), "utf-8");
-  const exportName = extractExportName(content);
-  if (!exportName) {
-    console.warn(`⚠ No export found in ${file}, skipping`);
-    return Effect.succeed<ReadonlyArray<RuleEntry>>([]);
-  }
-  return loadRecommendedOptions(file, exportName).pipe(
-    Effect.map(
-      (recommendedOptions): ReadonlyArray<RuleEntry> => [
-        {
-          fileName: file.replace(".ts", ""),
-          exportName,
-          category: detectCategory(content, file),
-          recommendedOptions,
-        },
-      ],
-    ),
-  );
+  return Option.match(extractExportName(content), {
+    onNone: () => {
+      console.warn(`⚠ No export found in ${file}, skipping`);
+      return Effect.succeed<ReadonlyArray<RuleEntry>>([]);
+    },
+    onSome: (exportName) =>
+      loadRecommendedOptions(file, exportName).pipe(
+        Effect.map(
+          (recommendedOptions): ReadonlyArray<RuleEntry> => [
+            {
+              fileName: file.replace(".ts", ""),
+              exportName,
+              category: detectCategory(content, file),
+              recommendedOptions,
+            },
+          ],
+        ),
+      ),
+  });
 };
 
 /** Render a flat options object the way oxfmt formats it: `{ max: 21 }`. */
-const formatOptions = (options: NonNullable<RecommendedOptions>): string => {
+const formatOptions = (options: RuleOptions): string => {
   const fields = Object.entries(options).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
   return `{ ${fields.join(", ")} }`;
 };
 
 /** Quote a preset key only when oxfmt would: plugin-prefixed names need quotes, bare names do not. */
-const presetKey = (name: string): string => (/^[A-Za-z_$][\w$]*$/u.test(name) ? name : `"${name}"`);
+const presetKey = (name: string): string => {
+  if (/^[A-Za-z_$][\w$]*$/u.test(name)) return name;
+  return `"${name}"`;
+};
 
 const presetEntry = (name: string, options: RecommendedOptions): string =>
-  options === undefined
-    ? `  ${presetKey(name)}: "error",`
-    : `  ${presetKey(name)}: ["error", ${formatOptions(options)}],`;
+  Option.match(options, {
+    onNone: () => `  ${presetKey(name)}: "error",`,
+    onSome: (ruleOptions) => `  ${presetKey(name)}: ["error", ${formatOptions(ruleOptions)}],`,
+  });
 
 const main = Effect.gen(function* () {
   const entries = (yield* Effect.forEach(files, loadEntry, { concurrency: 8 })).flat();
@@ -180,9 +191,10 @@ const main = Effect.gen(function* () {
   ] as const;
 
   if (check) {
-    const staleFiles = generatedFiles.flatMap(([path, expected]) =>
-      readFileSync(path, "utf-8") === expected ? [] : [path],
-    );
+    const staleFiles = generatedFiles.flatMap(([path, expected]) => {
+      if (readFileSync(path, "utf-8") === expected) return [];
+      return [path];
+    });
     if (staleFiles.length > 0) {
       console.error(`Generated files are stale:\n${staleFiles.join("\n")}`);
       process.exit(1);

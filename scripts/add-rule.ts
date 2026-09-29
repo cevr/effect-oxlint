@@ -17,7 +17,7 @@ const unsupportedFlag = args.find(
   (argument) => argument.startsWith("--") && argument !== "--dry-run",
 );
 
-if (unsupportedFlag !== undefined) {
+if (unsupportedFlag) {
   console.error(`Unsupported flag: ${unsupportedFlag}`);
   process.exit(1);
 }
