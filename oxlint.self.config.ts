@@ -8,15 +8,12 @@ const baseline = [
   "effect/maxCognitiveComplexity",
   "effect/noAs",
   "effect/noAsyncFunction",
-  "effect/noChainedTypeAssertions",
   "effect/noGlobals",
-  "effect/noNodeBuiltinImport",
   "effect/noNullish",
   "effect/noRuntimeTypeof",
   "effect/noShapeInSymbolNames",
   "effect/noTernary",
   "effect/noUnknownParameters",
-  "effect/noUnsafeDictionaryType",
 ] as const;
 
 export default {
@@ -32,4 +29,11 @@ export default {
     ...recommended,
     ...Object.fromEntries(baseline.map((rule) => [rule, "off"])),
   },
+  overrides: [
+    {
+      // Build scripts and the test harness run on the host, not in Effect programs.
+      files: ["scripts/**", "tests/support/**"],
+      rules: { "effect/noNodeBuiltinImport": "off" },
+    },
+  ],
 };

@@ -15,12 +15,13 @@
  * and every name or literal is an operand.
  */
 import type { ESTree } from "@oxlint/plugins";
+import { childNodesAt } from "./_ast-children.js";
 
 export type FunctionNode = ESTree.ArrowFunctionExpression | ESTree.Function;
 
 /**
- * Any ESTree node viewed structurally: a `type` tag, the scalar fields the
- * metrics read, and child slots reachable through the index signature.
+ * Any ESTree node viewed structurally: a `type` tag and the scalar fields the
+ * metrics read. Child slots are read with `childNodesAt`.
  */
 interface AnyNode {
   readonly type: string;
@@ -46,14 +47,10 @@ interface AnyNode {
   readonly superClass?: unknown;
   readonly meta?: unknown;
   readonly property?: unknown;
-  readonly [slot: string]: unknown;
 }
 
 const isNode = (value: unknown): value is AnyNode =>
-  typeof value === "object" &&
-  value !== null &&
-  "type" in value &&
-  typeof (value as { type: unknown }).type === "string";
+  typeof value === "object" && value !== null && "type" in value && typeof value.type === "string";
 
 const isFunctionType = (type: string): boolean =>
   type === "ArrowFunctionExpression" ||
@@ -91,12 +88,8 @@ const transparentTypeWrappers = new Set([
 const isTypeOnly = (node: AnyNode): boolean =>
   node.type.startsWith("TS") && !transparentTypeWrappers.has(node.type);
 
-const slot = (node: AnyNode, key: string): ReadonlyArray<AnyNode> => {
-  const value = node[key];
-  if (isNode(value)) return [value];
-  if (Array.isArray(value)) return value.filter(isNode);
-  return [];
-};
+const slot = (node: AnyNode, key: string): ReadonlyArray<AnyNode> =>
+  childNodesAt(node, key, isNode);
 
 /** Runtime child nodes of `node`, in source order of their slots. */
 const children = (node: AnyNode): ReadonlyArray<AnyNode> => {
@@ -113,8 +106,7 @@ const children = (node: AnyNode): ReadonlyArray<AnyNode> => {
 
 /** The nodes that form the body of a function unit: its parameters and its body. */
 const unitRoots = (fn: FunctionNode): ReadonlyArray<AnyNode> => {
-  const node = fn as unknown as AnyNode;
-  return [...slot(node, "params"), ...slot(node, "body")];
+  return [...slot(fn, "params"), ...slot(fn, "body")];
 };
 
 // ---------------------------------------------------------------------------
