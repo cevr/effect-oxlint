@@ -39,6 +39,7 @@ export const recommended = {
   "effect/noShapeInSymbolNames": "error",
   "effect/noSilentCatchAll": "error",
   "effect/noTernary": "error",
+  "effect/noTestGlobals": "error",
   "effect/noTestLifecycleHooks": "error",
   "effect/noThrowStatement": "error",
   "effect/noTryCatch": "error",

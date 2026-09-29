@@ -41,6 +41,7 @@ export * from "./no-sequential-effect-all.js";
 export * from "./no-shape-in-symbol-names.js";
 export * from "./no-silent-catch-all.js";
 export * from "./no-ternary.js";
+export * from "./no-test-globals.js";
 export * from "./no-test-lifecycle-hooks.js";
 export * from "./no-throw-statement.js";
 export * from "./no-try-catch.js";

@@ -35,7 +35,8 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 | `effect/noNewPromise`                  | Bans new Promise, Promise calls, and Promise static APIs                                  |
 | `effect/noNewError`                    | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die |
 | `effect/noNullish`                     | Bans null and undefined; permits `Object.create(null)` for prototype-free dictionaries    |
-| `effect/noModuleMocks`                 | Bans Vitest and Jest module mocks and method spies; use Effect service test layers        |
+| `effect/noModuleMocks`                 | Bans Vitest, Jest, and bun:test module mocks, mock functions, and spies; use test layers  |
+| `effect/noTestGlobals`                 | Bans global-object and `process.env` writes, global stubs, and implicit runner globals    |
 | `effect/noTernary`                     | Bans conditional expressions while allowing ordinary if statements                        |
 | `effect/noManagedRuntimeInEffect`      | Keeps ManagedRuntime construction at non-Effect host boundaries                           |
 | `effect/noModuleLevelMutableState`     | Bans module-level `let` and `var` outside tests; hold shared state in a Layer-owned `Ref` |

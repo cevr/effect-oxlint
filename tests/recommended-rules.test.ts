@@ -58,6 +58,7 @@ describe("recommended preset", () => {
       "effect/noSilentCatchAll": "error",
       "effect/preferEffectFn": "error",
       "effect/noTernary": "error",
+      "effect/noTestGlobals": "error",
       "effect/noTestLifecycleHooks": "error",
       "effect/noThrowStatement": "error",
       "effect/noTryCatch": "error",

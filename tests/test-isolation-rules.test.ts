@@ -1,0 +1,189 @@
+import { describe, expect, test } from "bun:test";
+
+import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
+
+describe("noModuleMocks", () => {
+  test("reports every Vitest and Jest mocking entry point", () => {
+    const results = lintCases("noModuleMocks", {
+      valid: [
+        'import { vi } from "vitest"; vi.useFakeTimers();',
+        'import { jest } from "@jest/globals"; jest.useRealTimers();',
+        "const jest = { fn: () => 1 }; jest.fn();",
+        'import { vi } from "./local-helpers.js"; vi.mock("./module.js");',
+      ],
+      invalid: [
+        'import { vi } from "vitest"; vi.fn();',
+        'import { vi } from "vitest"; vi.doMock("./module.js");',
+        'import { vi } from "vitest"; vi.mocked(service);',
+        'import { vi } from "vitest"; vi.unmock("./module.js");',
+        'import { vi as v } from "vitest"; v.spyOn(service, "run");',
+        'import { jest } from "@jest/globals"; jest.fn();',
+        'jest.doMock("./module.js");',
+        'vi.unmock("./module.js");',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("reports bun:test mocks, spies, and runner objects through any alias", () => {
+    const results = lintCases("noModuleMocks", {
+      valid: [
+        'import { test } from "bun:test"; test("works", () => {});',
+        'const spyOn = (target, method) => target[method]; spyOn(service, "run");',
+        "const mock = { module: () => 1 }; mock.module();",
+        'import { mock } from "bun:test"; mock.restore();',
+        'import { mock } from "./fakes.js"; mock.module("./module.js");',
+      ],
+      invalid: [
+        'import { mock } from "bun:test"; mock.module("./module.js", () => ({}));',
+        'import { mock as m } from "bun:test"; m.module("x");',
+        'import { mock } from "bun:test"; const run = mock(() => 1);',
+        'import { spyOn } from "bun:test"; spyOn(service, "run");',
+        'import { spyOn as watch } from "bun:test"; watch(service, "run");',
+        'import { vi } from "bun:test"; vi.mock("./module.js");',
+        'import { vi } from "bun:test"; vi.fn();',
+        'import { vi } from "bun:test"; vi.mocked(service);',
+        'import { jest } from "bun:test"; jest.spyOn(service, "run");',
+        'import { jest } from "bun:test"; jest.doMock("./module.js");',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("names the canonical call for an aliased binding", () => {
+    const findings = lintFixtures("noModuleMocks", {
+      "alias.test.ts": 'import { mock as m } from "bun:test";\nm.module("x");',
+    });
+    expect(findings.get("alias.test.ts")).toEqual([
+      {
+        line: 2,
+        message:
+          "Avoid mock.module(). Replace the external boundary with an Effect service test Layer.",
+      },
+    ]);
+  });
+});
+
+describe("noTestGlobals", () => {
+  test("reports writes to global objects and process.env", () => {
+    const results = lintCases("noTestGlobals", {
+      valid: [
+        "const current = window.location.href;",
+        "const window = {}; window.x = 1;",
+        "function f(globalThis) { globalThis.a = 1; }",
+        'const process = { env: {} }; process.env.FOO = "x";',
+        'document.body.innerHTML = "<p></p>";',
+        "const state = { count: 0 }; state.count += 1;",
+        "process.exitCode = 1;",
+      ],
+      invalid: [
+        "globalThis.fetch = () => 1;",
+        "window.__STATE__ = {};",
+        'window["__STATE__"] = state;',
+        "window.location.href = next;",
+        "global.counter++;",
+        "self.cache ??= new Map();",
+        "--globalThis.depth;",
+        "delete window.__STATE__;",
+        'process.env.FOO = "x";',
+        "delete process.env.FOO;",
+        'process.env["API_URL"] = url;',
+        "process.env = {};",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("reports Reflect and Object calls that mutate a global object", () => {
+    const results = lintCases("noTestGlobals", {
+      valid: [
+        "Object.assign({}, window.location);",
+        "const target = {}; Reflect.set(target, 'a', 1);",
+        "const window = {}; Object.defineProperty(window, 'a', { value: 1 });",
+        "const Reflect = { set: () => true }; Reflect.set(window, 'a', 1);",
+        "Object.keys(process.env);",
+      ],
+      invalid: [
+        'Reflect.set(window, "__STATE__", state);',
+        'Reflect.defineProperty(globalThis, "fetch", { value: fake });',
+        'Reflect.deleteProperty(process.env, "FOO");',
+        'Object.defineProperty(window, "matchMedia", { value: fake });',
+        "Object.defineProperties(globalThis, descriptors);",
+        "Object.assign(window.location, { href: next });",
+        'Object.assign(process.env, { FOO: "x" });',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("reports global and environment stubbing helpers", () => {
+    const results = lintCases("noTestGlobals", {
+      valid: [
+        'const vi = { stubGlobal: () => 1 }; vi.stubGlobal("fetch", fake);',
+        'import { vi } from "vitest"; vi.useFakeTimers();',
+      ],
+      invalid: [
+        'import { vi } from "vitest"; vi.stubGlobal("fetch", fake);',
+        'import { vi } from "vitest"; vi.stubEnv("FOO", "x");',
+        'import { vi } from "vitest"; vi.unstubAllGlobals();',
+        'import { vi } from "bun:test"; vi.unstubAllEnvs();',
+        'import { jest } from "@jest/globals"; jest.replaceProperty(config, "mode", "test");',
+        'import { jest } from "bun:test"; jest.replaceProperty(config, "mode", "test");',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("reports runner globals that no import provides", () => {
+    const results = lintCases("noTestGlobals", {
+      valid: [
+        'import { describe, expect, it } from "bun:test"; describe("x", () => { it("y", () => { expect(1).toBe(1); }); });',
+        'import { it } from "effect-bun-test"; it.effect("y", () => program);',
+        'import { describe as suite } from "bun:test"; suite("x", () => {});',
+        "const test = (name) => name; test('x');",
+        "const runner = { describe: () => 1 }; runner.describe();",
+      ],
+      invalid: [
+        'describe("x", () => {});',
+        'import { describe } from "bun:test"; describe("x", () => { it("y", () => {}); });',
+        "expect(1).toBe(1);",
+        "beforeEach(() => {});",
+        "const fn = mock(() => 1);",
+        'spyOn(service, "run");',
+        "jest.fn();",
+        'fit("x", () => {});',
+        'xdescribe("x", () => {});',
+        'xtest("x", () => {});',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("names the runner global and the written global", () => {
+    const findings = lintFixtures("noTestGlobals", {
+      "suite.test.ts": [
+        'import { it } from "bun:test";',
+        'describe("x", () => { it("y", () => {}); });',
+        "globalThis.fetch = fake;",
+        'Reflect.set(window, "__STATE__", state);',
+      ].join("\n"),
+    });
+    // Runner globals resolve once the whole module is scoped, so they report last.
+    expect(findings.get("suite.test.ts")).toEqual([
+      {
+        line: 3,
+        message:
+          "Avoid writing globalThis.fetch in tests. Provide the capability through an Effect service or runtime input.",
+      },
+      {
+        line: 4,
+        message:
+          "Avoid Reflect.set() on window in tests. Provide the capability through an Effect service or runtime input.",
+      },
+      {
+        line: 2,
+        message: "Import describe from your test library instead of using the runner global.",
+      },
+    ]);
+  });
+});

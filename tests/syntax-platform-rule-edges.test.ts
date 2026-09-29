@@ -63,10 +63,10 @@ describe("platform capability rules", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
-  test("noModuleMocks ignores local test-API lookalikes and unbanned methods", () => {
+  test("noModuleMocks ignores local test-API lookalikes and reports mock functions", () => {
     const results = lintCases("noModuleMocks", {
-      valid: ['const vi = { mock: () => 1 }; vi.mock("./module.js");', "vi.fn();"],
-      invalid: ['vi.mock("./module.js");'],
+      valid: ['const vi = { mock: () => 1 }; vi.mock("./module.js");'],
+      invalid: ['vi.mock("./module.js");', "vi.fn();"],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
