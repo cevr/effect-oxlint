@@ -40,7 +40,7 @@ describe("ambient platform APIs", () => {
         property: Testing.id("isTTY"),
         computed: false,
         optional: false,
-      } as never;
+      };
       Object.assign(streamAccess, { parent: ttyRead });
       expect(Testing.runRule(noGlobals, "MemberExpression", streamAccess)).toHaveLength(0);
     }
@@ -52,7 +52,7 @@ describe("ambient platform APIs", () => {
       property: Testing.id("write"),
       computed: false,
       optional: false,
-    } as never;
+    };
     Object.assign(writeAccess, { parent: writeCall });
     expect(Testing.runRule(noGlobals, "MemberExpression", writeAccess)).toHaveLength(1);
     expect(
@@ -66,7 +66,7 @@ describe("ambient platform APIs", () => {
       object: Testing.memberExpr("crypto", "subtle"),
       property: Testing.id("digest"),
       computed: false,
-    } as never;
+    };
     expect(Testing.runRule(noGlobals, "MemberExpression", digest)).toHaveLength(1);
     expect(
       Testing.runRule(noGlobals, "MemberExpression", Testing.memberExpr("crypto", "sign")),

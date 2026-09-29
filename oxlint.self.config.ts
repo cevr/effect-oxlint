@@ -3,7 +3,7 @@
 // report on this codebase. Fix a rule's findings, then delete its line.
 import { recommended } from "./dist/presets/recommended.js";
 
-const baseline = ["effect/noAs", "effect/noNullish", "effect/noTernary"] as const;
+const baseline = ["effect/noNullish", "effect/noTernary"] as const;
 
 export default {
   jsPlugins: ["./dist/plugin.js"],

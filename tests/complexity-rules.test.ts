@@ -9,26 +9,36 @@ import {
 import { maxCognitiveComplexity, maxHalsteadDifficulty } from "../src/rules/index.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
 
-const logical = (operator: "&&" | "||" | "??", left: ESTree.Expression, right: ESTree.Expression) =>
-  ({ type: "LogicalExpression", operator, left, right }) as never;
+/** A partial AST node: enough for the metrics walker, which reads `type` and child slots. */
+interface PartialNode {
+  readonly type: string;
+}
 
-const forOf = (body: ESTree.Statement) =>
-  ({
-    type: "ForOfStatement",
-    await: false,
-    left: Testing.id("item"),
-    right: Testing.id("items"),
-    body,
-  }) as never;
+const logical = (operator: "&&" | "||" | "??", left: PartialNode, right: PartialNode) => ({
+  type: "LogicalExpression",
+  operator,
+  left,
+  right,
+});
 
-const labelledBreak = () =>
-  ({ type: "BreakStatement", label: { type: "Identifier", name: "outer" } }) as never;
+const forOf = (body: ESTree.Statement) => ({
+  type: "ForOfStatement",
+  await: false,
+  left: Testing.id("item"),
+  right: Testing.id("items"),
+  body,
+});
+
+const labelledBreak = () => ({
+  type: "BreakStatement",
+  label: { type: "Identifier", name: "outer" },
+});
 
 const conditional = (
   condition: ESTree.Expression,
   consequent: ESTree.Expression,
   alternate: ESTree.Expression,
-) => ({ type: "ConditionalExpression", test: condition, consequent, alternate }) as never;
+) => ({ type: "ConditionalExpression", test: condition, consequent, alternate });
 
 const returnOne = () => Testing.returnStmt(Testing.numLiteral(1));
 

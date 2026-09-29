@@ -9,8 +9,12 @@ import { Testing } from "../src/vendor/effect-oxlint/index.js";
 const tagEquals = (subject: string, tag: string) =>
   Testing.binaryExpr("===", Testing.memberExpr(subject, "_tag"), Testing.strLiteral(tag));
 
-const or = (left: ESTree.Expression, right: ESTree.Expression) =>
-  ({ type: "LogicalExpression", operator: "||", left, right }) as never;
+const or = (left: ESTree.Expression, right: ESTree.Expression) => ({
+  type: "LogicalExpression",
+  operator: "||",
+  left,
+  right,
+});
 
 const returningSwitch = (withDefault = false, subject = "state") => ({
   type: "SwitchStatement",
@@ -74,7 +78,7 @@ describe("tagged value predicates", () => {
 describe("closed tagged union transformations", () => {
   test("nudges return-only tag switches toward Match.tagsExhaustive", () => {
     expect(
-      Testing.runRule(preferMatchTagsExhaustive, "SwitchStatement", returningSwitch() as never),
+      Testing.runRule(preferMatchTagsExhaustive, "SwitchStatement", returningSwitch()),
     ).toHaveLength(1);
   });
 
@@ -103,7 +107,7 @@ describe("closed tagged union transformations", () => {
 
   test("allows partial switches and stateful switches", () => {
     expect(
-      Testing.runRule(preferMatchTagsExhaustive, "SwitchStatement", returningSwitch(true) as never),
+      Testing.runRule(preferMatchTagsExhaustive, "SwitchStatement", returningSwitch(true)),
     ).toHaveLength(0);
 
     const stateful = {
@@ -120,7 +124,7 @@ describe("closed tagged union transformations", () => {
           consequent: [{ type: "BreakStatement", label: null }],
         },
       ],
-    } as never;
+    };
     expect(Testing.runRule(preferMatchTagsExhaustive, "SwitchStatement", stateful)).toHaveLength(0);
   });
 

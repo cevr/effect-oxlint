@@ -18,7 +18,7 @@ const directWithSpan = (namespace = "Effect") => {
       optional: false,
     },
     arguments: [Testing.strLiteral("Example.run")],
-  } as never;
+  };
 };
 
 const pipedWithSpan = (namespace = "Effect", withTransform = false) => {
@@ -36,7 +36,7 @@ const pipedWithSpan = (namespace = "Effect", withTransform = false) => {
       ...(withTransform ? [Testing.callOfMember(namespace, "map", [Testing.arrowFn()])] : []),
       Testing.callOfMember(namespace, "withSpan", [Testing.strLiteral("Example.run")]),
     ],
-  } as never;
+  };
 };
 
 describe("prefer Effect.fn", () => {
