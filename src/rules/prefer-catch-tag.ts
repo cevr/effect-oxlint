@@ -1,70 +1,79 @@
 /** Prefer Effect's tagged failure recovery over manual tag predicates. */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { isEffectCall, tagComparisonsInOr, taggedSwitchSubject } from "./_tagged-control-flow.js";
 
+const isFunction = (
+  argument: ESTree.Argument,
+): argument is ESTree.ArrowFunctionExpression | ESTree.Function =>
+  argument.type === "ArrowFunctionExpression" || argument.type === "FunctionExpression";
+
+const isIdentifier = (parameter: ESTree.ParamPattern): parameter is ESTree.BindingIdentifier =>
+  parameter.type === "Identifier";
+
+/** The name of a callback's first parameter when it is a plain identifier. */
+const identifierParameter = (
+  fn: ESTree.ArrowFunctionExpression | ESTree.Function,
+): Option.Option<string> =>
+  Arr.head(fn.params).pipe(
+    Option.filter(isIdentifier),
+    Option.map((parameter) => parameter.name),
+  );
+
+/** The expression a callback returns when its body is that expression or a lone `return`. */
 const returnedExpression = (
   fn: ESTree.ArrowFunctionExpression | ESTree.Function,
-): ESTree.Expression | null => {
-  if (fn.body === null) return null;
-  if (fn.body.type !== "BlockStatement") return fn.body;
-  if (fn.body.body.length !== 1) return null;
-  const statement = fn.body.body[0];
-  if (statement?.type !== "ReturnStatement" || statement.argument === null) return null;
-  return statement.argument;
-};
+): Option.Option<ESTree.Expression> =>
+  Option.flatMap(Option.fromNullishOr(fn.body), (body) => {
+    if (body.type !== "BlockStatement") return Option.some(body);
+    const [statement] = body.body;
+    if (body.body.length !== 1 || statement?.type !== "ReturnStatement") return Option.none();
+    return Option.fromNullishOr(statement.argument);
+  });
 
-const hasManualTagPredicate = (argument: ESTree.Argument | undefined): boolean => {
-  if (argument?.type !== "ArrowFunctionExpression" && argument?.type !== "FunctionExpression") {
-    return false;
-  }
-  const parameter = argument.params[0];
-  if (parameter?.type !== "Identifier") return false;
-  const expression = returnedExpression(argument);
-  if (expression === null) return false;
-  const comparisons = tagComparisonsInOr(expression);
-  if (comparisons === null || comparisons.length === 0) return false;
-  return comparisons.every((comparison) => comparison.subject === parameter.name);
-};
+/** Whether `expression` is one or more `parameter._tag === "Tag"` checks joined by `||`. */
+const isTagCheckOn = (expression: ESTree.Expression, parameter: string): boolean =>
+  Option.exists(tagComparisonsInOr(expression), (comparisons) =>
+    comparisons.every((comparison) => comparison.subject === parameter),
+  );
 
-const isFunction = (
-  argument: ESTree.Argument | undefined,
-): argument is ESTree.ArrowFunctionExpression | ESTree.Function =>
-  argument?.type === "ArrowFunctionExpression" || argument?.type === "FunctionExpression";
-
-const hasTagCondition = (node: ESTree.IfStatement, parameter: string): boolean => {
-  const comparisons = tagComparisonsInOr(node.test);
-  if (comparisons === null || comparisons.length === 0) return false;
-  return comparisons.every((comparison) => comparison.subject === parameter);
-};
+const hasManualTagPredicate = (argument: ESTree.Argument): boolean =>
+  isFunction(argument) &&
+  Option.exists(
+    Option.all([identifierParameter(argument), returnedExpression(argument)]),
+    ([parameter, expression]) => isTagCheckOn(expression, parameter),
+  );
 
 const hasTagSwitch = (node: ESTree.SwitchStatement, parameter: string): boolean => {
-  if (taggedSwitchSubject(node) !== parameter) return false;
+  if (!Option.contains(taggedSwitchSubject(node), parameter)) return false;
   return node.cases.some(
     (switchCase) =>
-      switchCase.test?.type === "Literal" && typeof switchCase.test.value === "string",
+      switchCase.test?.type === "Literal" && Predicate.isString(switchCase.test.value),
   );
 };
 
-const hasManualTagDispatch = (argument: ESTree.Argument | undefined): boolean => {
+const hasManualTagDispatch = (argument: ESTree.Argument): boolean => {
   if (!isFunction(argument) || argument.body?.type !== "BlockStatement") return false;
-  const parameter = argument.params[0];
-  if (parameter?.type !== "Identifier") return false;
-
-  return argument.body.body.some((statement) => {
-    if (statement.type === "IfStatement") return hasTagCondition(statement, parameter.name);
-    if (statement.type === "SwitchStatement") return hasTagSwitch(statement, parameter.name);
-    return false;
-  });
+  const statements = argument.body.body;
+  return Option.exists(identifierParameter(argument), (parameter) =>
+    statements.some((statement) => {
+      if (statement.type === "IfStatement") return isTagCheckOn(statement.test, parameter);
+      if (statement.type === "SwitchStatement") return hasTagSwitch(statement, parameter);
+      return false;
+    }),
+  );
 };
 
-const catchAllHandler = (node: ESTree.CallExpression): ESTree.Argument | undefined => {
-  if (!isEffectCall(node, "catchAll")) return undefined;
+const catchAllHandler = (node: ESTree.CallExpression): Option.Option<ESTree.Argument> => {
+  if (!isEffectCall(node, "catchAll")) return Option.none();
   let handlerIndex = 1;
   if (node.arguments.length === 1) handlerIndex = 0;
-  return node.arguments[handlerIndex];
+  return Arr.get(node.arguments, handlerIndex);
 };
 
 export const preferCatchTag = Rule.define({
@@ -80,9 +89,9 @@ export const preferCatchTag = Rule.define({
         if (isEffectCall(node, "catchIf")) {
           let predicateIndex = 1;
           if (node.arguments.length === 2) predicateIndex = 0;
-          const predicate = node.arguments[predicateIndex];
-          if (!hasManualTagPredicate(predicate)) return Effect.void;
-        } else if (!hasManualTagDispatch(catchAllHandler(node))) {
+          const predicate = Arr.get(node.arguments, predicateIndex);
+          if (!Option.exists(predicate, hasManualTagPredicate)) return Effect.void;
+        } else if (!Option.exists(catchAllHandler(node), hasManualTagDispatch)) {
           return Effect.void;
         }
         return context.report(

@@ -9,26 +9,36 @@ import {
 import { maxCognitiveComplexity, maxHalsteadDifficulty } from "../src/rules/index.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
 
-const logical = (operator: "&&" | "||" | "??", left: ESTree.Expression, right: ESTree.Expression) =>
-  ({ type: "LogicalExpression", operator, left, right }) as never;
+/** A partial AST node: enough for the metrics walker, which reads `type` and child slots. */
+interface PartialNode {
+  readonly type: string;
+}
 
-const forOf = (body: ESTree.Statement) =>
-  ({
-    type: "ForOfStatement",
-    await: false,
-    left: Testing.id("item"),
-    right: Testing.id("items"),
-    body,
-  }) as never;
+const logical = (operator: "&&" | "||" | "??", left: PartialNode, right: PartialNode) => ({
+  type: "LogicalExpression",
+  operator,
+  left,
+  right,
+});
 
-const labelledBreak = () =>
-  ({ type: "BreakStatement", label: { type: "Identifier", name: "outer" } }) as never;
+const forOf = (body: ESTree.Statement) => ({
+  type: "ForOfStatement",
+  await: false,
+  left: Testing.id("item"),
+  right: Testing.id("items"),
+  body,
+});
+
+const labelledBreak = () => ({
+  type: "BreakStatement",
+  label: { type: "Identifier", name: "outer" },
+});
 
 const conditional = (
   condition: ESTree.Expression,
   consequent: ESTree.Expression,
   alternate: ESTree.Expression,
-) => ({ type: "ConditionalExpression", test: condition, consequent, alternate }) as never;
+) => ({ type: "ConditionalExpression", test: condition, consequent, alternate });
 
 const returnOne = () => Testing.returnStmt(Testing.numLiteral(1));
 
@@ -137,6 +147,118 @@ describe("halstead", () => {
       totalOperands: 0,
     });
     expect(halsteadDifficulty(halstead(outer))).toBe(0);
+  });
+
+  test("counts literals by source text and template chunks by raw text", () => {
+    const chunk = (raw: string, tail: boolean) => ({
+      type: "TemplateElement",
+      value: { raw, cooked: raw },
+      tail,
+    });
+    const template = {
+      type: "TemplateLiteral",
+      quasis: [chunk("a", false), chunk("", true)],
+      expressions: [Testing.id("x")],
+    };
+    // `(x) => 1 + (1.0 + `a${x}`)`: `1` and `1.0` are distinct operands, and the empty chunk is none.
+    const fn = Testing.arrowFn(
+      Testing.binaryExpr(
+        "+",
+        { ...Testing.numLiteral(1), raw: "1" },
+        Testing.binaryExpr("+", { ...Testing.numLiteral(1), raw: "1.0" }, template),
+      ),
+      [Testing.id("x")],
+    );
+    expect(halstead(fn).distinctOperands).toBe(4);
+  });
+
+  test("tells operator tokens apart by node shape", () => {
+    const member = (computed: boolean, optional: boolean) => ({
+      type: "MemberExpression",
+      object: Testing.id("a"),
+      property: Testing.id("b"),
+      computed,
+      optional,
+    });
+    const call = (optional: boolean) => ({
+      type: "CallExpression",
+      callee: Testing.id("f"),
+      arguments: [],
+      optional,
+    });
+    const sequence = (...expressions: ReadonlyArray<PartialNode>) => ({
+      type: "SequenceExpression",
+      expressions,
+    });
+    const operators = (body: PartialNode) => halstead(Testing.arrowFn(body)).distinctOperators;
+
+    // ,  .  ?.  []  ()  ?.()  (the unit's own `=>` is not counted)
+    expect(
+      operators(
+        sequence(
+          member(false, false),
+          member(false, true),
+          member(true, false),
+          call(false),
+          call(true),
+        ),
+      ),
+    ).toBe(6);
+
+    const fn = (generator: boolean) => ({
+      type: "FunctionExpression",
+      generator,
+      async: false,
+      params: [],
+      body: Testing.blockStmt([]),
+    });
+    const yieldOf = (delegate: boolean) => ({
+      type: "YieldExpression",
+      argument: Testing.id("a"),
+      delegate,
+    });
+    // ,  function  function*  yield  yield*
+    expect(operators(sequence(fn(false), fn(true), yieldOf(false), yieldOf(true)))).toBe(5);
+
+    const forOfLoop = (isAwait: boolean) => ({
+      type: "ForOfStatement",
+      await: isAwait,
+      left: Testing.id("item"),
+      right: Testing.id("items"),
+      body: Testing.blockStmt([]),
+    });
+    const switchStatement = {
+      type: "SwitchStatement",
+      discriminant: Testing.id("a"),
+      cases: [
+        { type: "SwitchCase", test: Testing.id("b"), consequent: [] },
+        { type: "SwitchCase", consequent: [] },
+      ],
+    };
+    // for-of  for-await-of  switch  case  default
+    expect(operators(Testing.blockStmt([forOfLoop(false), forOfLoop(true), switchStatement]))).toBe(
+      5,
+    );
+  });
+
+  test("reads meta properties and non-blank JSX text as operands", () => {
+    const metaProperty = (meta: string, property: string) => ({
+      type: "MetaProperty",
+      meta: Testing.id(meta),
+      property: Testing.id(property),
+    });
+    const jsxText = (value: string) => ({ type: "JSXText", value });
+    const fn = Testing.arrowFn({
+      type: "SequenceExpression",
+      expressions: [
+        metaProperty("import", "meta"),
+        metaProperty("new", "target"),
+        jsxText(" hello "),
+        jsxText("   "),
+      ],
+    });
+    // import.meta, new.target, hello
+    expect(halstead(fn).distinctOperands).toBe(3);
   });
 
   test("ignores type annotations", () => {

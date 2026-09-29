@@ -3,7 +3,10 @@
  * c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b.
  */
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import {
   classifyWideningTarget,
   createTypeEnvironment,
@@ -12,6 +15,7 @@ import {
   type WideningTarget,
 } from "./_anti-slop-dictionary-types.js";
 import { resolveVariable } from "./_anti-slop-scope.js";
+import { ancestors } from "./_ast-ancestors.js";
 
 import type { ESTree, SourceCode, Variable } from "@oxlint/plugins";
 
@@ -31,12 +35,15 @@ function unwrapExpression(expression: ESTree.Expression): ESTree.Expression {
   return current;
 }
 
-function variableDeclarator(variable: Variable): ESTree.VariableDeclarator | null {
-  if (variable.defs.length !== 1) return null;
-  const [definition] = variable.defs;
-  return definition?.type === "Variable" && definition.node.type === "VariableDeclarator"
-    ? definition.node
-    : null;
+// Local change: returns Option instead of null.
+function variableDeclarator(variable: Variable): Option.Option<ESTree.VariableDeclarator> {
+  if (variable.defs.length !== 1) return Option.none();
+  return Option.flatMap(Arr.head(variable.defs), (definition) => {
+    if (definition.type !== "Variable" || definition.node.type !== "VariableDeclarator") {
+      return Option.none();
+    }
+    return Option.some(definition.node);
+  });
 }
 
 function isStableConstVariable(variable: Variable, declarator: ESTree.VariableDeclarator): boolean {
@@ -47,6 +54,20 @@ function isStableConstVariable(variable: Variable, declarator: ESTree.VariableDe
   );
 }
 
+/**
+ * The initializer of a variable's single const declarator that is never reassigned.
+ * (Local change: split from hasKnownEvidence to read the Option-returning helpers.)
+ */
+function stableConstInitializer(variable: Variable): Option.Option<ESTree.Expression> {
+  return Option.flatMap(
+    Option.filter(variableDeclarator(variable), (declarator) =>
+      isStableConstVariable(variable, declarator),
+    ),
+    (declarator) => Option.fromNullishOr(declarator.init),
+  );
+}
+
+// Local change: reads the Option-returning resolveVariable and stableConstInitializer.
 function hasKnownEvidence(
   sourceCode: SourceCode,
   expression: ESTree.Expression,
@@ -56,41 +77,34 @@ function hasKnownEvidence(
   const unwrapped = unwrapExpression(expression);
   if (unwrapped.type !== "Identifier") return false;
   const variable = resolveVariable(sourceCode, unwrapped);
-  if (variable === null || visitedVariables.has(variable)) return false;
-  const declarator = variableDeclarator(variable);
-  if (
-    declarator === null ||
-    declarator.init === null ||
-    !isStableConstVariable(variable, declarator)
-  ) {
-    return false;
-  }
-  visitedVariables.add(variable);
-  return hasKnownEvidence(sourceCode, declarator.init, visitedVariables);
+  if (Option.isNone(variable) || visitedVariables.has(variable.value)) return false;
+  const initializer = stableConstInitializer(variable.value);
+  if (Option.isNone(initializer)) return false;
+  visitedVariables.add(variable.value);
+  return hasKnownEvidence(sourceCode, initializer.value, visitedVariables);
 }
 
+// Local change: takes the annotation and environment as Options instead of nullable values.
 function annotationTarget(
-  annotation: ESTree.TSTypeAnnotation | null | undefined,
-  environment: TypeEnvironment,
-): WideningTarget | null {
-  return annotation === null || annotation === undefined
-    ? null
-    : classifyWideningTarget(annotation.typeAnnotation, environment);
+  annotation: Option.Option<ESTree.TSTypeAnnotation>,
+  environment: Option.Option<TypeEnvironment>,
+): Option.Option<WideningTarget> {
+  return Option.flatMap(Option.all({ annotation, environment }), (present) =>
+    classifyWideningTarget(present.annotation.typeAnnotation, present.environment),
+  );
 }
 
-function enclosingFunction(node: ESTree.Node): FunctionExpression | null {
-  let current: ESTree.Node | null = node.parent;
-  while (current !== null && current.type !== "Program") {
-    if (
-      current.type === "ArrowFunctionExpression" ||
-      current.type === "FunctionDeclaration" ||
-      current.type === "FunctionExpression"
-    ) {
-      return current;
-    }
-    current = current.parent;
-  }
-  return null;
+function isFunctionExpression(node: ESTree.Node): node is FunctionExpression {
+  return (
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression"
+  );
+}
+
+// Local change: returns Option instead of null, searching ancestors().
+function enclosingFunction(node: ESTree.Node): Option.Option<FunctionExpression> {
+  return Arr.findFirst(ancestors(node), isFunctionExpression);
 }
 
 function sourceKeyName(sourceCode: SourceCode, key: ESTree.PropertyKey): string {
@@ -99,9 +113,17 @@ function sourceKeyName(sourceCode: SourceCode, key: ESTree.PropertyKey): string 
   return sourceCode.getText(key);
 }
 
-function functionName(sourceCode: SourceCode, owner: FunctionExpression | null): string {
-  if (owner === null) return "anonymous function";
-  if (owner.id !== null) return owner.id.name;
+// Local change: takes the owner as an Option instead of null.
+function functionName(sourceCode: SourceCode, owner: Option.Option<FunctionExpression>): string {
+  return Option.match(owner, {
+    onNone: () => "anonymous function",
+    onSome: (present) => ownerFunctionName(sourceCode, present),
+  });
+}
+
+// Local change: split from functionName for the present owner.
+function ownerFunctionName(sourceCode: SourceCode, owner: FunctionExpression): string {
+  if (Predicate.isNotNull(owner.id)) return owner.id.name;
   const parent = owner.parent;
   if (parent.type === "VariableDeclarator" && parent.id.type === "Identifier")
     return parent.id.name;
@@ -136,15 +158,17 @@ export const noKnownValueWidening = Rule.define({
   }),
   create: function* () {
     const context = yield* RuleContext;
-    let environment: TypeEnvironment | null = null;
+    // Local change: the environment is an Option until Program sets it.
+    let environment: Option.Option<TypeEnvironment> = Option.none();
 
     const reportFlow = (
       expression: ESTree.Expression,
-      destination: WideningTarget | null,
+      destination: Option.Option<WideningTarget>,
       subject: string,
     ) => {
-      if (destination === null) return Effect.void;
-      if (isDictionaryAccumulatorTarget(destination) && isEmptyObjectExpression(expression)) {
+      if (Option.isNone(destination)) return Effect.void;
+      const target = destination.value;
+      if (isDictionaryAccumulatorTarget(target) && isEmptyObjectExpression(expression)) {
         return Effect.void;
       }
       if (!hasKnownEvidence(context.sourceCode, expression)) return Effect.void;
@@ -152,61 +176,76 @@ export const noKnownValueWidening = Rule.define({
         Diagnostic.fromId({
           node: expression,
           messageId: "widening",
-          data: { subject, target: destination.kind },
+          data: { subject, target: target.kind },
         }),
       );
     };
 
-    const targetFromAnnotation = (annotation: ESTree.TSTypeAnnotation | null | undefined) =>
-      environment === null ? null : annotationTarget(annotation, environment);
+    // Local change: host annotations lift into Option at each call site.
+    const targetFromAnnotation = (annotation: Option.Option<ESTree.TSTypeAnnotation>) =>
+      annotationTarget(annotation, environment);
+
+    // Local change: both assertion forms share one handler without ternaries.
+    const reportAssertion = (node: ESTree.TSAsExpression | ESTree.TSTypeAssertion) => {
+      if (hasParentAssertion(node)) return Effect.void;
+      const target = Option.flatMap(environment, (present) =>
+        classifyWideningTarget(node.typeAnnotation, present),
+      );
+      return reportFlow(node.expression, target, "assertion");
+    };
 
     return {
       Program: (node: ESTree.Program) => {
-        environment = createTypeEnvironment(node, context.sourceCode.visitorKeys);
+        environment = Option.some(createTypeEnvironment(node, context.sourceCode.visitorKeys));
         return Effect.void;
       },
       VariableDeclarator: (node: ESTree.VariableDeclarator) => {
-        if (node.init === null || node.id.type !== "Identifier") return Effect.void;
+        if (Predicate.isNull(node.init) || node.id.type !== "Identifier") return Effect.void;
         return reportFlow(
           node.init,
-          targetFromAnnotation(node.id.typeAnnotation),
+          targetFromAnnotation(Option.fromNullishOr(node.id.typeAnnotation)),
           `binding \`${node.id.name}\``,
         );
       },
       PropertyDefinition: (node: ESTree.PropertyDefinition) => {
-        if (node.value === null) return Effect.void;
+        if (Predicate.isNull(node.value)) return Effect.void;
         return reportFlow(
           node.value,
-          targetFromAnnotation(node.typeAnnotation),
+          targetFromAnnotation(Option.fromNullishOr(node.typeAnnotation)),
           `property \`${sourceKeyName(context.sourceCode, node.key)}\``,
         );
       },
       AccessorProperty: (node: ESTree.AccessorProperty) => {
-        if (node.value === null) return Effect.void;
+        if (Predicate.isNull(node.value)) return Effect.void;
         return reportFlow(
           node.value,
-          targetFromAnnotation(node.typeAnnotation),
+          targetFromAnnotation(Option.fromNullishOr(node.typeAnnotation)),
           `property \`${sourceKeyName(context.sourceCode, node.key)}\``,
         );
       },
       AssignmentExpression: (node: ESTree.AssignmentExpression) => {
         if (node.operator !== "=" || node.left.type !== "Identifier") return Effect.void;
-        const variable = resolveVariable(context.sourceCode, node.left);
-        if (variable === null) return Effect.void;
-        const declarator = variableDeclarator(variable);
-        if (declarator === null || declarator.id.type !== "Identifier") return Effect.void;
+        const declarator = Option.flatMap(
+          resolveVariable(context.sourceCode, node.left),
+          variableDeclarator,
+        );
+        if (Option.isNone(declarator)) return Effect.void;
+        const { id } = declarator.value;
+        if (id.type !== "Identifier") return Effect.void;
         return reportFlow(
           node.right,
-          targetFromAnnotation(declarator.id.typeAnnotation),
-          `binding \`${declarator.id.name}\``,
+          targetFromAnnotation(Option.fromNullishOr(id.typeAnnotation)),
+          `binding \`${id.name}\``,
         );
       },
       ReturnStatement: (node: ESTree.ReturnStatement) => {
-        if (node.argument === null) return Effect.void;
+        if (Predicate.isNull(node.argument)) return Effect.void;
         const owner = enclosingFunction(node);
         return reportFlow(
           node.argument,
-          targetFromAnnotation(owner?.returnType),
+          targetFromAnnotation(
+            Option.flatMap(owner, (present) => Option.fromNullishOr(present.returnType)),
+          ),
           `return value of \`${functionName(context.sourceCode, owner)}\``,
         );
       },
@@ -214,26 +253,12 @@ export const noKnownValueWidening = Rule.define({
         if (node.body.type === "BlockStatement") return Effect.void;
         return reportFlow(
           node.body,
-          targetFromAnnotation(node.returnType),
-          `return value of \`${functionName(context.sourceCode, node)}\``,
+          targetFromAnnotation(Option.fromNullishOr(node.returnType)),
+          `return value of \`${functionName(context.sourceCode, Option.some(node))}\``,
         );
       },
-      TSAsExpression: (node: ESTree.TSAsExpression) =>
-        environment === null || hasParentAssertion(node)
-          ? Effect.void
-          : reportFlow(
-              node.expression,
-              classifyWideningTarget(node.typeAnnotation, environment),
-              "assertion",
-            ),
-      TSTypeAssertion: (node: ESTree.TSTypeAssertion) =>
-        environment === null || hasParentAssertion(node)
-          ? Effect.void
-          : reportFlow(
-              node.expression,
-              classifyWideningTarget(node.typeAnnotation, environment),
-              "assertion",
-            ),
+      TSAsExpression: reportAssertion,
+      TSTypeAssertion: reportAssertion,
     };
   },
 });

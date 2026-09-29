@@ -9,6 +9,7 @@
  */
 import type { CreateRule } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -25,13 +26,18 @@ const check = process.argv.includes("--check");
  * instead of re-implementing it. Its limit matches the cognitive limit.
  */
 /** Rule options the preset can carry: a flat object of JSON scalars, such as `{ max: 21 }`. */
-const RecommendedOptions = Schema.UndefinedOr(
-  Schema.Record(Schema.String, Schema.Union([Schema.Number, Schema.String, Schema.Boolean])),
+const RuleOptions = Schema.Record(
+  Schema.String,
+  Schema.Union([Schema.Number, Schema.String, Schema.Boolean]),
 );
+type RuleOptions = typeof RuleOptions.Type;
+
+/** A rule's `meta.docs.recommendedOptions`: absent when the preset enables it without options. */
+const RecommendedOptions = Schema.OptionFromUndefinedOr(RuleOptions);
 type RecommendedOptions = typeof RecommendedOptions.Type;
 
 const nativeRules: ReadonlyArray<readonly [name: string, options: RecommendedOptions]> = [
-  ["complexity", { max: 21 }],
+  ["complexity", Option.some({ max: 21 })],
 ];
 
 interface RuleEntry {
@@ -69,17 +75,22 @@ function detectCategory(content: string, fileName: string): string {
   return "AST pattern rules";
 }
 
-function extractExportName(content: string): string | null {
-  const match = content.match(/export const (\w+)/);
-  return match?.[1] ?? null;
+function extractExportName(content: string): Option.Option<string> {
+  return Option.fromNullishOr(content.match(/export const (\w+)/)?.[1]);
 }
 
 const files = readdirSync(RULES_DIR)
   .filter((f) => f.endsWith(".ts") && !f.startsWith("_") && f !== "index.ts")
   .sort();
 
+// The barrel re-exports each rule module whole, so a second export would
+// register as a plugin rule. Every rule module exports exactly its rule.
 const loadRecommendedOptions = (file: string, exportName: string) =>
   Effect.promise((): Promise<Record<string, CreateRule>> => import(join(RULES_DIR, file))).pipe(
+    Effect.filterOrFail(
+      (module) => Object.keys(module).length === 1 && exportName in module,
+      () => `${file} must export only ${exportName}`,
+    ),
     Effect.flatMap((module) =>
       Schema.decodeUnknownEffect(RecommendedOptions)(
         module[exportName]?.meta?.docs?.recommendedOptions,
@@ -90,105 +101,114 @@ const loadRecommendedOptions = (file: string, exportName: string) =>
 
 const loadEntry = (file: string) => {
   const content = readFileSync(join(RULES_DIR, file), "utf-8");
-  const exportName = extractExportName(content);
-  if (!exportName) {
-    console.warn(`⚠ No export found in ${file}, skipping`);
-    return Effect.succeed<ReadonlyArray<RuleEntry>>([]);
-  }
-  return loadRecommendedOptions(file, exportName).pipe(
-    Effect.map(
-      (recommendedOptions): ReadonlyArray<RuleEntry> => [
-        {
-          fileName: file.replace(".ts", ""),
-          exportName,
-          category: detectCategory(content, file),
-          recommendedOptions,
-        },
-      ],
-    ),
-  );
+  return Option.match(extractExportName(content), {
+    onNone: () => {
+      console.warn(`⚠ No export found in ${file}, skipping`);
+      return Effect.succeed<ReadonlyArray<RuleEntry>>([]);
+    },
+    onSome: (exportName) =>
+      loadRecommendedOptions(file, exportName).pipe(
+        Effect.map(
+          (recommendedOptions): ReadonlyArray<RuleEntry> => [
+            {
+              fileName: file.replace(".ts", ""),
+              exportName,
+              category: detectCategory(content, file),
+              recommendedOptions,
+            },
+          ],
+        ),
+      ),
+  });
 };
 
-const entries = (
-  await Effect.runPromise(Effect.forEach(files, loadEntry, { concurrency: 8 }))
-).flat();
-
 /** Render a flat options object the way oxfmt formats it: `{ max: 21 }`. */
-const formatOptions = (options: NonNullable<RecommendedOptions>): string => {
+const formatOptions = (options: RuleOptions): string => {
   const fields = Object.entries(options).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
   return `{ ${fields.join(", ")} }`;
 };
 
 /** Quote a preset key only when oxfmt would: plugin-prefixed names need quotes, bare names do not. */
-const presetKey = (name: string): string => (/^[A-Za-z_$][\w$]*$/u.test(name) ? name : `"${name}"`);
+const presetKey = (name: string): string => {
+  if (/^[A-Za-z_$][\w$]*$/u.test(name)) return name;
+  return `"${name}"`;
+};
 
 const presetEntry = (name: string, options: RecommendedOptions): string =>
-  options === undefined
-    ? `  ${presetKey(name)}: "error",`
-    : `  ${presetKey(name)}: ["error", ${formatOptions(options)}],`;
+  Option.match(options, {
+    onNone: () => `  ${presetKey(name)}: "error",`,
+    onSome: (ruleOptions) => `  ${presetKey(name)}: ["error", ${formatOptions(ruleOptions)}],`,
+  });
 
-// Group by category
-const grouped = new Map<string, RuleEntry[]>();
-for (const entry of entries) {
-  const list = grouped.get(entry.category) ?? [];
-  list.push(entry);
-  grouped.set(entry.category, list);
-}
+const main = Effect.gen(function* () {
+  const entries = (yield* Effect.forEach(files, loadEntry, { concurrency: 8 })).flat();
 
-// Build output
-const lines: string[] = [
-  "/**",
-  " * All Effect oxlint rules, exported by rule name for Plugin.define.",
-  " *",
-  " * AUTO-GENERATED by scripts/codegen.ts — do not edit manually.",
-  " */",
-  "",
-];
-
-for (const cat of categoryOrder) {
-  const catEntries = grouped.get(cat);
-  if (!catEntries || catEntries.length === 0) continue;
-  lines.push(`// --- ${cat} ---`);
-  for (const entry of catEntries) {
-    lines.push(`export { ${entry.exportName} } from "./${entry.fileName}.js";`);
+  // Group by category
+  const grouped = new Map<string, RuleEntry[]>();
+  for (const entry of entries) {
+    const list = grouped.get(entry.category) ?? [];
+    list.push(entry);
+    grouped.set(entry.category, list);
   }
-  lines.push("");
-}
 
-const indexOutput = lines.join("\n");
-const recommendedOutput = [
-  "/**",
-  " * Strict, non-type-aware policy for Effect-native application code.",
-  " *",
-  " * AUTO-GENERATED by scripts/codegen.ts — do not edit manually.",
-  " */",
-  "export const recommended = {",
-  ...nativeRules.map(([name, options]) => presetEntry(name, options)),
-  ...entries.map((entry) => presetEntry(`effect/${entry.exportName}`, entry.recommendedOptions)),
-  "} as const;",
-  "",
-].join("\n");
+  // Build output
+  const lines: string[] = [
+    "/**",
+    " * All Effect oxlint rules for Plugin.define. Each rule module exports only its rule, named by rule id.",
+    " *",
+    " * AUTO-GENERATED by scripts/codegen.ts — do not edit manually.",
+    " */",
+    "",
+  ];
 
-const generatedFiles = [
-  [INDEX_PATH, indexOutput],
-  [RECOMMENDED_PATH, recommendedOutput],
-] as const;
-
-if (check) {
-  const staleFiles = generatedFiles.flatMap(([path, expected]) =>
-    readFileSync(path, "utf-8") === expected ? [] : [path],
-  );
-  if (staleFiles.length > 0) {
-    console.error(`Generated files are stale:\n${staleFiles.join("\n")}`);
-    process.exit(1);
+  for (const cat of categoryOrder) {
+    const catEntries = grouped.get(cat);
+    if (!catEntries || catEntries.length === 0) continue;
+    lines.push(`// --- ${cat} ---`);
+    for (const entry of catEntries) {
+      lines.push(`export * from "./${entry.fileName}.js";`);
+    }
+    lines.push("");
   }
-  console.log(`✓ ${generatedFiles.length} generated files are current`);
-  process.exit(0);
-}
 
-for (const [path, output] of generatedFiles) writeFileSync(path, output);
+  const indexOutput = lines.join("\n");
+  const recommendedOutput = [
+    "/**",
+    " * Strict, non-type-aware policy for Effect-native application code.",
+    " *",
+    " * AUTO-GENERATED by scripts/codegen.ts — do not edit manually.",
+    " */",
+    "export const recommended = {",
+    ...nativeRules.map(([name, options]) => presetEntry(name, options)),
+    ...entries.map((entry) => presetEntry(`effect/${entry.exportName}`, entry.recommendedOptions)),
+    "} as const;",
+    "",
+  ].join("\n");
 
-console.log(`✓ Generated ${generatedFiles.length} files with ${entries.length} rules`);
-for (const [cat, catEntries] of grouped) {
-  console.log(`  ${cat}: ${catEntries.length}`);
-}
+  const generatedFiles = [
+    [INDEX_PATH, indexOutput],
+    [RECOMMENDED_PATH, recommendedOutput],
+  ] as const;
+
+  if (check) {
+    const staleFiles = generatedFiles.flatMap(([path, expected]) => {
+      if (readFileSync(path, "utf-8") === expected) return [];
+      return [path];
+    });
+    if (staleFiles.length > 0) {
+      console.error(`Generated files are stale:\n${staleFiles.join("\n")}`);
+      process.exit(1);
+    }
+    console.log(`✓ ${generatedFiles.length} generated files are current`);
+    process.exit(0);
+  }
+
+  for (const [path, output] of generatedFiles) writeFileSync(path, output);
+
+  console.log(`✓ Generated ${generatedFiles.length} files with ${entries.length} rules`);
+  for (const [cat, catEntries] of grouped) {
+    console.log(`  ${cat}: ${catEntries.length}`);
+  }
+});
+
+Effect.runPromise(main);

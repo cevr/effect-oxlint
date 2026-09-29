@@ -22,11 +22,16 @@ export const noReflectGet = Rule.define({
   create: function* () {
     const context = yield* RuleContext;
     return {
-      CallExpression: (node: ESTree.CallExpression) =>
-        node.callee.type !== "Super" &&
-        isGlobalReflectMethodCall(context.sourceCode, node.callee, "get")
-          ? context.report(Diagnostic.fromId({ node, messageId: "reflectGet" }))
-          : Effect.void,
+      // Local change: the report condition is an early return instead of a ternary.
+      CallExpression: (node: ESTree.CallExpression) => {
+        if (
+          node.callee.type === "Super" ||
+          !isGlobalReflectMethodCall(context.sourceCode, node.callee, "get")
+        ) {
+          return Effect.void;
+        }
+        return context.report(Diagnostic.fromId({ node, messageId: "reflectGet" }));
+      },
     };
   },
 });

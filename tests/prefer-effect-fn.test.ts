@@ -18,10 +18,10 @@ const directWithSpan = (namespace = "Effect") => {
       optional: false,
     },
     arguments: [Testing.strLiteral("Example.run")],
-  } as never;
+  };
 };
 
-const pipedWithSpan = (namespace = "Effect", withTransform = false) => {
+const pipedWithSpan = (namespace = "Effect", ...transforms: ReadonlyArray<string>) => {
   const generated = Testing.callOfMember(namespace, "gen", [Testing.arrowFn()]);
   return {
     type: "CallExpression",
@@ -33,10 +33,12 @@ const pipedWithSpan = (namespace = "Effect", withTransform = false) => {
       optional: false,
     },
     arguments: [
-      ...(withTransform ? [Testing.callOfMember(namespace, "map", [Testing.arrowFn()])] : []),
+      ...transforms.map((transform) =>
+        Testing.callOfMember(namespace, transform, [Testing.arrowFn()]),
+      ),
       Testing.callOfMember(namespace, "withSpan", [Testing.strLiteral("Example.run")]),
     ],
-  } as never;
+  };
 };
 
 describe("prefer Effect.fn", () => {
@@ -62,7 +64,7 @@ describe("prefer Effect.fn", () => {
     expect(
       Testing.runRuleMulti(preferEffectFn, [
         ["ImportDeclaration", effectImport("Fx")],
-        ["CallExpression", pipedWithSpan("Fx", true)],
+        ["CallExpression", pipedWithSpan("Fx", "map")],
       ]),
     ).toHaveLength(1);
   });

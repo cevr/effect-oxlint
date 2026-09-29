@@ -5,6 +5,7 @@
 import type { ESTree } from "@oxlint/plugins";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
 
 const forbiddenSymbolName = "shape";
 
@@ -12,14 +13,16 @@ function containsForbiddenSymbolName(name: string): boolean {
   return name.toLowerCase().includes(forbiddenSymbolName);
 }
 
+// Local change: Predicate.isNull replaces a null comparison.
 /** Return whether an identifier names a statically accessed member owned by another value. */
 function isBorrowedMemberName(node: ESTree.Node): boolean {
   const parent = node.parent;
-  if (parent === null || parent.type !== "MemberExpression") return false;
+  if (Predicate.isNull(parent) || parent.type !== "MemberExpression") return false;
   return parent.property === node && !parent.computed;
 }
 
 /** Ban the case-insensitive substring "shape" in every JavaScript and TypeScript symbol name. */
+// oxlint-disable-next-line effect/noShapeInSymbolNames -- the export name is the public rule id `effect/noShapeInSymbolNames`
 export const noShapeInSymbolNames = Rule.define({
   name: "no-shape-in-symbol-names",
   meta: Rule.meta({
@@ -33,16 +36,19 @@ export const noShapeInSymbolNames = Rule.define({
   }),
   create: function* () {
     const context = yield* RuleContext;
-    const reportForbiddenSymbolName = (node: ESTree.Node & { name: string }) =>
-      containsForbiddenSymbolName(node.name) && !isBorrowedMemberName(node)
-        ? context.report(
-            Diagnostic.fromId({
-              node,
-              messageId: "forbiddenSymbolName",
-              data: { name: node.name },
-            }),
-          )
-        : Effect.void;
+    // Local change: the ternary is an early return.
+    const reportForbiddenSymbolName = (node: ESTree.Node & { name: string }) => {
+      if (!containsForbiddenSymbolName(node.name) || isBorrowedMemberName(node)) {
+        return Effect.void;
+      }
+      return context.report(
+        Diagnostic.fromId({
+          node,
+          messageId: "forbiddenSymbolName",
+          data: { name: node.name },
+        }),
+      );
+    };
     return {
       Identifier: reportForbiddenSymbolName,
       PrivateIdentifier: reportForbiddenSymbolName,

@@ -1,6 +1,7 @@
 /** Construct shared caches in their owning layer, not on every operation call. */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { enclosingEffectProgram } from "./_effect-context.js";
@@ -45,8 +46,11 @@ export const noPerCallCacheConstruction = Rule.define({
       CallExpression: (node) => {
         if (node.type !== "CallExpression" || node.callee.type === "Super") return Effect.void;
         const effects = visibleNamespaces(ctx, node, effectNamespaces);
-        const program = enclosingEffectProgram(node, effects);
-        if (program === undefined || program[1] === "gen") return Effect.void;
+        const insideOperation = Option.exists(
+          enclosingEffectProgram(node, effects),
+          ([, kind]) => kind !== "gen",
+        );
+        if (!insideOperation) return Effect.void;
         const caches = visibleNamespaces(ctx, node, cacheNamespaces);
         const constructsCache =
           isOperation(node.callee, effects, cachedEffectOperations) ||

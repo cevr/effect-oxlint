@@ -15,7 +15,7 @@ const insideEffectFn = (expression: ReturnType<typeof Testing.callOfMember>) => 
   const body = Testing.blockStmt([statement]);
   const operation = Testing.arrowFn(body);
   const named = Testing.callOfMember("Effect", "fn", [Testing.strLiteral("Fixture.operation")]);
-  const wrapper = { type: "CallExpression", callee: named, arguments: [operation] } as never;
+  const wrapper = { type: "CallExpression", callee: named, arguments: [operation] };
   Object.defineProperty(expression, "parent", { value: statement });
   Object.defineProperty(statement, "parent", { value: body });
   Object.defineProperty(body, "parent", { value: operation });
@@ -54,7 +54,7 @@ describe("dependency ownership", () => {
 describe("flat sequencing", () => {
   test("rejects a directly yielded nested generator", () => {
     const nested = Testing.callOfMember("Effect", "gen", [Testing.arrowFn()]);
-    const yielded = { type: "YieldExpression", argument: nested, delegate: true } as never;
+    const yielded = { type: "YieldExpression", argument: nested, delegate: true };
     const body = Testing.blockStmt([Testing.exprStmt(yielded)]);
     const generator = {
       type: "FunctionExpression",
@@ -62,7 +62,7 @@ describe("flat sequencing", () => {
       body,
       generator: true,
       async: false,
-    } as never;
+    };
     const outer = Testing.callOfMember("Effect", "gen", [generator]);
     Object.defineProperty(nested, "parent", { value: yielded });
     Object.defineProperty(yielded, "parent", { value: body.body[0] });
@@ -73,7 +73,7 @@ describe("flat sequencing", () => {
   });
 
   test("rejects serial Effect.all only when its result is discarded", () => {
-    const steps = { type: "ArrayExpression", elements: [Testing.id("first")] } as never;
+    const steps = { type: "ArrayExpression", elements: [Testing.id("first")] };
     const discarded = Testing.callOfMember("Effect", "all", [
       steps,
       Testing.objectExpr([
@@ -140,7 +140,7 @@ describe("bounded streams", () => {
         Testing.callOfMember("Stream", "take", [Testing.numLiteral(10)]),
         Testing.memberExpr("Stream", "runCollect"),
       ],
-    } as never;
+    };
     expect(Testing.runRule(noRunCollectOnUnboundedStream, "CallExpression", pipe)).toHaveLength(0);
   });
 });

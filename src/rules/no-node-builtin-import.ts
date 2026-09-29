@@ -1,8 +1,10 @@
 /** Ban Node builtin capabilities only when Effect supplies a direct replacement. */
 import type { ESTree } from "@oxlint/plugins";
 import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 
 const replacedModules = new Map([
   ["child_process", "ChildProcessSpawner from 'effect/unstable/process'"],
@@ -42,48 +44,68 @@ const processOperations = new Set([
 type PartialModule = "crypto" | "process" | "subtle" | "webcrypto";
 
 const moduleBase = (source: string): string => {
-  const withoutPrefix = source.startsWith("node:") ? source.slice(5) : source;
-  return withoutPrefix.split("/")[0] ?? withoutPrefix;
+  let withoutPrefix = source;
+  if (source.startsWith("node:")) withoutPrefix = source.slice(5);
+  return Option.getOrElse(Arr.head(withoutPrefix.split("/")), () => withoutPrefix);
 };
 
-const importedName = (specifier: ESTree.ImportSpecifier): string =>
-  specifier.imported.type === "Identifier" ? specifier.imported.name : specifier.imported.value;
-
-const memberPath = (node: ESTree.MemberExpression): ReadonlyArray<string> | undefined => {
-  if (node.computed || node.property.type !== "Identifier") return undefined;
-  if (node.object.type === "Identifier") return [node.object.name, node.property.name];
-  if (node.object.type !== "MemberExpression") return undefined;
-  const parentPath = memberPath(node.object);
-  return parentPath === undefined ? undefined : [...parentPath, node.property.name];
+const importedName = (specifier: ESTree.ImportSpecifier): string => {
+  if (specifier.imported.type === "Identifier") return specifier.imported.name;
+  return specifier.imported.value;
 };
 
-const cryptoReplacement = (operation: string, path: ReadonlyArray<string>): string | undefined => {
-  if (cryptoOperations.has(operation) && path.length === 2) return "Crypto";
-  if (path.at(-2) === "webcrypto" && cryptoOperations.has(operation)) return "Crypto";
-  return operation === "digest" && path.at(-2) === "subtle" ? "Crypto.digest" : undefined;
+const memberPath = (node: ESTree.MemberExpression): Option.Option<ReadonlyArray<string>> => {
+  if (node.computed || node.property.type !== "Identifier") return Option.none();
+  const property = node.property.name;
+  if (node.object.type === "Identifier") return Option.some([node.object.name, property]);
+  if (node.object.type !== "MemberExpression") return Option.none();
+  return Option.map(memberPath(node.object), (parentPath) => [...parentPath, property]);
+};
+
+/** Whether the segment before the operation in `path` is `name`. */
+const followsSegment = (path: ReadonlyArray<string>, name: string): boolean =>
+  Option.contains(Arr.get(path, path.length - 2), name);
+
+const isDigestUnder = (operation: string, path: ReadonlyArray<string>, name: string): boolean =>
+  operation === "digest" && followsSegment(path, name);
+
+const cryptoReplacement = (operation: string, path: ReadonlyArray<string>): Option.Option<string> => {
+  if (cryptoOperations.has(operation) && path.length === 2) return Option.some("Crypto");
+  if (followsSegment(path, "webcrypto") && cryptoOperations.has(operation)) {
+    return Option.some("Crypto");
+  }
+  if (isDigestUnder(operation, path, "subtle")) return Option.some("Crypto.digest");
+  return Option.none();
+};
+
+const replacementFor = (
+  module: PartialModule,
+  operation: string,
+  path: ReadonlyArray<string>,
+): Option.Option<string> => {
+  if (module === "process") {
+    if (processOperations.has(operation) && path.length === 2) {
+      return Option.some("Config, Stdio, Clock, or Effect scheduling");
+    }
+    return Option.none();
+  }
+  if (module === "subtle") {
+    if (operation === "digest" && path.length === 2) return Option.some("Crypto.digest");
+    return Option.none();
+  }
+  if (module === "webcrypto") {
+    if (cryptoOperations.has(operation) && path.length === 2) return Option.some("Crypto");
+    if (isDigestUnder(operation, path, "subtle")) return Option.some("Crypto.digest");
+    return Option.none();
+  }
+  return cryptoReplacement(operation, path);
 };
 
 const partialReplacement = (
   module: PartialModule,
   path: ReadonlyArray<string>,
-): string | undefined => {
-  const operation = path.at(-1);
-  if (operation === undefined) return undefined;
-
-  if (module === "process") {
-    return processOperations.has(operation) && path.length === 2
-      ? "Config, Stdio, Clock, or Effect scheduling"
-      : undefined;
-  }
-  if (module === "subtle") {
-    return operation === "digest" && path.length === 2 ? "Crypto.digest" : undefined;
-  }
-  if (module === "webcrypto") {
-    if (cryptoOperations.has(operation) && path.length === 2) return "Crypto";
-    return operation === "digest" && path.at(-2) === "subtle" ? "Crypto.digest" : undefined;
-  }
-  return cryptoReplacement(operation, path);
-};
+): Option.Option<string> =>
+  Option.flatMap(Arr.last(path), (operation) => replacementFor(module, operation, path));
 
 export const noNodeBuiltinImport = Rule.define({
   name: "no-node-builtin-import",
@@ -101,16 +123,23 @@ export const noNodeBuiltinImport = Rule.define({
           message: `Avoid ${used}. Use ${alternative}; platform adapters may disable this rule explicitly.`,
         }),
       );
+    /** The partially replaced module a member path starts from, if its root is an alias. */
+    const aliasedModule = (path: ReadonlyArray<string>): Option.Option<PartialModule> =>
+      Option.flatMap(Arr.head(path), (alias) =>
+        Option.fromUndefinedOr(partialModuleByAlias.get(alias)),
+      );
 
     return {
       ImportDeclaration: (node) => {
-        const declaration = Option.getOrUndefined(AST.narrow(node, "ImportDeclaration"));
-        if (declaration === undefined) return Effect.void;
+        const narrowed = AST.narrow(node, "ImportDeclaration");
+        if (Option.isNone(narrowed)) return Effect.void;
+        const declaration = narrowed.value;
         const source = AST.importSource(declaration);
         const module = moduleBase(source);
         const alternative = replacedModules.get(module);
-        if (alternative !== undefined)
+        if (Predicate.isNotUndefined(alternative)) {
           return report(declaration, `importing '${source}'`, alternative);
+        }
         if (module !== "crypto" && module !== "process") return Effect.void;
 
         const diagnostics: Array<Effect.Effect<void>> = [];
@@ -141,20 +170,22 @@ export const noNodeBuiltinImport = Rule.define({
         }
         return Effect.all(diagnostics, { discard: true });
       },
-      MemberExpression: (node) => {
-        const member = Option.getOrUndefined(AST.narrow(node, "MemberExpression"));
-        if (member === undefined) return Effect.void;
-        const path = memberPath(member);
-        if (path === undefined) return Effect.void;
-        const alias = path[0];
-        if (alias === undefined) return Effect.void;
-        const module = partialModuleByAlias.get(alias);
-        if (module === undefined) return Effect.void;
-        const alternative = partialReplacement(module, path);
-        return alternative === undefined
-          ? Effect.void
-          : report(member, `${path.join(".")}`, alternative);
-      },
+      MemberExpression: (node) =>
+        Option.match(AST.narrow(node, "MemberExpression"), {
+          onNone: () => Effect.void,
+          onSome: (member) => {
+            const replacement = Option.flatMap(memberPath(member), (path) =>
+              Option.map(
+                Option.flatMap(aliasedModule(path), (module) => partialReplacement(module, path)),
+                (alternative) => ({ path, alternative }),
+              ),
+            );
+            return Option.match(replacement, {
+              onNone: () => Effect.void,
+              onSome: ({ path, alternative }) => report(member, `${path.join(".")}`, alternative),
+            });
+          },
+        }),
     };
   },
 });

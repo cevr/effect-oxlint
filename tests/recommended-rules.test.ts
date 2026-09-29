@@ -17,6 +17,7 @@ import {
   noTryCatch,
 } from "../src/rules/index.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
+import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
 
 describe("recommended preset", () => {
   test("enables the complete maintained rule set at error severity", () => {
@@ -79,52 +80,38 @@ describe("recommended preset", () => {
 
 describe("unconditional syntax", () => {
   test("rejects explicit nullish values and types", () => {
-    const diagnostics = Testing.runRule(noNullish, "Literal", {
-      type: "Literal",
-      value: null,
-    } as never);
+    const results = lintCases("noNullish", {
+      valid: ['const label = "available";', "const pattern = /[a&&b]/v;"],
+      invalid: [
+        "const missing = null;",
+        "const missing = undefined;",
+        "type Missing = null;",
+        "type Missing = undefined;",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+    expect(
+      lintFixtures("noNullish", { "value.ts": "const missing = null;" }).get("value.ts"),
+    ).toEqual([{ line: 1, message: expect.stringContaining("Use Option") }]);
+  });
 
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]?.diagnostic.message).toContain("Use Option");
-    expect(
-      Testing.runRule(noNullish, "TSNullKeyword", { type: "TSNullKeyword" } as never),
-    ).toHaveLength(1);
-    expect(
-      Testing.runRule(noNullish, "TSUndefinedKeyword", {
-        type: "TSUndefinedKeyword",
-      } as never),
-    ).toHaveLength(1);
-    expect(Testing.runRule(noNullish, "Literal", Testing.strLiteral("available"))).toHaveLength(0);
-    expect(
-      Testing.runRule(noNullish, "Literal", {
-        type: "Literal",
-        value: null,
-        regex: { flags: "v", pattern: "[a&&b]" },
-      } as never),
-    ).toHaveLength(0);
+  test("allows a regex literal whose value the host could not construct", () => {
+    // The host AST gives a regex it cannot compile in this runtime a null value.
+    const uncompilableRegex = {
+      type: "Literal",
+      // oxlint-disable-next-line effect/noNullish -- mirrors the host AST: an uncompilable regex literal has value null
+      value: null,
+      regex: { flags: "v", pattern: "[a&&b]" },
+    };
+    expect(Testing.runRule(noNullish, "Literal", uncompilableRegex)).toHaveLength(0);
   });
 
   test("allows null only as the Object.create prototype", () => {
-    const nullPrototype = {
-      type: "Literal",
-      value: null,
-    } as const;
-    const call = Testing.callOfMember("Object", "create", [nullPrototype]);
-    Object.assign(nullPrototype, { parent: call });
-
-    expect(Testing.runRule(noNullish, "Literal", nullPrototype as never)).toHaveLength(0);
-
-    const propertyValue = {
-      type: "Literal",
-      value: null,
-    } as const;
-    const callWithProperties = Testing.callOfMember("Object", "create", [
-      Testing.strLiteral("prototype"),
-      propertyValue,
-    ]);
-    Object.assign(propertyValue, { parent: callWithProperties });
-
-    expect(Testing.runRule(noNullish, "Literal", propertyValue as never)).toHaveLength(1);
+    const results = lintCases("noNullish", {
+      valid: ["const dictionary = Object.create(null);"],
+      invalid: ["const dictionary = Object.create(prototype, null);"],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
   test("rejects as assertions and allows satisfies expressions", () => {
@@ -132,7 +119,7 @@ describe("unconditional syntax", () => {
       type: "TSAsExpression",
       expression: Testing.id("value"),
       typeAnnotation: Testing.tsTypeRef("Expected"),
-    } as never;
+    };
     expect(Testing.runRule(noAs, "TSAsExpression", asExpression)).toHaveLength(1);
     expect(
       Testing.runRule(noAs, "TSAsExpression", Testing.tsAsExpr("TSUnknownKeyword")),
@@ -142,7 +129,7 @@ describe("unconditional syntax", () => {
       type: "TSSatisfiesExpression",
       expression: Testing.id("value"),
       typeAnnotation: Testing.tsTypeRef("Expected"),
-    } as never;
+    };
     expect(Testing.runRule(noAs, "TSSatisfiesExpression", satisfiesExpression)).toHaveLength(0);
   });
 
@@ -151,14 +138,14 @@ describe("unconditional syntax", () => {
       type: "TSAsExpression",
       expression: Testing.id("value"),
       typeAnnotation: Testing.tsTypeRef("const"),
-    } as never;
+    };
     expect(Testing.runRule(noAs, "TSAsExpression", constAssertion)).toHaveLength(0);
 
     const namedAssertion = {
       type: "TSAsExpression",
       expression: Testing.id("value"),
       typeAnnotation: Testing.tsTypeRef("Constant"),
-    } as never;
+    };
     expect(Testing.runRule(noAs, "TSAsExpression", namedAssertion)).toHaveLength(1);
   });
 
@@ -193,11 +180,11 @@ describe("unconditional syntax", () => {
   });
 
   test("rejects async functions and await", () => {
-    const asyncFunction = { ...Testing.arrowFn(), async: true } as never;
+    const asyncFunction = { ...Testing.arrowFn(), async: true };
     const awaitExpression = {
       type: "AwaitExpression",
       argument: Testing.callExpr("work"),
-    } as never;
+    };
     expect(Testing.runRule(noAsyncFunction, "ArrowFunctionExpression", asyncFunction)).toHaveLength(
       1,
     );
@@ -226,7 +213,7 @@ describe("unconditional syntax", () => {
       test: Testing.id("condition"),
       consequent: Testing.id("yes"),
       alternate: Testing.id("no"),
-    } as never;
+    };
     expect(Testing.runRule(noTernary, "ConditionalExpression", ternary)).toHaveLength(1);
     expect(Testing.runRule(noTernary, "IfStatement", Testing.ifStmt())).toHaveLength(0);
   });
@@ -295,7 +282,7 @@ describe("dynamic loading", () => {
     const imported = {
       type: "ImportExpression",
       source: Testing.strLiteral("./module.js"),
-    } as never;
+    };
     expect(Testing.runRule(noDynamicImports, "ImportExpression", imported)).toHaveLength(1);
     expect(
       Testing.runRule(
@@ -310,13 +297,13 @@ describe("dynamic loading", () => {
     const imported = {
       type: "ImportExpression",
       source: Testing.strLiteral("./module.js"),
-    } as never;
-    const awaited = { type: "AwaitExpression", argument: imported } as never;
+    };
+    const awaited = { type: "AwaitExpression", argument: imported };
     const binding = {
       type: "VariableDeclarator",
       id: Testing.id("moduleNamespace"),
       init: awaited,
-    } as never;
+    };
     Object.defineProperty(imported, "parent", { value: awaited });
     Object.defineProperty(awaited, "parent", { value: binding });
     expect(Testing.runRule(noDynamicImports, "ImportExpression", imported)).toHaveLength(0);
@@ -326,7 +313,7 @@ describe("dynamic loading", () => {
     const importedByEffect = {
       type: "ImportExpression",
       source: Testing.strLiteral("./module.js"),
-    } as never;
+    };
     const callback = Testing.arrowFn(importedByEffect);
     const boundary = Testing.callOfMember("Effect", "tryPromise", [callback]);
     Object.defineProperty(importedByEffect, "parent", { value: callback });
@@ -336,7 +323,7 @@ describe("dynamic loading", () => {
     const importedByBinding = {
       type: "ImportExpression",
       source: Testing.strLiteral("./module.js"),
-    } as never;
+    };
     const destructuring = {
       type: "VariableDeclarator",
       id: {
@@ -354,7 +341,7 @@ describe("dynamic loading", () => {
         ],
       },
       init: importedByBinding,
-    } as never;
+    };
     Object.defineProperty(importedByBinding, "parent", { value: destructuring });
     expect(Testing.runRule(noDynamicImports, "ImportExpression", importedByBinding)).toHaveLength(
       0,

@@ -36,7 +36,7 @@ describe("bounded concurrency", () => {
 
   test("allows an explicit fixed collection", () => {
     const call = Testing.callOfMember("Effect", "all", [
-      { type: "ArrayExpression", elements: [Testing.id("first"), Testing.id("second")] } as never,
+      { type: "ArrayExpression", elements: [Testing.id("first"), Testing.id("second")] },
       options,
     ]);
     expect(Testing.runRule(noUnboundedConcurrency, "CallExpression", call)).toHaveLength(0);
@@ -65,7 +65,7 @@ describe("bounded retry", () => {
         computed: false,
       },
       arguments: [Testing.callOfMember("Schedule", "take", [Testing.numLiteral(3)])],
-    } as never;
+    };
     const retry = Testing.callOfMember("Effect", "retry", [Testing.id("request"), schedule]);
     expect(Testing.runRule(noUnboundedRetry, "CallExpression", retry)).toHaveLength(0);
   });
@@ -81,7 +81,7 @@ describe("ManagedRuntime ownership", () => {
       body,
       generator: true,
       async: false,
-    } as never;
+    };
     const program = Testing.callOfMember("Effect", "gen", [generator]);
     Object.defineProperty(make, "parent", { value: body.body[0] });
     Object.defineProperty(body.body[0], "parent", { value: body });

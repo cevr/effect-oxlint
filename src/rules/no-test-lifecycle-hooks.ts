@@ -1,5 +1,4 @@
 /** Ban test lifecycle hooks in favor of Effect scopes and scoped test variants. */
-import type { ESTree } from "@oxlint/plugins";
 import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -20,12 +19,13 @@ export const noTestLifecycleHooks = Rule.define({
         Option.match(AST.narrow(node, "CallExpression"), {
           onNone: () => Effect.void,
           onSome: (call) => {
-            const name = Option.getOrUndefined(AST.calleeName(call));
-            if (name === undefined || !lifecycleHooks.has(name)) return Effect.void;
+            const hook = Option.filter(AST.calleeName(call), (name) => lifecycleHooks.has(name));
+            if (Option.isNone(hook)) return Effect.void;
+            const name = hook.value;
 
             return ctx.report(
               Diagnostic.make({
-                node: call as ESTree.Node,
+                node: call,
                 message: `Avoid ${name}(). Use effect-bun-test scoped tests and Effect.acquireRelease for fixture lifecycles.`,
               }),
             );

@@ -7,31 +7,45 @@ import * as Option from "effect/Option";
 type TestApi = "jest" | "vi";
 
 const bannedMethods = new Set(["mock", "spyOn"]);
-const identifierName = (node: ESTree.Node | null | undefined): string | undefined => {
-  if (node?.type === "Identifier") return node.name;
-  return undefined;
+const identifierName = (node: ESTree.Node): Option.Option<string> => {
+  if (node.type === "Identifier") return Option.some(node.name);
+  return Option.none();
 };
 
-const globalTestApi = (name: string): TestApi | undefined => {
-  if (name === "jest" || name === "vi") return name;
-  return undefined;
+const globalTestApi = (name: string): Option.Option<TestApi> => {
+  if (name === "jest" || name === "vi") return Option.some(name);
+  return Option.none();
 };
 
-const importedTestApi = (source: string, imported: string): TestApi | undefined => {
-  if (source === "vitest" && imported === "vi") return "vi";
-  if (source === "@jest/globals" && imported === "jest") return "jest";
-  return undefined;
+const importedTestApi = (source: string, imported: string): Option.Option<TestApi> => {
+  if (source === "vitest" && imported === "vi") return Option.some("vi");
+  if (source === "@jest/globals" && imported === "jest") return Option.some("jest");
+  return Option.none();
 };
 
 const testApiFromVariable = (
   variable: Variable,
   importedBindings: ReadonlyMap<string, TestApi>,
-): TestApi | undefined => {
+): Option.Option<TestApi> => {
   if (variable.defs.some((definition) => definition.type === "ImportBinding")) {
-    return importedBindings.get(variable.name);
+    return Option.fromUndefinedOr(importedBindings.get(variable.name));
   }
-  return undefined;
+  return Option.none();
 };
+
+/** The test API an `object` names: an imported binding, or the unshadowed global. */
+const resolveTestApi = (
+  binding: Option.Option<Variable>,
+  object: string,
+  importedBindings: ReadonlyMap<string, TestApi>,
+): Option.Option<TestApi> =>
+  Option.match(binding, {
+    onNone: () => globalTestApi(object),
+    onSome: (variable) =>
+      Option.orElse(testApiFromVariable(variable, importedBindings), () =>
+        Option.filter(globalTestApi(object), () => variable.defs.length === 0),
+      ),
+  });
 
 export const noModuleMocks = Rule.define({
   name: "no-module-mocks",
@@ -51,10 +65,10 @@ export const noModuleMocks = Rule.define({
             const source = AST.importSource(declaration);
             for (const specifier of declaration.specifiers) {
               if (specifier.type !== "ImportSpecifier") continue;
-              const imported = identifierName(specifier.imported);
-              if (imported === undefined) continue;
-              const api = importedTestApi(source, imported);
-              if (api !== undefined) importedBindings.set(specifier.local.name, api);
+              const api = Option.flatMap(identifierName(specifier.imported), (imported) =>
+                importedTestApi(source, imported),
+              );
+              if (Option.isSome(api)) importedBindings.set(specifier.local.name, api.value);
             }
             return Effect.void;
           },
@@ -64,25 +78,20 @@ export const noModuleMocks = Rule.define({
           onNone: () => Effect.void,
           onSome: (call) => {
             if (call.callee.type !== "MemberExpression") return Effect.void;
-            const names = Option.getOrUndefined(AST.memberNames(call.callee));
-            if (names === undefined) return Effect.void;
-            const [object, method] = names;
-            if (!bannedMethods.has(method)) return Effect.void;
-
-            const variable = Option.getOrUndefined(
-              Scope.findVariableUp(context.sourceCode.getScope(call), object),
+            const names = Option.filter(AST.memberNames(call.callee), ([, method]) =>
+              bannedMethods.has(method),
             );
-            let api = globalTestApi(object);
-            if (variable !== undefined) {
-              api = testApiFromVariable(variable, importedBindings);
-              if (api === undefined && variable.defs.length === 0) api = globalTestApi(object);
-            }
-            if (api === undefined) return Effect.void;
+            if (Option.isNone(names)) return Effect.void;
+            const [object, method] = names.value;
+
+            const variable = Scope.findVariableUp(context.sourceCode.getScope(call), object);
+            const api = resolveTestApi(variable, object, importedBindings);
+            if (Option.isNone(api)) return Effect.void;
 
             return context.report(
               Diagnostic.make({
                 node: call,
-                message: `Avoid ${api}.${method}(). Replace the external boundary with an Effect service test Layer.`,
+                message: `Avoid ${api.value}.${method}(). Replace the external boundary with an Effect service test Layer.`,
               }),
             );
           },

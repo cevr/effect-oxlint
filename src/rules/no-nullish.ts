@@ -3,6 +3,7 @@ import type { ESTree } from "@oxlint/plugins";
 import { AST, Diagnostic, Rule, RuleContext, SourceCode } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 
 const message =
   "Avoid null and undefined. Use Option for presence or absence. Use a domain enum when the state has more than two cases.";
@@ -44,12 +45,16 @@ export const noNullish = Rule.define({
       Literal: (node) =>
         Option.match(AST.narrow(node, "Literal"), {
           onNone: () => Effect.void,
-          onSome: (literal) =>
-            literal.value === null &&
-            !("regex" in literal) &&
-            !isNullPrototypeArgument(literal)
-              ? report(literal)
-              : Effect.void,
+          onSome: (literal) => {
+            if (
+              !Predicate.isNull(literal.value) ||
+              "regex" in literal ||
+              isNullPrototypeArgument(literal)
+            ) {
+              return Effect.void;
+            }
+            return report(literal);
+          },
         }),
       TSNullKeyword: (node) =>
         Option.match(AST.narrow(node, "TSNullKeyword"), {

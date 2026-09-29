@@ -15,7 +15,11 @@
  * and every name or literal is an operand.
  */
 import type { ESTree } from "@oxlint/plugins";
-import { childNodesAt } from "./_ast-children.js";
+import * as Arr from "effect/Array";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+
+import { childNodesAt, isAstNode } from "./_ast-children.js";
 
 export type FunctionNode = ESTree.ArrowFunctionExpression | ESTree.Function;
 
@@ -49,8 +53,7 @@ interface AnyNode {
   readonly property?: unknown;
 }
 
-const isNode = (value: unknown): value is AnyNode =>
-  typeof value === "object" && value !== null && "type" in value && typeof value.type === "string";
+const isNode = (value: unknown): value is AnyNode => isAstNode(value);
 
 const isFunctionType = (type: string): boolean =>
   type === "ArrowFunctionExpression" ||
@@ -151,7 +154,8 @@ export const cognitiveComplexity = (fn: FunctionNode): number => {
   };
 
   const visitIf = (node: AnyNode, nesting: number, isElseIf: boolean): void => {
-    total += isElseIf ? 1 : 1 + nesting;
+    total += 1;
+    if (!isElseIf) total += nesting;
     visitSlot(node, "test", nesting);
     visitSlot(node, "consequent", nesting + 1);
     for (const alternate of slot(node, "alternate")) {
@@ -243,21 +247,38 @@ export const halsteadDifficulty = (counts: HalsteadCounts): number => {
 
 const functionOperator = (node: AnyNode): string => {
   if (node.type === "ArrowFunctionExpression") return "=>";
-  return node.generator === true ? "function*" : "function";
+  if (node.generator === true) return "function*";
+  return "function";
 };
 
 const literalOperand = (node: AnyNode): string => {
-  if (typeof node.raw === "string") return node.raw;
-  if (typeof node.bigint === "string") return `${node.bigint}n`;
+  if (Predicate.isString(node.raw)) return node.raw;
+  if (Predicate.isString(node.bigint)) return `${node.bigint}n`;
   return String(node.value);
 };
 
-const templateOperand = (node: AnyNode): string | null => {
+const isNonEmpty = (text: string): boolean => text.length > 0;
+
+const templateOperand = (node: AnyNode): Option.Option<string> => {
   const value = node.value;
-  if (typeof value !== "object" || value === null) return null;
-  const raw = (value as { raw?: unknown }).raw;
-  return typeof raw === "string" && raw.length > 0 ? raw : null;
+  if (!Predicate.hasProperty(value, "raw") || !Predicate.isString(value.raw)) {
+    return Option.none();
+  }
+  return Option.liftPredicate(value.raw, isNonEmpty);
 };
+
+/** `tokens` when `present`, otherwise none: the operator tokens of an optional clause. */
+const tokensIf = (present: boolean, ...tokens: ReadonlyArray<string>): ReadonlyArray<string> => {
+  if (!present) return [];
+  return tokens;
+};
+
+/** The `name` of the node held in a slot, or empty when the slot holds none. */
+const slotName = (node: AnyNode, key: string): string =>
+  Option.match(Arr.head(slot(node, key)), {
+    onNone: () => "",
+    onSome: (child) => String(child.name),
+  });
 
 /** Node types that always stand for the same operator tokens. */
 const fixedOperators = new Map<string, ReadonlyArray<string>>([
@@ -304,25 +325,38 @@ const operatorCarriers = new Set([
 const statementOperators = (node: AnyNode): ReadonlyArray<string> => {
   switch (node.type) {
     case "IfStatement":
-      return isNode(node.alternate) ? ["if", "else"] : ["if"];
+      return ["if", ...tokensIf(isNode(node.alternate), "else")];
     case "ForOfStatement":
-      return node.await === true ? ["for-await-of"] : ["for-of"];
+      if (node.await === true) return ["for-await-of"];
+      return ["for-of"];
     case "SwitchCase":
-      return isNode(node.test) ? ["case"] : ["default"];
+      if (isNode(node.test)) return ["case"];
+      return ["default"];
     case "TryStatement":
-      return isNode(node.finalizer) ? ["try", "finally"] : ["try"];
+      return ["try", ...tokensIf(isNode(node.finalizer), "finally")];
     case "VariableDeclaration":
       return [String(node.kind)];
     case "VariableDeclarator":
-      return isNode(node.init) ? ["="] : [];
+      return tokensIf(isNode(node.init), "=");
     case "ClassDeclaration":
     case "ClassExpression":
-      return isNode(node.superClass) ? ["class", "extends"] : ["class"];
+      return ["class", ...tokensIf(isNode(node.superClass), "extends")];
     case "PropertyDefinition":
-      return isNode(node.value) ? ["="] : [];
+      return tokensIf(isNode(node.value), "=");
     default:
       return [];
   }
+};
+
+/** `?.` calls and accesses carry a leading `?`. */
+const optionalMark = (node: AnyNode): string => {
+  if (node.optional === true) return "?";
+  return "";
+};
+
+const memberAccess = (node: AnyNode): string => {
+  if (node.computed === true) return "[]";
+  return ".";
 };
 
 /** Expression-level nodes whose operator tokens depend on the node's shape. */
@@ -330,22 +364,21 @@ const expressionOperators = (node: AnyNode): ReadonlyArray<string> => {
   if (operatorCarriers.has(node.type)) return [String(node.operator)];
   switch (node.type) {
     case "CallExpression":
-      return node.optional === true ? ["?.()"] : ["()"];
-    case "MemberExpression": {
-      const access = node.computed === true ? "[]" : ".";
-      return node.optional === true ? [`?${access}`] : [access];
-    }
+      return [`${optionalMark(node)}()`];
+    case "MemberExpression":
+      return [`${optionalMark(node)}${memberAccess(node)}`];
     case "Property":
       if (node.kind === "get" || node.kind === "set") return [String(node.kind)];
-      return node.shorthand === true || node.method === true ? [] : [":"];
+      return tokensIf(node.shorthand !== true && node.method !== true, ":");
     case "YieldExpression":
-      return node.delegate === true ? ["yield*"] : ["yield"];
+      if (node.delegate === true) return ["yield*"];
+      return ["yield"];
     case "JSXAttribute":
-      return isNode(node.value) ? ["="] : [];
+      return tokensIf(isNode(node.value), "=");
     case "ArrowFunctionExpression":
     case "FunctionDeclaration":
     case "FunctionExpression":
-      return node.async === true ? ["async", functionOperator(node)] : [functionOperator(node)];
+      return [...tokensIf(node.async === true, "async"), functionOperator(node)];
     default:
       return [];
   }
@@ -359,32 +392,27 @@ const operatorsOf = (node: AnyNode): ReadonlyArray<string> => [
 ];
 
 /** The operand a leaf node contributes, if any. */
-const operandOf = (node: AnyNode): string | null => {
+const operandOf = (node: AnyNode): Option.Option<string> => {
   switch (node.type) {
     case "Identifier":
     case "JSXIdentifier":
-      return String(node.name);
+      return Option.some(String(node.name));
     case "PrivateIdentifier":
-      return `#${String(node.name)}`;
+      return Option.some(`#${String(node.name)}`);
     case "Literal":
-      return literalOperand(node);
+      return Option.some(literalOperand(node));
     case "TemplateElement":
       return templateOperand(node);
     case "ThisExpression":
-      return "this";
+      return Option.some("this");
     case "Super":
-      return "super";
-    case "MetaProperty": {
-      const meta = isNode(node.meta) ? String(node.meta.name) : "";
-      const property = isNode(node.property) ? String(node.property.name) : "";
-      return `${meta}.${property}`;
-    }
-    case "JSXText": {
-      const text = String(node.value).trim();
-      return text.length > 0 ? text : null;
-    }
+      return Option.some("super");
+    case "MetaProperty":
+      return Option.some(`${slotName(node, "meta")}.${slotName(node, "property")}`);
+    case "JSXText":
+      return Option.liftPredicate(String(node.value).trim(), isNonEmpty);
     default:
-      return null;
+      return Option.none();
   }
 };
 
@@ -404,7 +432,7 @@ export const halstead = (fn: FunctionNode): HalsteadCounts => {
     if (isTypeOnly(node)) return;
     for (const operator of operatorsOf(node)) tally(operators, operator);
     const operand = operandOf(node);
-    if (operand !== null) tally(operands, operand);
+    if (Option.isSome(operand)) tally(operands, operand.value);
     if (isFunctionType(node.type) || node.type === "MetaProperty") return;
     for (const child of children(node)) visit(child);
   };

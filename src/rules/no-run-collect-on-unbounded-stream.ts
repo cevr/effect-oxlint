@@ -1,8 +1,10 @@
 /** Do not collect a clearly unbounded Stream without a terminating operation. */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { expressionArgument } from "./_call-arguments.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
 
 const unboundedSources = new Set(["fromPubSub", "fromPubSubTake", "fromQueue", "repeat"]);
@@ -18,71 +20,63 @@ const terminatingOperations = new Set([
 ]);
 
 const staticOperation = (
-  node: ESTree.CallExpression["arguments"][number],
+  node: ESTree.Argument,
   streamNamespaces: ReadonlySet<string>,
   operations: ReadonlySet<string>,
 ): boolean => {
   if (node.type === "SpreadElement") return false;
-  const candidate =
-    node.type === "CallExpression" && node.callee.type !== "Super" ? node.callee : node;
+  let candidate: ESTree.Expression = node;
+  if (node.type === "CallExpression" && node.callee.type !== "Super") candidate = node.callee;
   for (const operation of operations) {
     if (isStaticMember(candidate, streamNamespaces, operation)) return true;
   }
   return false;
 };
 
+const isPipeMember = (node: ESTree.Expression): node is ESTree.MemberExpression =>
+  node.type === "MemberExpression" &&
+  !node.computed &&
+  node.property.type === "Identifier" &&
+  node.property.name === "pipe";
+
+const pipesTerminatingOperation = (
+  node: ESTree.CallExpression,
+  streamNamespaces: ReadonlySet<string>,
+): boolean =>
+  node.arguments.some((operation) =>
+    staticOperation(operation, streamNamespaces, terminatingOperations),
+  );
+
 const unboundedRoot = (
   node: ESTree.Expression,
   streamNamespaces: ReadonlySet<string>,
-): ESTree.Node | undefined => {
-  if (node.type !== "CallExpression" || node.callee.type === "Super") return undefined;
+): Option.Option<ESTree.Node> => {
+  if (node.type !== "CallExpression" || node.callee.type === "Super") return Option.none();
   for (const source of unboundedSources) {
-    if (isStaticMember(node.callee, streamNamespaces, source)) return node;
+    if (isStaticMember(node.callee, streamNamespaces, source)) return Option.some(node);
   }
-  if (
-    node.callee.type !== "MemberExpression" ||
-    node.callee.computed ||
-    node.callee.property.type !== "Identifier" ||
-    node.callee.property.name !== "pipe"
-  ) {
-    return undefined;
-  }
-  const root = unboundedRoot(node.callee.object, streamNamespaces);
-  if (root === undefined) return undefined;
-  for (const operation of node.arguments) {
-    if (staticOperation(operation, streamNamespaces, terminatingOperations)) return undefined;
-  }
-  return root;
+  if (!isPipeMember(node.callee)) return Option.none();
+  return Option.filter(
+    unboundedRoot(node.callee.object, streamNamespaces),
+    () => !pipesTerminatingOperation(node, streamNamespaces),
+  );
 };
 
 const collectedSource = (
   node: ESTree.CallExpression,
   streamNamespaces: ReadonlySet<string>,
-): ESTree.Expression | undefined => {
-  if (node.callee.type === "Super") return undefined;
+): Option.Option<ESTree.Expression> => {
+  if (node.callee.type === "Super") return Option.none();
   const dataFirstRunCollect: boolean = isStaticMember(node.callee, streamNamespaces, "runCollect");
-  if (dataFirstRunCollect) {
-    const source = node.arguments[0];
-    if (source !== undefined && source.type !== "SpreadElement") return source;
-    return undefined;
+  if (dataFirstRunCollect) return expressionArgument(node, 0);
+  if (!isPipeMember(node.callee) || pipesTerminatingOperation(node, streamNamespaces)) {
+    return Option.none();
   }
-  if (
-    node.callee.type !== "MemberExpression" ||
-    node.callee.computed ||
-    node.callee.property.type !== "Identifier" ||
-    node.callee.property.name !== "pipe"
-  ) {
-    return undefined;
-  }
-  for (const operation of node.arguments) {
-    if (staticOperation(operation, streamNamespaces, terminatingOperations)) return undefined;
-  }
-  for (const operation of node.arguments) {
-    if (staticOperation(operation, streamNamespaces, collectOperations)) {
-      return node.callee.object;
-    }
-  }
-  return undefined;
+  const collects = node.arguments.some((operation) =>
+    staticOperation(operation, streamNamespaces, collectOperations),
+  );
+  if (!collects) return Option.none();
+  return Option.some(node.callee.object);
 };
 
 export const noRunCollectOnUnboundedStream = Rule.define({
@@ -106,17 +100,20 @@ export const noRunCollectOnUnboundedStream = Rule.define({
       CallExpression: (node) => {
         if (node.type !== "CallExpression") return Effect.void;
         const namespaces = visibleNamespaces(ctx, node, streamNamespaces);
-        const source = collectedSource(node, namespaces);
-        if (source === undefined) return Effect.void;
-        const root = unboundedRoot(source, namespaces);
-        if (root === undefined) return Effect.void;
-        return ctx.report(
-          Diagnostic.make({
-            node: root,
-            message:
-              "Do not collect a clearly unbounded Stream. Add a terminating operation or consume it with runForEach or runDrain.",
-          }),
+        const root = Option.flatMap(collectedSource(node, namespaces), (source) =>
+          unboundedRoot(source, namespaces),
         );
+        return Option.match(root, {
+          onNone: () => Effect.void,
+          onSome: (stream) =>
+            ctx.report(
+              Diagnostic.make({
+                node: stream,
+                message:
+                  "Do not collect a clearly unbounded Stream. Add a terminating operation or consume it with runForEach or runDrain.",
+              }),
+            ),
+        });
       },
     };
   },

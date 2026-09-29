@@ -1,9 +1,13 @@
 /** Construct acquireRelease resources inside the acquire Effect, not before it. */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext, Scope } from "../vendor/effect-oxlint/index.js";
+import { ancestors } from "./_ast-ancestors.js";
+import { expressionArgument } from "./_call-arguments.js";
 import { importedNamespaces, isStaticCall, visibleNamespaces } from "./_effect-namespaces.js";
 
 type Thunk = ESTree.ArrowFunctionExpression | ESTree.Function;
@@ -23,24 +27,26 @@ const unwrapExpression = (node: ESTree.Expression): ESTree.Expression => {
 };
 
 const isWithin = (node: ESTree.Node, ancestor: ESTree.Node): boolean => {
-  let current: ESTree.Node | null = node;
-  while (current !== null) {
+  if (node === ancestor) return true;
+  for (const current of ancestors(node)) {
     if (current === ancestor) return true;
-    current = current.parent;
   }
   return false;
 };
 
-const singleReturnedValue = (thunk: Thunk): ESTree.Expression | undefined => {
+const isThunk = (node: ESTree.Expression): node is Thunk =>
+  node.type === "ArrowFunctionExpression" || node.type === "FunctionExpression";
+
+/** The value a thunk returns, when its body is an expression or holds exactly one return. */
+const singleReturnedValue = (thunk: Thunk): Option.Option<ESTree.Expression> => {
   const body = thunk.body;
-  if (body === null) return undefined;
-  if (body.type !== "BlockStatement") return body;
+  if (Predicate.isNull(body)) return Option.none();
+  if (body.type !== "BlockStatement") return Option.some(body);
   const returns = body.body.filter(
     (statement): statement is ESTree.ReturnStatement => statement.type === "ReturnStatement",
   );
-  const [returned] = returns;
-  if (returns.length !== 1 || returned === undefined) return undefined;
-  return returned.argument ?? undefined;
+  if (returns.length !== 1) return Option.none();
+  return Option.flatMap(Arr.head(returns), (returned) => Option.fromNullOr(returned.argument));
 };
 
 export const noEagerAcquire = Rule.define({
@@ -68,24 +74,38 @@ export const noEagerAcquire = Rule.define({
       if (value.type !== "Identifier") return false;
       return Option.match(Scope.findVariableUp(ctx.sourceCode.getScope(value), value.name), {
         onNone: () => true,
-        onSome: (variable) => {
-          const [definition] = variable.defs;
-          if (definition === undefined) return true;
-          if (seen.has(definition.node)) return false;
-          seen.add(definition.node);
-          if (!isWithin(definition.node, thunk)) return true;
-          if (definition.node.type === "VariableDeclarator") {
-            return definition.node.init !== null && isCaptured(definition.node.init, thunk, seen);
-          }
-          const defaulted = thunk.params.find(
-            (parameter): parameter is ESTree.AssignmentPattern =>
-              parameter.type === "AssignmentPattern" &&
-              parameter.left.type === "Identifier" &&
-              parameter.left.name === value.name,
-          );
-          return defaulted !== undefined && isCaptured(defaulted.right, thunk, seen);
-        },
+        onSome: (variable) =>
+          Option.match(Arr.head(variable.defs), {
+            onNone: () => true,
+            onSome: (definition) => isCapturedDefinition(definition.node, value.name, thunk, seen),
+          }),
       });
+    };
+
+    /** Whether a binding's definition holds a value that exists before the thunk runs. */
+    const isCapturedDefinition = (
+      definition: ESTree.Node,
+      name: string,
+      thunk: Thunk,
+      seen: Set<ESTree.Node>,
+    ): boolean => {
+      if (seen.has(definition)) return false;
+      seen.add(definition);
+      if (!isWithin(definition, thunk)) return true;
+      if (definition.type === "VariableDeclarator") {
+        const init = definition.init;
+        return Predicate.isNotNull(init) && isCaptured(init, thunk, seen);
+      }
+      return Option.exists(
+        Arr.findFirst(
+          thunk.params,
+          (parameter): parameter is ESTree.AssignmentPattern =>
+            parameter.type === "AssignmentPattern" &&
+            parameter.left.type === "Identifier" &&
+            parameter.left.name === name,
+        ),
+        (defaulted) => isCaptured(defaulted.right, thunk, seen),
+      );
     };
 
     const returnsCapturedHandle = (
@@ -93,14 +113,15 @@ export const noEagerAcquire = Rule.define({
       effects: ReadonlySet<string>,
     ): boolean => {
       if (!isStaticCall(expression, effects, "sync")) return false;
-      const [argument] = expression.arguments;
-      if (argument === undefined || argument.type === "SpreadElement") return false;
-      const thunk = unwrapExpression(argument);
-      if (thunk.type !== "ArrowFunctionExpression" && thunk.type !== "FunctionExpression") {
-        return false;
-      }
-      const returned = singleReturnedValue(thunk);
-      return returned !== undefined && isCaptured(returned, thunk, new Set());
+      const thunk = Option.filter(
+        Option.map(expressionArgument(expression, 0), unwrapExpression),
+        isThunk,
+      );
+      return Option.exists(thunk, (lazy) =>
+        Option.exists(singleReturnedValue(lazy), (returned) =>
+          isCaptured(returned, lazy, new Set()),
+        ),
+      );
     };
 
     return {
@@ -114,22 +135,24 @@ export const noEagerAcquire = Rule.define({
         if (node.callee.type === "Super") return Effect.void;
         const effects = visibleNamespaces(ctx, node, effectNamespaces);
         if (!isStaticCall(node, effects, "acquireRelease")) return Effect.void;
-        const [acquire] = node.arguments;
-        if (acquire === undefined || acquire.type === "SpreadElement") return Effect.void;
-        const expression = unwrapExpression(acquire);
-        if (
-          !isStaticCall(expression, effects, "succeed") &&
-          !returnsCapturedHandle(expression, effects)
-        ) {
-          return Effect.void;
-        }
-        return ctx.report(
-          Diagnostic.make({
-            node: acquire,
-            message:
-              "Build the resource inside acquire (Effect.sync(() => new Resource()), Effect.tryPromise, or another lazy Effect). Effect.succeed(handle) or Effect.sync(() => handle) creates it before acquire runs, so an interruption in between leaks it.",
-          }),
-        );
+        const eagerAcquire = Option.filter(expressionArgument(node, 0), (acquire) => {
+          const expression = unwrapExpression(acquire);
+          return (
+            isStaticCall(expression, effects, "succeed") ||
+            returnsCapturedHandle(expression, effects)
+          );
+        });
+        return Option.match(eagerAcquire, {
+          onNone: () => Effect.void,
+          onSome: (acquire) =>
+            ctx.report(
+              Diagnostic.make({
+                node: acquire,
+                message:
+                  "Build the resource inside acquire (Effect.sync(() => new Resource()), Effect.tryPromise, or another lazy Effect). Effect.succeed(handle) or Effect.sync(() => handle) creates it before acquire runs, so an interruption in between leaks it.",
+              }),
+            ),
+        });
       },
     };
   },

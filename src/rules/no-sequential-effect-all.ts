@@ -1,34 +1,48 @@
 /** Use explicit sequencing when Effect.all discards a serial result. */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { expressionArgument, staticProperties } from "./_call-arguments.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
 
-const propertyLiteral = (
-  node: ESTree.CallExpression["arguments"][number] | undefined,
-  name: string,
-): string | number | boolean | null | undefined => {
-  if (node?.type !== "ObjectExpression") return undefined;
-  for (const property of node.properties) {
-    if (property.type !== "Property" || property.computed) continue;
-    const matches =
-      (property.key.type === "Identifier" && property.key.name === name) ||
-      (property.key.type === "Literal" && property.key.value === name);
-    if (matches && property.value.type === "Literal") {
-      const value = property.value.value;
-      if (
-        value === null ||
-        typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean"
-      ) {
-        return value;
-      }
-    }
+type LiteralNode = Extract<ESTree.Expression, { readonly type: "Literal" }>;
+
+const primitiveLiteral = (node: ESTree.Expression): Option.Option<LiteralNode> => {
+  if (node.type !== "Literal") return Option.none();
+  const value = node.value;
+  if (
+    Predicate.isNull(value) ||
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
+  ) {
+    return Option.some(node);
   }
-  return undefined;
+  return Option.none();
 };
+
+/** The first primitive literal given for `name` in an options object literal. */
+const propertyLiteral = (node: ESTree.Expression, name: string): Option.Option<LiteralNode> => {
+  if (node.type !== "ObjectExpression") return Option.none();
+  return Arr.findFirst(staticProperties(node, name), (property) =>
+    primitiveLiteral(property.value),
+  );
+};
+
+/** Whether the options set `name` to the literal `expected`. */
+const hasLiteralOption = (
+  options: Option.Option<ESTree.Expression>,
+  name: string,
+  expected: boolean | number,
+): boolean =>
+  Option.exists(
+    Option.flatMap(options, (node) => propertyLiteral(node, name)),
+    (literal) => literal.value === expected,
+  );
 
 const pipedToAsVoid = (
   node: ESTree.CallExpression,
@@ -77,10 +91,10 @@ export const noSequentialEffectAll = Rule.define({
         const namespaces = visibleNamespaces(ctx, node, effectNamespaces);
         if (!isStaticMember(node.callee, namespaces, "all")) return Effect.void;
         if (node.arguments[0]?.type !== "ArrayExpression") return Effect.void;
-        const options = node.arguments[1];
-        if (propertyLiteral(options, "concurrency") !== 1) return Effect.void;
+        const options = expressionArgument(node, 1);
+        if (!hasLiteralOption(options, "concurrency", 1)) return Effect.void;
         const discards =
-          propertyLiteral(options, "discard") === true || pipedToAsVoid(node, namespaces);
+          hasLiteralOption(options, "discard", true) || pipedToAsVoid(node, namespaces);
         if (!discards) return Effect.void;
         return ctx.report(
           Diagnostic.make({

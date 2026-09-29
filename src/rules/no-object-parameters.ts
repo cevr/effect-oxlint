@@ -5,6 +5,7 @@
 import type { ESTree } from "@oxlint/plugins";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import {
   functionParameterBindingName,
   functionParameterTypeAnnotation,
@@ -38,26 +39,29 @@ export const noObjectParameters = Rule.define({
   }),
   create: function* () {
     const context = yield* RuleContext;
-    let environment: TypeAliasEnvironment | null = null;
+    // Local change: the environment is an Option until Program sets it.
+    let environment: Option.Option<TypeAliasEnvironment> = Option.none();
 
     const resolvesToObject = (type: ESTree.TSType): boolean =>
-      environment !== null &&
-      resolvedTypeMatches(type, environment, (resolved, matches) => {
-        if (resolved.type === "TSObjectKeyword") return true;
-        if (resolved.type === "TSParenthesizedType") return matches(resolved.typeAnnotation);
-        return resolved.type === "TSUnionType" && resolved.types.some(matches);
-      });
+      Option.exists(environment, (present) =>
+        resolvedTypeMatches(type, present, (resolved, matches) => {
+          if (resolved.type === "TSObjectKeyword") return true;
+          if (resolved.type === "TSParenthesizedType") return matches(resolved.typeAnnotation);
+          return resolved.type === "TSUnionType" && resolved.types.some(matches);
+        }),
+      );
 
     const checkParameters = (node: ParameterOwner) =>
       Effect.forEach(
         node.params,
         (parameter) => {
           const annotation = functionParameterTypeAnnotation(parameter);
-          if (annotation === null || annotation === undefined) return Effect.void;
-          if (!resolvesToObject(annotation.typeAnnotation)) return Effect.void;
+          if (Option.isNone(annotation)) return Effect.void;
+          const type = annotation.value.typeAnnotation;
+          if (!resolvesToObject(type)) return Effect.void;
           return context.report(
             Diagnostic.fromId({
-              node: annotation.typeAnnotation,
+              node: type,
               messageId: "objectParameter",
               data: { parameter: functionParameterBindingName(parameter, context.sourceCode) },
             }),
@@ -68,7 +72,7 @@ export const noObjectParameters = Rule.define({
 
     return {
       Program: (node: ESTree.Program) => {
-        environment = createTypeAliasEnvironment(node, context.sourceCode.visitorKeys);
+        environment = Option.some(createTypeAliasEnvironment(node, context.sourceCode.visitorKeys));
         return Effect.void;
       },
       ArrowFunctionExpression: checkParameters,
