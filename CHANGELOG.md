@@ -1,5 +1,18 @@
 # oxlint-plugin-effect
 
+## 0.14.0
+
+### Minor Changes
+
+- [#31](https://github.com/cevr/effect-oxlint/pull/31) [`8ef79e5`](https://github.com/cevr/effect-oxlint/commit/8ef79e5dd27d38362504a321435c36cf7b554fc2) Thanks [@cevr](https://github.com/cevr)! - Add ten rules to the recommended preset, all at `error`:
+  - `noModuleLevelMutableState` bans module-level `let` and `var` outside test files; keep request-shared state in a `Ref` owned by a Layer.
+  - `noEagerAcquire` bans `Effect.acquireRelease` acquires that build or capture the resource before acquire runs (`Effect.succeed(handle)`, `Effect.sync(() => capturedHandle)`).
+  - `noEffectRunInTests` bans `Effect.run*` and `ManagedRuntime.make` in test files; use `it.effect` or `it.layer`.
+  - `requireSuppressionReason` requires every oxlint, ESLint, `@effect-diagnostics`, and `@ts-*` suppression to name what it disables and give a reason after `--`, and rejects `effect/`-prefixed `@effect-diagnostics` rule names.
+  - From anti-slop: `noArrayFilterMap`, `noReduceAccumulatorCopy`, `noReflectApply`, `noReflectGet`, and `noUnknownReturns`.
+
+  The vendored anti-slop rules now include upstream bug fixes through `c44ef22`: lexical type alias resolution, literal-keyed `Record`s treated as closed, `unknown` detected inside unions, type-guard subjects and promise rejection reasons exempt from `noUnknownParameters`, `typeof` existence probes allowed, borrowed `shape` members allowed, type parameter constraints exempt from `noUnsafeDictionaryType`, and no semantics-changing autofix in `noConditionalEmptyObjectSpread`.
+
 ## 0.13.0
 
 ### Minor Changes
