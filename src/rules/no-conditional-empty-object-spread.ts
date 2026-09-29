@@ -40,10 +40,16 @@ export const noConditionalEmptyObjectSpread = Rule.define({
   create: function* () {
     const context = yield* RuleContext;
     return {
-      SpreadElement: (node: ESTree.SpreadElement) =>
-        node.parent?.type === "ObjectExpression" && isConditionalEmptyObjectSpread(node.argument)
-          ? context.report(Diagnostic.fromId({ node, messageId: "avoid" }))
-          : Effect.void,
+      // Local change: the ternary is an early return.
+      SpreadElement: (node: ESTree.SpreadElement) => {
+        if (
+          node.parent?.type !== "ObjectExpression" ||
+          !isConditionalEmptyObjectSpread(node.argument)
+        ) {
+          return Effect.void;
+        }
+        return context.report(Diagnostic.fromId({ node, messageId: "avoid" }));
+      },
     };
   },
 });

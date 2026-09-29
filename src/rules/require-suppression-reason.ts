@@ -46,8 +46,12 @@ const parseDirectives = (value: string): ReadonlyArray<Directive> => {
       .trim();
     const padded = ` ${body} `;
     const separator = padded.search(reasonSeparator);
-    const targetText = separator === -1 ? padded : padded.slice(0, separator);
-    const reason = separator === -1 ? "" : padded.slice(separator + 4);
+    let targetText = padded;
+    let reason = "";
+    if (separator !== -1) {
+      targetText = padded.slice(0, separator);
+      reason = padded.slice(separator + 4);
+    }
     return {
       kind: kindOf(name),
       name,
@@ -60,7 +64,8 @@ const parseDirectives = (value: string): ReadonlyArray<Directive> => {
 const checkDirective = (directive: Directive): ReadonlyArray<Finding> => {
   const findings: Array<Finding> = [];
   if (directive.kind !== "typescript" && directive.targets.length === 0) {
-    const example = directive.kind === "lint" ? "rule-name" : "ruleName:off";
+    let example = "ruleName:off";
+    if (directive.kind === "lint") example = "rule-name";
     findings.push({ messageId: "missingTarget", data: { directive: directive.name, example } });
   }
   if (directive.kind === "effect-diagnostics") {

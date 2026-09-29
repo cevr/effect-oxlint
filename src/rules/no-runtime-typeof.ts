@@ -6,12 +6,14 @@ import type { ESTree } from "@oxlint/plugins";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
 
+// Local change: the operand ternary is a reassignment.
 /** Whether `typeof` probes for a possibly absent binding, which only `typeof` can do safely. */
 function isExistenceProbe(node: ESTree.UnaryExpression): boolean {
   const parent = node.parent;
   if (parent?.type !== "BinaryExpression") return false;
   if (!["===", "!==", "==", "!="].includes(parent.operator)) return false;
-  const other = parent.left === node ? parent.right : parent.left;
+  let other = parent.left;
+  if (parent.left === node) other = parent.right;
   return other.type === "Literal" && other.value === "undefined";
 }
 
@@ -30,10 +32,11 @@ export const noRuntimeTypeof = Rule.define({
   create: function* () {
     const context = yield* RuleContext;
     return {
-      UnaryExpression: (node: ESTree.UnaryExpression) =>
-        node.operator === "typeof" && !isExistenceProbe(node)
-          ? context.report(Diagnostic.fromId({ node, messageId: "runtimeTypeof" }))
-          : Effect.void,
+      // Local change: the ternary is an early return.
+      UnaryExpression: (node: ESTree.UnaryExpression) => {
+        if (node.operator !== "typeof" || isExistenceProbe(node)) return Effect.void;
+        return context.report(Diagnostic.fromId({ node, messageId: "runtimeTypeof" }));
+      },
     };
   },
 });

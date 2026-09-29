@@ -19,8 +19,9 @@ export const noTestLifecycleHooks = Rule.define({
         Option.match(AST.narrow(node, "CallExpression"), {
           onNone: () => Effect.void,
           onSome: (call) => {
-            const name = Option.getOrUndefined(AST.calleeName(call));
-            if (name === undefined || !lifecycleHooks.has(name)) return Effect.void;
+            const hook = Option.filter(AST.calleeName(call), (name) => lifecycleHooks.has(name));
+            if (Option.isNone(hook)) return Effect.void;
+            const name = hook.value;
 
             return ctx.report(
               Diagnostic.make({

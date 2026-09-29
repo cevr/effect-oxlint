@@ -28,8 +28,10 @@ export const noNewPromise = Rule.define({
       NewExpression: (node) =>
         Option.match(AST.narrow(node, "NewExpression"), {
           onNone: () => Effect.void,
-          onSome: (expression) =>
-            isPromiseIdentifier(expression.callee) ? report(expression) : Effect.void,
+          onSome: (expression) => {
+            if (!isPromiseIdentifier(expression.callee)) return Effect.void;
+            return report(expression);
+          },
         }),
       CallExpression: (node) =>
         Option.match(AST.narrow(node, "CallExpression"), {
@@ -37,8 +39,12 @@ export const noNewPromise = Rule.define({
           onSome: (call) => {
             if (isPromiseIdentifier(call.callee)) return report(call);
             if (call.callee.type !== "MemberExpression") return Effect.void;
-            const member = Option.getOrUndefined(AST.memberNames(call.callee));
-            return member?.[0] === "Promise" ? report(call) : Effect.void;
+            const isPromiseStatic = Option.exists(
+              AST.memberNames(call.callee),
+              ([object]) => object === "Promise",
+            );
+            if (!isPromiseStatic) return Effect.void;
+            return report(call);
           },
         }),
     };

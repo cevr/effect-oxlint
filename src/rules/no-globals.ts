@@ -102,11 +102,6 @@ const isUnshadowedGlobal = (
     onSome: (variable) => variable.defs.length === 0,
   });
 
-const staticMember = (
-  node: ESTree.MemberExpression,
-): readonly [object: string, property: string] | undefined =>
-  Option.getOrUndefined(AST.memberNames(node));
-
 const processStreams = new Set(["stderr", "stdin", "stdout"]);
 
 // No Effect service exposes TTY detection, so capability probes stay allowed
@@ -151,56 +146,70 @@ export const noGlobals = Rule.define({
         }),
       );
 
-    return {
-      MemberExpression: (node) => {
-        const memberExpression = Option.getOrUndefined(AST.narrow(node, "MemberExpression"));
-        if (memberExpression === undefined) return Effect.void;
-        if (
-          isCryptoDigest(memberExpression) &&
-          isUnshadowedGlobal(ctx, memberExpression, "crypto")
-        ) {
-          return report(memberExpression, "crypto.subtle.digest", "Crypto.digest");
-        }
-
-        const names = staticMember(memberExpression);
-        if (names === undefined) return Effect.void;
-        const [object, property] = names;
-        if (!isUnshadowedGlobal(ctx, memberExpression, object)) return Effect.void;
-
-        for (const [bannedObject, properties, alternative] of memberBans) {
-          if (object === bannedObject && properties.has(property)) {
-            if (
-              object === "process" &&
-              processStreams.has(property) &&
-              isTtyRead(memberExpression)
-            ) {
-              return Effect.void;
+    const reportMember = (memberExpression: ESTree.MemberExpression) => {
+      if (isCryptoDigest(memberExpression) && isUnshadowedGlobal(ctx, memberExpression, "crypto")) {
+        return report(memberExpression, "crypto.subtle.digest", "Crypto.digest");
+      }
+      return Option.match(AST.memberNames(memberExpression), {
+        onNone: () => Effect.void,
+        onSome: ([object, property]) => {
+          if (!isUnshadowedGlobal(ctx, memberExpression, object)) return Effect.void;
+          for (const [bannedObject, properties, alternative] of memberBans) {
+            if (object === bannedObject && properties.has(property)) {
+              if (
+                object === "process" &&
+                processStreams.has(property) &&
+                isTtyRead(memberExpression)
+              ) {
+                return Effect.void;
+              }
+              return report(memberExpression, `${object}.${property}`, alternative);
             }
-            return report(memberExpression, `${object}.${property}`, alternative);
           }
-        }
-        return Effect.void;
-      },
-      CallExpression: (node) => {
-        const call = Option.getOrUndefined(AST.narrow(node, "CallExpression"));
-        if (call === undefined) return Effect.void;
-        const name = Option.getOrUndefined(AST.calleeName(call));
-        if (name === undefined || !isUnshadowedGlobal(ctx, call, name)) return Effect.void;
-        const alternative = callBans.get(name);
-        return alternative === undefined ? Effect.void : report(call, `${name}()`, alternative);
-      },
-      NewExpression: (node) => {
-        const expression = Option.getOrUndefined(AST.narrow(node, "NewExpression"));
-        if (expression === undefined || expression.callee.type !== "Identifier") {
           return Effect.void;
-        }
-        const name = expression.callee.name;
-        if (!isUnshadowedGlobal(ctx, expression, name)) return Effect.void;
-        const alternative = constructorBans.get(name);
-        return alternative === undefined
-          ? Effect.void
-          : report(expression, `new ${name}()`, alternative);
-      },
+        },
+      });
+    };
+
+    const reportCall = (call: ESTree.CallExpression) =>
+      Option.match(
+        Option.filter(AST.calleeName(call), (name) => isUnshadowedGlobal(ctx, call, name)),
+        {
+          onNone: () => Effect.void,
+          onSome: (name) =>
+            Option.match(Option.fromUndefinedOr(callBans.get(name)), {
+              onNone: () => Effect.void,
+              onSome: (alternative) => report(call, `${name}()`, alternative),
+            }),
+        },
+      );
+
+    const reportConstructor = (expression: ESTree.NewExpression) => {
+      if (expression.callee.type !== "Identifier") return Effect.void;
+      const name = expression.callee.name;
+      if (!isUnshadowedGlobal(ctx, expression, name)) return Effect.void;
+      return Option.match(Option.fromUndefinedOr(constructorBans.get(name)), {
+        onNone: () => Effect.void,
+        onSome: (alternative) => report(expression, `new ${name}()`, alternative),
+      });
+    };
+
+    return {
+      MemberExpression: (node) =>
+        Option.match(AST.narrow(node, "MemberExpression"), {
+          onNone: () => Effect.void,
+          onSome: reportMember,
+        }),
+      CallExpression: (node) =>
+        Option.match(AST.narrow(node, "CallExpression"), {
+          onNone: () => Effect.void,
+          onSome: reportCall,
+        }),
+      NewExpression: (node) =>
+        Option.match(AST.narrow(node, "NewExpression"), {
+          onNone: () => Effect.void,
+          onSome: reportConstructor,
+        }),
     };
   },
 });

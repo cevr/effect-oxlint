@@ -63,10 +63,13 @@ export const noChainedTypeAssertions = Rule.define({
   }),
   create: function* () {
     const context = yield* RuleContext;
-    const checkTypeAssertion = (node: TypeAssertionExpression) =>
-      isOutermostAssertionInChain(node) && isForbiddenAssertionChain(node)
-        ? context.report(Diagnostic.fromId({ node, messageId: "chained" }))
-        : Effect.void;
+    // Local change: the ternary is an early return.
+    const checkTypeAssertion = (node: TypeAssertionExpression) => {
+      if (!isOutermostAssertionInChain(node) || !isForbiddenAssertionChain(node)) {
+        return Effect.void;
+      }
+      return context.report(Diagnostic.fromId({ node, messageId: "chained" }));
+    };
     return {
       TSAsExpression: checkTypeAssertion,
       TSTypeAssertion: checkTypeAssertion,
