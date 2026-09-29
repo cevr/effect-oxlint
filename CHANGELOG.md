@@ -1,5 +1,13 @@
 # oxlint-plugin-effect
 
+## 0.15.0
+
+### Minor Changes
+
+- [`3e06227`](https://github.com/cevr/effect-oxlint/commit/3e062277baca2a8efe87ec74a009712d3a94def8) Thanks [@cevr](https://github.com/cevr)! - Extend `effect/noModuleMocks` to bun:test and to every mock-double entry point. It now reports `mock.module()`, bare `mock()`, and bare `spyOn()` bound to `bun:test`, plus `fn`, `doMock`, `mocked`, and `unmock` on `vi` and `jest` from `vitest`, `@jest/globals`, `bun:test`, or the unshadowed runner globals. `vi.fn()` and `jest.fn()` were previously allowed and are now reported.
+
+  Add `effect/noTestGlobals` to the recommended preset. In test files (`*.test.*`, `*.spec.*`) it reports writes (assignment, update, and `delete`) to `globalThis`, `window`, `global`, `self`, and `process.env`; `Reflect.set`/`defineProperty`/`deleteProperty` and `Object.assign`/`defineProperty`/`defineProperties` on those objects; `vi.stubGlobal`, `vi.stubEnv`, `vi.unstubAllGlobals`, `vi.unstubAllEnvs`, and `jest.replaceProperty`; and any runner global such as `describe`, `it`, `expect`, or `beforeEach` that no import provides.
+
 ## 0.14.0
 
 ### Minor Changes
