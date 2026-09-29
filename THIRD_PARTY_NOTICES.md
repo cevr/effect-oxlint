@@ -1,8 +1,10 @@
 # Third-Party Notices
 
 The anti-slop rules include code derived from
-[`dmmulroy/anti-slop`](https://github.com/dmmulroy/anti-slop) at commit
-`b5d2288db1f00469a1d5f2e3b0e265e5a5676fd0`.
+[`dmmulroy/anti-slop`](https://github.com/dmmulroy/anti-slop), synced to commit
+`c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b`. The rejection-handler exemption in
+`noUnknownParameters` comes from the vendored copy in
+[`joelhooks/rat-stack`](https://github.com/joelhooks/rat-stack).
 
 MIT License
 

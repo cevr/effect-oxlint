@@ -30,3 +30,6 @@ jobs:
 
       - name: Test
         run: bun run test
+
+      - name: Self-lint
+        run: bun run lint:self

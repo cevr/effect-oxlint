@@ -1,0 +1,42 @@
+name: Anti-slop drift
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    name: Compare with upstream
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open or refresh the drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          synced=$(grep -oE '[0-9a-f]{40}' THIRD_PARTY_NOTICES.md | head -1)
+          head=$(gh api repos/dmmulroy/anti-slop/commits/main --jq .sha)
+          if [ "$synced" = "$head" ]; then
+            echo "In sync with dmmulroy/anti-slop at $synced"
+            exit 0
+          fi
+
+          commits=$(gh api "repos/dmmulroy/anti-slop/compare/$synced...$head" \
+            --jq '.commits[] | "- [`\(.sha[0:7])`](\(.html_url)) \(.commit.message | split("\n")[0])"')
+          body=$(printf '%s\n\n%s\n\n%s\n' \
+            "Upstream \`dmmulroy/anti-slop\` moved past the synced commit \`$synced\` (THIRD_PARTY_NOTICES.md)." \
+            "$commits" \
+            "Take bug fixes, skip new behavior, then update the synced commit in THIRD_PARTY_NOTICES.md.")
+
+          issue=$(gh issue list --state open --search '"Sync anti-slop" in:title' --json number --jq '.[0].number // empty')
+          if [ -n "$issue" ]; then
+            gh issue edit "$issue" --body "$body"
+          else
+            gh issue create --title "Sync anti-slop upstream changes" --body "$body"
+          fi

@@ -34,10 +34,13 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 | `effect/noThrowStatement`              | Bans every throw statement                                                                |
 | `effect/noNewPromise`                  | Bans new Promise, Promise calls, and Promise static APIs                                  |
 | `effect/noNewError`                    | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die |
-| `effect/noNullish`                     | Bans null and undefined; permits `Object.create(null)` for prototype-free dictionaries   |
+| `effect/noNullish`                     | Bans null and undefined; permits `Object.create(null)` for prototype-free dictionaries    |
 | `effect/noModuleMocks`                 | Bans Vitest and Jest module mocks and method spies; use Effect service test layers        |
 | `effect/noTernary`                     | Bans conditional expressions while allowing ordinary if statements                        |
 | `effect/noManagedRuntimeInEffect`      | Keeps ManagedRuntime construction at non-Effect host boundaries                           |
+| `effect/noModuleLevelMutableState`     | Bans module-level `let` and `var` outside tests; hold shared state in a Layer-owned `Ref` |
+| `effect/noEagerAcquire`                | Bans `acquireRelease` acquires that build or capture the resource before acquire runs     |
+| `effect/noEffectRunInTests`            | Bans `Effect.run*` and `ManagedRuntime.make` in tests; use `it.effect` or `it.layer`      |
 | `effect/noInlineProvide`               | Keeps dependency provisioning at explicit composition boundaries                          |
 | `effect/noNestedEffectGen`             | Flattens directly yielded nested generators                                               |
 | `effect/noPerCallCacheConstruction`    | Constructs shared caches once in their owning layer                                       |
@@ -55,26 +58,34 @@ If the project uses JSON configuration, copy the exported rule map into `rules`;
 | `effect/preferPredicateIsTagged`       | Replaces combined `_tag` comparisons with a named `Predicate` refinement                  |
 | `effect/preferServiceOf`               | Checks inline Layer implementations through `Service.of`                                  |
 | `effect/requireNamedEffectFn`          | Requires stable names for `Effect.fn` operations                                          |
+| `effect/requireSuppressionReason`      | Requires lint, Effect, and TS suppressions to name their target and give a `--` reason    |
 | `effect/noGlobals`                     | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`    |
 | `effect/noNodeBuiltinImport`           | Bans fully replaced Node modules and replaced operations from partial modules             |
+
+`effect/requireSuppressionReason` also rejects `@effect-diagnostics effect/name:off`: @effect/tsgo ignores the `effect/` prefix, so write the bare rule name. A blanket directive that covers its own line, such as a bare `// oxlint-disable-line` or a file-leading `/* eslint-disable */`, suppresses this rule's report too; oxlint applies the directive before the rule can report it.
 
 ## Anti-Slop Rules
 
 The recommended preset also includes these rules from
 [`dmmulroy/anti-slop`](https://github.com/dmmulroy/anti-slop):
 
-| Rule                                    | Contract                                                           |
-| --------------------------------------- | ------------------------------------------------------------------ |
-| `effect/noChainedTypeAssertions`        | Bans nested type assertions that invent type evidence              |
-| `effect/noConditionalEmptyObjectSpread` | Bans conditional spreads that use an empty object to omit fields   |
-| `effect/noKnownValueWidening`           | Bans broad target types that discard known value evidence          |
-| `effect/noObjectParameters`             | Bans the broad `object` type on function inputs                    |
-| `effect/noRuntimeTypeof`                | Requires boundary parsing instead of runtime `typeof` narrowing    |
-| `effect/noShapeInSymbolNames`           | Bans `shape` in symbol names                                       |
-| `effect/noUnknownParameters`            | Bans `unknown` inputs except an input named `cause`                |
-| `effect/noUnknownTypeAliases`           | Bans aliases that only hide `unknown`                              |
-| `effect/noUnsafeDictionaryType`         | Bans dictionaries with unsafe broad value types                    |
-| `effect/noWidenThenAssert`              | Bans local flows that widen known values and then assert them back |
+| Rule                                    | Contract                                                                         |
+| --------------------------------------- | -------------------------------------------------------------------------------- |
+| `effect/noArrayFilterMap`               | Bans adjacent array `filter`/`map` passes over a known array                     |
+| `effect/noChainedTypeAssertions`        | Bans nested type assertions that invent type evidence                            |
+| `effect/noConditionalEmptyObjectSpread` | Bans conditional spreads that use an empty object to omit fields                 |
+| `effect/noKnownValueWidening`           | Bans broad target types that discard known value evidence                        |
+| `effect/noObjectParameters`             | Bans the broad `object` type on function inputs                                  |
+| `effect/noReduceAccumulatorCopy`        | Bans copying a reducer accumulator on every iteration                            |
+| `effect/noReflectApply`                 | Bans `Reflect.apply`; call typed functions directly                              |
+| `effect/noReflectGet`                   | Bans `Reflect.get`; use typed property access                                    |
+| `effect/noRuntimeTypeof`                | Requires boundary parsing instead of `typeof` narrowing; allows existence probes |
+| `effect/noShapeInSymbolNames`           | Bans `shape` in symbol names                                                     |
+| `effect/noUnknownParameters`            | Bans `unknown` inputs except `cause`, type guards, and rejection reasons         |
+| `effect/noUnknownReturns`               | Bans return contracts of `unknown` or `Promise<unknown>`                         |
+| `effect/noUnknownTypeAliases`           | Bans aliases that only hide `unknown`                                            |
+| `effect/noUnsafeDictionaryType`         | Bans dictionaries with unsafe broad value types                                  |
+| `effect/noWidenThenAssert`              | Bans local flows that widen known values and then assert them back               |
 
 See `THIRD_PARTY_NOTICES.md` for the source revision and license.
 

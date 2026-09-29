@@ -1,12 +1,17 @@
 /**
  * Ported from dmmulroy/anti-slop at
- * b5d2288db1f00469a1d5f2e3b0e265e5a5676fd0.
+ * c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b. The rejection-handler exemption
+ * comes from the vendored copy in joelhooks/rat-stack.
  */
 import type { ESTree } from "@oxlint/plugins";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
+import {
+  containsUnknownType,
+  functionParameterBindingName,
+  functionParameterTypeAnnotation,
+} from "./_anti-slop-function-parameters.js";
 
-type Parameter = ESTree.ParamPattern;
 type ParameterOwner =
   | ESTree.ArrowFunctionExpression
   | ESTree.Function
@@ -16,35 +21,45 @@ type ParameterOwner =
   | ESTree.TSFunctionType
   | ESTree.TSMethodSignature;
 
-function parameterAnnotation(parameter: Parameter): ESTree.TSTypeAnnotation | null | undefined {
-  if (parameter.type === "TSParameterProperty") return parameterAnnotation(parameter.parameter);
-  if (parameter.type === "RestElement") {
-    return parameter.typeAnnotation ?? parameterAnnotation(parameter.argument);
-  }
-  if (parameter.type === "AssignmentPattern") {
-    return parameter.typeAnnotation ?? parameter.left.typeAnnotation;
-  }
-  return parameter.typeAnnotation;
+function isTypePredicateSubject(owner: ParameterOwner, parameterName: string): boolean {
+  const predicate = owner.returnType?.typeAnnotation;
+  return (
+    predicate?.type === "TSTypePredicate" &&
+    predicate.parameterName.type === "Identifier" &&
+    predicate.parameterName.name === parameterName
+  );
 }
 
-function parameterName(parameter: Parameter, sourceText: string): string {
-  if (parameter.type === "TSParameterProperty") {
-    return parameterName(parameter.parameter, sourceText);
+/**
+ * Whether the function is a promise rejection handler: the argument to `.catch`
+ * or the second argument to `.then`. Its first parameter is the function form of
+ * a `catch` clause binding and receives `unknown` by nature.
+ */
+function isRejectionHandler(owner: ParameterOwner): boolean {
+  if (owner.type !== "ArrowFunctionExpression" && owner.type !== "FunctionExpression") {
+    return false;
   }
-  if (parameter.type === "AssignmentPattern") return parameterName(parameter.left, sourceText);
-  if (parameter.type === "RestElement") return parameterName(parameter.argument, sourceText);
-  return parameter.type === "Identifier"
-    ? parameter.name
-    : sourceText.replace(/\s*:\s*unknown\s*$/u, "");
+  const call = owner.parent;
+  if (
+    call?.type !== "CallExpression" ||
+    call.callee.type !== "MemberExpression" ||
+    call.callee.computed ||
+    call.callee.property.type !== "Identifier"
+  ) {
+    return false;
+  }
+  const position = call.arguments.indexOf(owner);
+  const method = call.callee.property.name;
+  return (method === "catch" && position === 0) || (method === "then" && position === 1);
 }
 
-/** Disallow unknown inputs except explicitly named error-cause enrichment. */
+/** Disallow unknown inputs except error-cause enrichment, type guards, and rejection handlers. */
 export const noUnknownParameters = Rule.define({
   name: "no-unknown-parameters",
   meta: Rule.meta({
     type: "problem",
     description:
-      "Disallow explicitly unknown function parameters except `cause`; decode unknown input at its I/O boundary instead.",
+      "Disallow explicitly unknown function parameters except `cause`, type-predicate subjects, and the reason a promise rejection handler receives; decode unknown input at its I/O boundary instead.",
     messages: {
       unknownParameter:
         "Parameter `{{parameter}}` accepts `unknown` without establishing its contract. Define the expected schema or parser so the value becomes a strongly typed domain type at the earliest possible point, as close as possible to the I/O boundary where the data originated.",
@@ -56,10 +71,17 @@ export const noUnknownParameters = Rule.define({
       Effect.forEach(
         node.params,
         (parameter) => {
-          const annotation = parameterAnnotation(parameter);
-          if (annotation?.typeAnnotation.type !== "TSUnknownKeyword") return Effect.void;
-          const name = parameterName(parameter, context.sourceCode.getText(parameter));
-          if (name === "cause") return Effect.void;
+          const annotation = functionParameterTypeAnnotation(parameter);
+          if (annotation === null || annotation === undefined) return Effect.void;
+          if (!containsUnknownType(annotation.typeAnnotation)) return Effect.void;
+          const name = functionParameterBindingName(parameter, context.sourceCode);
+          if (
+            name === "cause" ||
+            isTypePredicateSubject(node, name) ||
+            (parameter === node.params[0] && isRejectionHandler(node))
+          ) {
+            return Effect.void;
+          }
           return context.report(
             Diagnostic.fromId({
               node: annotation.typeAnnotation,

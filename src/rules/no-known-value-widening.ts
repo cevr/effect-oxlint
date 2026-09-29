@@ -1,6 +1,6 @@
 /**
  * Ported from dmmulroy/anti-slop at
- * b5d2288db1f00469a1d5f2e3b0e265e5a5676fd0.
+ * c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b.
  */
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
@@ -11,8 +11,9 @@ import {
   type TypeEnvironment,
   type WideningTarget,
 } from "./_anti-slop-dictionary-types.js";
+import { resolveVariable } from "./_anti-slop-scope.js";
 
-import type { ESTree, Scope, SourceCode, Variable } from "@oxlint/plugins";
+import type { ESTree, SourceCode, Variable } from "@oxlint/plugins";
 
 type FunctionExpression = ESTree.ArrowFunctionExpression | ESTree.Function;
 
@@ -28,19 +29,6 @@ function unwrapExpression(expression: ESTree.Expression): ESTree.Expression {
     current = current.expression;
   }
   return current;
-}
-
-function resolveVariable(
-  sourceCode: SourceCode,
-  identifier: ESTree.IdentifierReference,
-): Variable | null {
-  let scope: Scope | null = sourceCode.getScope(identifier);
-  while (scope !== null) {
-    const variable = scope.set.get(identifier.name);
-    if (variable !== undefined) return variable;
-    scope = scope.upper;
-  }
-  return null;
 }
 
 function variableDeclarator(variable: Variable): ESTree.VariableDeclarator | null {
@@ -154,14 +142,9 @@ export const noKnownValueWidening = Rule.define({
       expression: ESTree.Expression,
       destination: WideningTarget | null,
       subject: string,
-      options: Readonly<{ allowEmptyDictionaryAccumulator?: boolean }> = {},
     ) => {
       if (destination === null) return Effect.void;
-      if (
-        options.allowEmptyDictionaryAccumulator === true &&
-        isDictionaryAccumulatorTarget(destination) &&
-        isEmptyObjectExpression(expression)
-      ) {
+      if (isDictionaryAccumulatorTarget(destination) && isEmptyObjectExpression(expression)) {
         return Effect.void;
       }
       if (!hasKnownEvidence(context.sourceCode, expression)) return Effect.void;
@@ -179,7 +162,7 @@ export const noKnownValueWidening = Rule.define({
 
     return {
       Program: (node: ESTree.Program) => {
-        environment = createTypeEnvironment(node);
+        environment = createTypeEnvironment(node, context.sourceCode.visitorKeys);
         return Effect.void;
       },
       VariableDeclarator: (node: ESTree.VariableDeclarator) => {
@@ -188,7 +171,6 @@ export const noKnownValueWidening = Rule.define({
           node.init,
           targetFromAnnotation(node.id.typeAnnotation),
           `binding \`${node.id.name}\``,
-          { allowEmptyDictionaryAccumulator: true },
         );
       },
       PropertyDefinition: (node: ESTree.PropertyDefinition) => {

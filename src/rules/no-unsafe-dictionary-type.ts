@@ -1,6 +1,6 @@
 /**
  * Ported from dmmulroy/anti-slop at
- * b5d2288db1f00469a1d5f2e3b0e265e5a5676fd0.
+ * c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b.
  */
 import type { ESTree } from "@oxlint/plugins";
 import {
@@ -9,11 +9,52 @@ import {
   createTypeEnvironment,
   type TypeEnvironment,
 } from "./_anti-slop-dictionary-types.js";
+import { visibleTypeAlias } from "./_anti-slop-type-alias-resolution.js";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
 
+const typeNodeKinds: ReadonlySet<string> = new Set([
+  "JSDocNonNullableType",
+  "JSDocNullableType",
+  "JSDocUnknownType",
+  "TSAnyKeyword",
+  "TSArrayType",
+  "TSBigIntKeyword",
+  "TSBooleanKeyword",
+  "TSConditionalType",
+  "TSConstructorType",
+  "TSFunctionType",
+  "TSImportType",
+  "TSIndexedAccessType",
+  "TSInferType",
+  "TSIntersectionType",
+  "TSIntrinsicKeyword",
+  "TSLiteralType",
+  "TSMappedType",
+  "TSNamedTupleMember",
+  "TSNeverKeyword",
+  "TSNullKeyword",
+  "TSNumberKeyword",
+  "TSObjectKeyword",
+  "TSParenthesizedType",
+  "TSStringKeyword",
+  "TSSymbolKeyword",
+  "TSTemplateLiteralType",
+  "TSThisType",
+  "TSTupleType",
+  "TSTypeLiteral",
+  "TSTypeOperator",
+  "TSTypePredicate",
+  "TSTypeQuery",
+  "TSTypeReference",
+  "TSUndefinedKeyword",
+  "TSUnionType",
+  "TSUnknownKeyword",
+  "TSVoidKeyword",
+]);
+
 function isTypeNode(node: ESTree.Node): node is ESTree.TSType {
-  return node.type.startsWith("TS") && node.type !== "TSTypeAnnotation";
+  return typeNodeKinds.has(node.type);
 }
 
 function typeReferenceName(type: ESTree.TSTypeReference): string | null {
@@ -32,10 +73,26 @@ function isInsideTypeAliasDeclaration(node: ESTree.Node): boolean {
 function isPlainAliasConsumerUse(node: ESTree.TSType, environment: TypeEnvironment): boolean {
   if (node.type !== "TSTypeReference" || node.typeArguments?.params.length) return false;
   const name = typeReferenceName(node);
-  return name !== null && environment.aliases.has(name) && !isInsideTypeAliasDeclaration(node);
+  return (
+    name !== null &&
+    visibleTypeAlias(name, node, environment.typeAliases) !== null &&
+    !isInsideTypeAliasDeclaration(node)
+  );
+}
+
+function isInsideTypeParameterConstraint(node: ESTree.TSType): boolean {
+  let child: ESTree.Node = node;
+  let parent: ESTree.Node | null = child.parent;
+  while (parent !== null && parent.type !== "Program") {
+    if (parent.type === "TSTypeParameter" && parent.constraint === child) return true;
+    child = parent;
+    parent = child.parent;
+  }
+  return false;
 }
 
 function shouldReportType(node: ESTree.TSType, environment: TypeEnvironment): boolean {
+  if (isInsideTypeParameterConstraint(node)) return false;
   if (isPlainAliasConsumerUse(node, environment)) return false;
   if (classifyUnsafeDictionary(node, environment) === null) return false;
   let current: ESTree.Node | null = node.parent;
@@ -71,7 +128,7 @@ export const noUnsafeDictionaryType = Rule.define({
     };
     return {
       Program: (node: ESTree.Program) => {
-        environment = createTypeEnvironment(node);
+        environment = createTypeEnvironment(node, context.sourceCode.visitorKeys);
         return Effect.void;
       },
       TSTypeReference: reportIfUnsafe,

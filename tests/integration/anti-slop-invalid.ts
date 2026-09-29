@@ -19,3 +19,13 @@ export const optionalValue = {
 };
 
 export type InvalidTypes = HiddenInput | UnsafeValues;
+
+const users = [{ active: true, email: "a@example.com" }];
+export const activeEmails = users.filter((user) => user.active).map((user) => user.email);
+export const byEmail = users.reduce(
+  (accumulator, user) => Object.assign({}, accumulator, { [user.email]: user }),
+  {},
+);
+export const reflected = Reflect.get(users, "length");
+export const applied = Reflect.apply(Math.max, undefined, [1, 2]);
+export declare function readPayload(): Promise<unknown>;
