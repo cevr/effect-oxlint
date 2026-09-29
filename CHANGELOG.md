@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.16.1
+
+### Patch Changes
+
+- [`402d496`](https://github.com/cevr/effect-oxlint/commit/402d496d3c0de8a07c56d2f07547b7fba69c554d) Thanks [@cevr](https://github.com/cevr)! - `preferPredicateIsTagged` and `preferMatchTagsExhaustive` now report only in files that import `effect`, an `effect/` subpath, or an `@effect/` package. Their fixes need `Predicate` or `Match`, so a plain TypeScript file with `_tag` unions is no longer reported.
+
 ## 0.16.0
 
 ### Minor Changes
