@@ -5,7 +5,7 @@ import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { importedNamespaces, isStaticCall, visibleNamespaces } from "./_effect-namespaces.js";
-import { isTestFile, skipFile } from "./_test-files.js";
+import { isTestModule, skipFile } from "./_test-files.js";
 
 const guidance =
   "A fixed wait guesses when state changes, so it flakes under load and slows the suite. Advance virtual time with TestClock.adjust, or wait on the event itself: a Deferred, Latch, or Queue in Effect code, a condition or locator assertion (expect.poll, waitForFunction) in a browser.";
@@ -79,7 +79,7 @@ export const noFixedWaitInTests = Rule.define({
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    if (!isTestFile(ctx.filename)) return skipFile;
+    if (!isTestModule(ctx)) return skipFile;
     const effectNamespaces = new Set(["Effect"]);
     const timerPromiseNames = new Set<string>();
 

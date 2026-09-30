@@ -366,4 +366,13 @@ describe("effect.testFiles setting", () => {
     );
     expect(reportedLines(findings, "tests/support/counter.ts")).toEqual([]);
   });
+
+  test("reports fixed waits in configured test helpers", () => {
+    const findings = lintFixtures(
+      "noFixedWaitInTests",
+      { "tests/support/wait.ts": "async function settle() { await Bun.sleep(10); }" },
+      { settings: { effect: { testFiles: ["tests/**"] } } },
+    );
+    expect(reportedLines(findings, "tests/support/wait.ts")).toEqual([1]);
+  });
 });
