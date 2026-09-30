@@ -1,4 +1,5 @@
 {
+  "plugins": [],
   "jsPlugins": ["oxlint-plugin-effect/plugin"],
   "rules": {
     "complexity": ["error", { "max": 21 }],

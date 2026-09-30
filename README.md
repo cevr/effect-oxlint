@@ -21,7 +21,7 @@ export default {
 };
 ```
 
-A JSON configuration extends the generated preset file. It loads the plugin and enables every recommended rule, so new rules arrive with each release:
+A JSON configuration extends the generated preset file. It loads the plugin and enables every recommended rule, so new rules arrive with each release. It declares an empty `plugins` list, so it turns on none of oxlint's built-in plugins; the extending config's own `plugins` decide those:
 
 ```jsonc
 {

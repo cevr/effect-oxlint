@@ -82,6 +82,7 @@ describe("recommended preset", () => {
 
   test("ships the same rules as a JSON preset that loads the plugin", () => {
     expect<unknown>(recommendedJson).toEqual({
+      plugins: [],
       jsPlugins: ["oxlint-plugin-effect/plugin"],
       rules: recommended,
     });
@@ -100,6 +101,20 @@ describe("recommended preset", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toContain("effect(noAsyncFunction)");
     expect(result.stdout).toContain("eslint(complexity)");
+  });
+
+  test("leaves the extending config's plugin list in charge", () => {
+    const result = runCommand([
+      "bunx",
+      "oxlint",
+      "--format",
+      "unix",
+      "--config",
+      "tests/integration/preset-consumer-oxlint.json",
+      "tests/integration/preset-plugin-scope.ts",
+    ]);
+    expect(result.stdout).not.toContain("unicorn(");
+    expect(result.exitCode).toBe(0);
   });
 });
 

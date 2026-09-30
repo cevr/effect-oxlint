@@ -1,0 +1,5 @@
+{
+  "categories": { "correctness": "error", "suspicious": "error", "perf": "error" },
+  "plugins": ["typescript"],
+  "extends": ["../../presets/recommended.json"]
+}

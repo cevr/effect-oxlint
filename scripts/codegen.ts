@@ -200,8 +200,11 @@ const main = Effect.gen(function* () {
 
   // JSON oxlint configs cannot import the TypeScript preset, so they extend this file.
   // It loads the plugin by package name, which resolves from the consumer's node_modules.
+  // An extended config without `plugins` turns on oxlint's default plugins (unicorn, oxc, ...)
+  // in the consumer; the empty list leaves the consumer's own `plugins` in charge.
   const recommendedJsonOutput = [
     "{",
+    '  "plugins": [],',
     '  "jsPlugins": ["oxlint-plugin-effect/plugin"],',
     '  "rules": {',
     [
