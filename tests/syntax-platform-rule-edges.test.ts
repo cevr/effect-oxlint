@@ -52,6 +52,17 @@ describe("noDynamicImports boundaries", () => {
     });
     expect(reportedLines(findings, "alias.ts")).toEqual([2, 3]);
   });
+
+  test("reports a createRequire bridge called inline", () => {
+    const findings = lintFixtures("noDynamicImports", {
+      "inline.ts": [
+        'import { createRequire as bridge } from "module";',
+        'const fs = bridge(import.meta.url)("node:fs");',
+        'const other = (() => createRequire)()("node:fs");',
+      ].join("\n"),
+    });
+    expect(reportedLines(findings, "inline.ts")).toEqual([2]);
+  });
 });
 
 describe("platform capability rules", () => {

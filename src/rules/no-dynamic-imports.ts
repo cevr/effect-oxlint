@@ -167,6 +167,14 @@ export const noDynamicImports = Rule.define({
         return Option.match(AST.narrow(node, "CallExpression"), {
           onNone: () => Effect.void,
           onSome: (call) => {
+            // `createRequire(import.meta.url)("x")` loads through the bridge without binding it.
+            if (
+              call.callee.type === "CallExpression" &&
+              call.callee.callee.type === "Identifier" &&
+              createRequireNames.has(call.callee.callee.name)
+            ) {
+              return report(call, "Avoid createRequire(). Keep module loading static.");
+            }
             const aliasMessage = Option.map(
               Option.filter(identifierName(call.callee), (name) => requireAliases.has(name)),
               () => "Avoid createRequire aliases. Keep module loading static.",
