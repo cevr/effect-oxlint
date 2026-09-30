@@ -17,6 +17,7 @@ import {
   noTernary,
   noTestLifecycleHooks,
   noThrowStatement,
+  noTimeoutDieInTests,
   noTryCatch,
   noWithWrapperCall,
 } from "../src/rules/index.js";
@@ -25,7 +26,12 @@ import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
 import { runCommand } from "./support/run-command.js";
 
 /** Rules that encode a project policy the preset cannot assume; a project enables each by name. */
-const optInRules = { noPositionalLogArguments, noRunPromise, noWithWrapperCall };
+const optInRules = {
+  noPositionalLogArguments,
+  noRunPromise,
+  noTimeoutDieInTests,
+  noWithWrapperCall,
+};
 
 describe("recommended preset", () => {
   test("enables the complete maintained rule set at error severity", () => {

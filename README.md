@@ -91,6 +91,7 @@ These rules encode a project policy the preset cannot assume. The plugin registe
 | --------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `effect/noPositionalLogArguments` | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                    |
 | `effect/noRunPromise`             | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts     |
+| `effect/noTimeoutDieInTests`      | Fails a test's timeout with a typed error instead of `Effect.die`                                   |
 | `effect/noWithWrapperCall`        | Pipes values through `withX` adapters instead of wrapping calls or callbacks; `allow` exempts names |
 
 ## Test Files

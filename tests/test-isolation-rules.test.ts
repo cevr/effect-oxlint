@@ -246,6 +246,37 @@ describe("noPromiseChainsInTests", () => {
   });
 });
 
+describe("noTimeoutDieInTests", () => {
+  test("reports a die whose message describes a timeout", () => {
+    const results = lintCases("noTimeoutDieInTests", {
+      extension: "test.ts",
+      valid: [
+        'Effect.die("fixture missing");',
+        "Effect.dieMessage(`index ${index} out of range`);",
+        'Effect.fail(new WaitTimeout({ message: "timed out" }));',
+        'log("timed out");',
+      ],
+      invalid: [
+        'Effect.die("timed out waiting for the stream");',
+        "Effect.dieMessage(`waitFor gave up after ${attempts} attempts`);",
+        'Effect.die(new Error("Timeout: " + label));',
+        'Effect.die("still " + "waiting for idle");',
+        'import { Effect as E } from "effect"; E.die("Time out");',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("skips application modules", () => {
+    const findings = lintFixtures("noTimeoutDieInTests", {
+      "poll.ts": 'Effect.die("timed out");',
+      "poll.test.ts": 'Effect.die("timed out");',
+    });
+    expect(reportedLines(findings, "poll.ts")).toEqual([]);
+    expect(reportedLines(findings, "poll.test.ts")).toEqual([1]);
+  });
+});
+
 describe("noTestGlobals scope", () => {
   test("skips application modules", () => {
     const findings = lintFixtures("noTestGlobals", {
