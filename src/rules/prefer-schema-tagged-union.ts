@@ -1,16 +1,19 @@
 /**
  * Declare tagged unions with Schema instead of hand-written `_tag` object types.
  *
- * A union of two or more type literals that each carry a PascalCase `_tag`
- * string literal, such as `{ _tag: "Ok"; value: A } | { _tag: "Err"; error: E }`,
+ * A union of two or more type literals that each carry a `_tag` string
+ * literal, such as `{ _tag: "Ok"; value: A } | { _tag: "Err"; error: E }`,
  * is a tagged union without constructors, guards, or a codec.
  * `Schema.TaggedUnion` (or `Schema.TaggedStruct` variants, or
  * `Schema.TaggedErrorClass` for failures) gives each variant a constructor,
  * `_tag` discrimination, and encoding for free.
  *
- * Lowercase tags are left alone: they are wire tags, not variant names. Only
- * the inline type-literal form is reported; a union of named aliases or
- * interfaces is not.
+ * Every tag spelling counts: PascalCase, lowercase and kebab-case alike. A
+ * wire tag such as `"tool-call"` is declared with `Schema.TaggedStruct`
+ * variants joined by `Schema.toTaggedUnion`. One tagged object on its own, or
+ * beside `undefined` or another non-literal member, is not a union of
+ * variants. Only the inline type-literal form is reported; a union of named
+ * aliases or interfaces is not.
  */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
@@ -24,9 +27,7 @@ const propertyKeyName = (key: ESTree.PropertyKey): string => {
   return "";
 };
 
-const isPascalCase = (value: string): boolean => /^\p{Lu}/u.test(value);
-
-/** `_tag: "Name"` with a PascalCase string literal type. */
+/** `_tag: "name"` with a non-empty string literal type. */
 const isVariantTag = (member: ESTree.TSSignature): boolean => {
   if (member.type !== "TSPropertySignature" || propertyKeyName(member.key) !== "_tag") {
     return false;
@@ -36,7 +37,7 @@ const isVariantTag = (member: ESTree.TSSignature): boolean => {
     type?.type === "TSLiteralType" &&
     type.literal.type === "Literal" &&
     Predicate.isString(type.literal.value) &&
-    isPascalCase(type.literal.value)
+    type.literal.value.length > 0
   );
 };
 
@@ -59,7 +60,7 @@ export const preferSchemaTaggedUnion = Rule.define({
           Diagnostic.make({
             node,
             message:
-              "Hand-written `_tag` union. Declare it with Schema.TaggedUnion (or Schema.TaggedStruct variants, or Schema.TaggedErrorClass for failures) so each variant gets a constructor, guard, and codec.",
+              "Hand-written `_tag` union. Declare it with Schema.TaggedUnion (Schema.TaggedStruct variants with Schema.toTaggedUnion for lowercase or kebab-case tags, or Schema.TaggedErrorClass for failures) so each variant gets a constructor, guard, and codec.",
           }),
         );
       },

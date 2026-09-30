@@ -323,11 +323,14 @@ describe("tag comparisons in parsed source", () => {
 });
 
 describe("tagged union declarations", () => {
-  test("report a union of two or more type literals with PascalCase tags", () => {
+  test("report a union of two or more tagged type literals, whatever the tag's case", () => {
     const results = lintCases("preferSchemaTaggedUnion", {
       valid: [
         'type One = { readonly _tag: "Only"; readonly value: number } | undefined;',
-        'type Wire = { _tag: "regular" } | { _tag: "interjection" };',
+        'type Single = { readonly _tag: "idle" };',
+        'type Lone = { _tag: "tool-call"; id: string } | string | undefined;',
+        'const state: { _tag: "idle" } = { _tag: "idle" };',
+        'type Empty = { _tag: "" } | { _tag: "" };',
         "type Named = Ok | Err;",
         'type Loose = { _tag: string } | { _tag: "Err" };',
         'type Kinds = { kind: "Ok" } | { kind: "Err" };',
@@ -337,6 +340,9 @@ describe("tagged union declarations", () => {
         'type Result = { readonly _tag: "Ok"; readonly value: number } | { readonly _tag: "Err"; readonly error: string };',
         'type Quoted = { "_tag": "Ok" } | { "_tag": "Err" } | undefined;',
         'const handle = (event: { _tag: "Opened" } | { _tag: "Closed"; code: number }) => event;',
+        'type Wire = { _tag: "regular" } | { _tag: "interjection" };',
+        'type Part = { readonly _tag: "tool-call"; id: string } | { readonly _tag: "text-delta"; text: string };',
+        'type Overlay = { _tag: "none" } | { _tag: "picker"; index: number } | undefined;',
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
