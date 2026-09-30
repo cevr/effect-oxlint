@@ -87,9 +87,10 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 
 These rules encode a project policy the preset cannot assume. The plugin registers them, and the preset leaves them off; enable each by name.
 
-| Rule                              | Contract                                                                         |
-| --------------------------------- | -------------------------------------------------------------------------------- |
-| `effect/noPositionalLogArguments` | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs` |
+| Rule                              | Contract                                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `effect/noPositionalLogArguments` | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                |
+| `effect/noRunPromise`             | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts |
 
 ## Test Files
 

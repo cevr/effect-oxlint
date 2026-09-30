@@ -13,6 +13,7 @@ import {
   noNewPromise,
   noNullish,
   noPositionalLogArguments,
+  noRunPromise,
   noTernary,
   noTestLifecycleHooks,
   noThrowStatement,
@@ -23,7 +24,7 @@ import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
 import { runCommand } from "./support/run-command.js";
 
 /** Rules that encode a project policy the preset cannot assume; a project enables each by name. */
-const optInRules = { noPositionalLogArguments };
+const optInRules = { noPositionalLogArguments, noRunPromise };
 
 describe("recommended preset", () => {
   test("enables the complete maintained rule set at error severity", () => {

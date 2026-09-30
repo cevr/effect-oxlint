@@ -161,3 +161,38 @@ describe("ManagedRuntime ownership", () => {
     expect(Testing.runRule(noManagedRuntimeInEffect, "CallExpression", make)).toHaveLength(0);
   });
 });
+
+describe("Promise edges", () => {
+  test("reports Effect.runPromise variants and runtime runPromise calls", () => {
+    const results = lintCases("noRunPromise", {
+      valid: [
+        "Effect.runSync(program);",
+        "Effect.runFork(program);",
+        "runtime.runFork(program);",
+        "client.runPromise(program);",
+        "const runner = runtime.runPromise;",
+        'const Effect = { runPromise: (x) => x }; Effect.runPromise("x");',
+      ],
+      invalid: [
+        "Effect.runPromise(program);",
+        "Effect.runPromiseExit(program);",
+        "Effect.runPromiseWith(services)(program);",
+        "program.pipe(Effect.runPromise);",
+        'import { Effect as E } from "effect"; E.runPromise(program);',
+        "runtime.runPromise(program);",
+        "serverRuntime.runPromiseExit(program);",
+        "ui.clientRuntime.runPromise(program);",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("leaves test modules to noEffectRunInTests and boundary files to an override", () => {
+    const findings = lintFixtures("noRunPromise", {
+      "main.ts": "Effect.runPromise(program);",
+      "main.test.ts": "Effect.runPromise(program);",
+    });
+    expect(reportedLines(findings, "main.ts")).toEqual([1]);
+    expect(reportedLines(findings, "main.test.ts")).toEqual([]);
+  });
+});

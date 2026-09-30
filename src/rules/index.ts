@@ -42,6 +42,7 @@ export * from "./no-reduce-accumulator-copy.js";
 export * from "./no-reflect-apply.js";
 export * from "./no-reflect-get.js";
 export * from "./no-run-collect-on-unbounded-stream.js";
+export * from "./no-run-promise.js";
 export * from "./no-runtime-typeof.js";
 export * from "./no-sequential-effect-all.js";
 export * from "./no-shape-in-symbol-names.js";
