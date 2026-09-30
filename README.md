@@ -45,6 +45,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/noTestLifecycleHooks`          | Bans `beforeEach`, `afterEach`, `beforeAll`, and `afterAll`; use Effect scopes instead                                 |
 | `effect/noThrowStatement`              | Bans every throw statement                                                                                             |
 | `effect/noNewPromise`                  | Bans new Promise, Promise calls, and Promise static APIs                                                               |
+| `effect/noPromiseChainsInTests`        | Bans `.then`, `.catch`, and `.finally` Promise chains in test files                                                    |
 | `effect/noNewError`                    | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die                              |
 | `effect/noNullish`                     | Bans null and undefined; permits `Object.create(null)` for prototype-free dictionaries                                 |
 | `effect/noModuleMocks`                 | Bans Vitest, Jest, and bun:test module mocks, mock functions, and spies; use test layers                               |

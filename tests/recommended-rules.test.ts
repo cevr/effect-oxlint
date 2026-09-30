@@ -53,6 +53,7 @@ describe("recommended preset", () => {
       "effect/noNullish": "error",
       "effect/noObjectParameters": "error",
       "effect/noPerCallCacheConstruction": "error",
+      "effect/noPromiseChainsInTests": "error",
       "effect/noReduceAccumulatorCopy": "error",
       "effect/noReflectApply": "error",
       "effect/noReflectGet": "error",

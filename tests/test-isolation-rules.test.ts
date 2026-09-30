@@ -215,6 +215,37 @@ describe("noEffectBunTestItCall", () => {
   });
 });
 
+describe("noPromiseChainsInTests", () => {
+  test("reports then, catch, and finally chains on non-Effect receivers", () => {
+    const results = lintCases("noPromiseChainsInTests", {
+      extension: "test.ts",
+      valid: [
+        'import { Effect } from "effect"; const recovered = Effect.catch(program, () => Effect.void);',
+        'import * as Stream from "effect/Stream"; const safe = Stream.catch(stream, () => Stream.empty);',
+        'import { Effect as E } from "effect"; E.catch(program, recover);',
+        "const handlers = { then: 1 }; const value = handlers.then;",
+      ],
+      invalid: [
+        "load().then((value) => value);",
+        "client.fetch().catch(() => 0);",
+        "task.finally(() => cleanup());",
+        "Effect.runPromise(program).then(check);",
+        'import { Effect } from "./local.js"; run().catch(recover);',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("skips application modules", () => {
+    const findings = lintFixtures("noPromiseChainsInTests", {
+      "client.ts": "load().then(check);",
+      "client.test.ts": "load().then(check);",
+    });
+    expect(reportedLines(findings, "client.ts")).toEqual([]);
+    expect(reportedLines(findings, "client.test.ts")).toEqual([1]);
+  });
+});
+
 describe("noTestGlobals scope", () => {
   test("skips application modules", () => {
     const findings = lintFixtures("noTestGlobals", {
