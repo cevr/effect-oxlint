@@ -21,6 +21,7 @@ export const recommended = {
   "effect/noGlobals": "error",
   "effect/noInlineProvide": "error",
   "effect/noKnownValueWidening": "error",
+  "effect/noLintEvasion": "error",
   "effect/noManagedRuntimeInEffect": "error",
   "effect/noModuleLevelMutableState": "error",
   "effect/noModuleMocks": "error",

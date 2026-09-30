@@ -73,6 +73,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/preferServiceOf`               | Checks inline Layer implementations through `Service.of`                                                               |
 | `effect/requireNamedEffectFn`          | Requires stable names for `Effect.fn` operations                                                                       |
 | `effect/requireSuppressionReason`      | Requires lint, Effect, and TS suppressions to name their target and give a `--` reason                                 |
+| `effect/noLintEvasion`                 | Bans `undefined` and `unknown` spelled through `Option.none()` or `Schema.Unknown`                                     |
 | `effect/noGlobals`                     | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`                                 |
 | `effect/noNodeBuiltinImport`           | Bans fully replaced Node modules and replaced operations from partial modules                                          |
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { lintFixtures } from "./support/lint-fixtures.js";
+import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
 
 const findings = lintFixtures("requireSuppressionReason", {
   "directives.ts": [
@@ -60,5 +60,43 @@ describe("requireSuppressionReason", () => {
         (left, right) => left - right,
       ),
     ).toEqual([3, 5, 7, 11, 19, 23, 24]);
+  });
+});
+
+describe("noLintEvasion", () => {
+  test("reports undefined, null, and unknown spelled through Effect APIs", () => {
+    const results = lintCases("noLintEvasion", {
+      valid: [
+        "const value = Option.getOrUndefined(found);",
+        "const value = Option.getOrElse(Option.none(), () => 0);",
+        "type Decoded = Schema.Schema.Type<typeof Payload>;",
+        "type Encoded = Schema.Codec.Encoded<typeof Schema.Unknown>;",
+        "const unknownSchema = Schema.Unknown;",
+        "const Option = { getOrUndefined: (x) => x, none: () => 0 }; Option.getOrUndefined(Option.none());",
+      ],
+      invalid: [
+        "const missing = Option.getOrUndefined(Option.none());",
+        "const missing = Option.getOrNull(Option.none());",
+        'import { Option as O } from "effect"; const missing = O.getOrUndefined(O.none());',
+        'import * as Opt from "effect/Option"; const missing = Opt.getOrUndefined(Opt.none());',
+        "type Anything = Schema.Schema.Type<typeof Schema.Unknown>;",
+        "type Anything = typeof Schema.Unknown.Type;",
+        'import { Schema as S } from "effect"; const f = (input: S.Schema.Type<typeof S.Unknown>) => input;',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("names the evaded rule", () => {
+    const evasions = lintFixtures("noLintEvasion", {
+      "evasion.ts": [
+        "const missing = Option.getOrUndefined(Option.none());",
+        "type Anything = Schema.Schema.Type<typeof Schema.Unknown>;",
+      ].join("\n"),
+    });
+    expect(evasions.get("evasion.ts")).toEqual([
+      { line: 1, message: expect.stringContaining("effect/noNullish") },
+      { line: 2, message: expect.stringContaining("effect/noUnknownParameters") },
+    ]);
   });
 });
