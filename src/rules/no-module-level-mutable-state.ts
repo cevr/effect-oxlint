@@ -6,7 +6,7 @@ import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { ancestors } from "./_ast-ancestors.js";
-import { isTestFile, skipFile } from "./_test-files.js";
+import { isTestModule, skipFile } from "./_test-files.js";
 
 /** Nodes that start a new `var` scope, so a `var` below them is not module state. */
 const functionScopeBoundaries = new Set([
@@ -35,7 +35,7 @@ export const noModuleLevelMutableState = Rule.define({
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    if (isTestFile(ctx.filename)) return skipFile;
+    if (isTestModule(ctx)) return skipFile;
 
     const isModuleScoped = (node: ESTree.VariableDeclaration): boolean => {
       if (node.kind === "var") return isModuleScopedVar(node);

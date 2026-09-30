@@ -6,7 +6,7 @@ import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
-import { isTestFile, skipFile } from "./_test-files.js";
+import { isTestModule, skipFile } from "./_test-files.js";
 
 const effectRunners = [
   "runCallback",
@@ -32,7 +32,7 @@ export const noEffectRunInTests = Rule.define({
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    if (!isTestFile(ctx.filename)) return skipFile;
+    if (!isTestModule(ctx)) return skipFile;
     const effectNamespaces = new Set(["Effect"]);
     const managedRuntimeNamespaces = new Set(["ManagedRuntime"]);
 

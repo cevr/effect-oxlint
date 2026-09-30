@@ -4,7 +4,7 @@ import { AST, Diagnostic, Rule, RuleContext, Scope } from "../vendor/effect-oxli
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { collectTestBindings, resolveTestBinding, type TestBinding } from "./_test-apis.js";
-import { isTestFile, skipFile } from "./_test-files.js";
+import { isTestModule, skipFile } from "./_test-files.js";
 
 const globalRoots = new Set(["global", "globalThis", "self", "window"]);
 
@@ -78,7 +78,7 @@ export const noTestGlobals = Rule.define({
   create: function* () {
     const ctx = yield* RuleContext;
     // Application code owns its globals; this rule is about test isolation.
-    if (!isTestFile(ctx.filename)) return skipFile;
+    if (!isTestModule(ctx)) return skipFile;
     const bindings = new Map<string, TestBinding>();
 
     const isUnshadowedGlobal = (node: ESTree.Node, name: string): boolean =>

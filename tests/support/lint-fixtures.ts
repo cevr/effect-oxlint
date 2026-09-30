@@ -11,6 +11,21 @@ export interface Finding {
   readonly message: string;
 }
 
+/** A JSON value in an oxlint configuration. */
+export type ConfigValue =
+  | string
+  | number
+  | boolean
+  | ReadonlyArray<ConfigValue>
+  | { readonly [key: string]: ConfigValue };
+
+/** Configuration beside the one enabled rule: its options and the shared settings. */
+export interface LintConfig {
+  /** The rule's options, after its severity. */
+  readonly options?: ReadonlyArray<ConfigValue>;
+  readonly settings?: { readonly [key: string]: ConfigValue };
+}
+
 /**
  * Lint named fixture files through the compiled plugin with one rule enabled.
  *
@@ -20,6 +35,7 @@ export interface Finding {
 export const lintFixtures = (
   rule: string,
   fixtures: Readonly<Record<string, string>>,
+  config: LintConfig = {},
 ): ReadonlyMap<string, ReadonlyArray<Finding>> => {
   const directory = mkdtempSync(join(tmpdir(), "oxlint-plugin-effect-"));
   const findings = new Map<string, Array<Finding>>();
@@ -30,7 +46,11 @@ export const lintFixtures = (
   }
   writeFileSync(
     join(directory, "oxlint.json"),
-    JSON.stringify({ jsPlugins: [pluginPath], rules: { [`effect/${rule}`]: "error" } }),
+    JSON.stringify({
+      jsPlugins: [pluginPath],
+      settings: config.settings ?? {},
+      rules: { [`effect/${rule}`]: ["error", ...(config.options ?? [])] },
+    }),
   );
   const result = runCommand(
     ["bunx", "oxlint", "--format", "unix", "--config", "oxlint.json", ...Object.keys(fixtures)],

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
+import { lintCases, lintFixtures, reportedLines } from "./support/lint-fixtures.js";
 
 describe("noModuleMocks", () => {
   test("reports every Vitest and Jest mocking entry point", () => {
@@ -244,5 +244,41 @@ describe("noFixedWaitInTests", () => {
           "Avoid a fixed wait in tests (Bun.sleep). A fixed wait guesses when state changes, so it flakes under load and slows the suite. Advance virtual time with TestClock.adjust, or wait on the event itself: a Deferred, Latch, or Queue in Effect code, a condition or locator assertion (expect.poll, waitForFunction) in a browser.",
       },
     ]);
+  });
+});
+
+describe("effect.testFiles setting", () => {
+  const fixtures = {
+    "tests/support/helpers.ts": "window.__STATE__ = {};",
+    "packages/e2e/src/driver.ts": "window.__STATE__ = {};",
+    "packages/e2e-tools/src/driver.ts": "window.__STATE__ = {};",
+    "src/tests.ts": "window.__STATE__ = {};",
+    "src/app.test.ts": "window.__STATE__ = {};",
+  };
+
+  test("adds the matching files to the test modules every test rule reads", () => {
+    const findings = lintFixtures("noTestGlobals", fixtures, {
+      settings: { effect: { testFiles: ["**/tests/**", "packages/e2e/**"] } },
+    });
+    expect(reportedLines(findings, "tests/support/helpers.ts")).toEqual([1]);
+    expect(reportedLines(findings, "packages/e2e/src/driver.ts")).toEqual([1]);
+    expect(reportedLines(findings, "packages/e2e-tools/src/driver.ts")).toEqual([]);
+    expect(reportedLines(findings, "src/tests.ts")).toEqual([]);
+    expect(reportedLines(findings, "src/app.test.ts")).toEqual([1]);
+  });
+
+  test("keeps test and spec modules alone without the setting", () => {
+    const findings = lintFixtures("noTestGlobals", fixtures);
+    expect(reportedLines(findings, "tests/support/helpers.ts")).toEqual([]);
+    expect(reportedLines(findings, "src/app.test.ts")).toEqual([1]);
+  });
+
+  test("exempts configured test files from rules that skip tests", () => {
+    const findings = lintFixtures(
+      "noModuleLevelMutableState",
+      { "tests/support/counter.ts": "let count = 0;\nexport const next = () => count;\n" },
+      { settings: { effect: { testFiles: ["tests/**"] } } },
+    );
+    expect(reportedLines(findings, "tests/support/counter.ts")).toEqual([]);
   });
 });

@@ -78,6 +78,18 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 
 `effect/requireSuppressionReason` also rejects `@effect-diagnostics effect/name:off`: @effect/tsgo ignores the `effect/` prefix, so write the bare rule name. A blanket directive that covers its own line, such as a bare `// oxlint-disable-line` or a file-leading `/* eslint-disable */`, suppresses this rule's report too; oxlint applies the directive before the rule can report it.
 
+## Test Files
+
+Rules that treat tests differently read one definition of a test: a `*.test.*` or `*.spec.*` module. Add a project's other test code, such as helpers in a `tests/` tree or a test harness package, with the shared `effect.testFiles` setting. Each glob matches the file's path relative to the lint root; `**` crosses directories and `*` does not.
+
+```json
+{
+  "settings": {
+    "effect": { "testFiles": ["**/tests/**", "packages/e2e/**"] }
+  }
+}
+```
+
 ## Anti-Slop Rules
 
 The recommended preset also includes these rules from
