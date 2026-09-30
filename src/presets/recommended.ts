@@ -17,6 +17,7 @@ export const recommended = {
   "effect/noEffectBind": "error",
   "effect/noEffectDo": "error",
   "effect/noEffectRunInTests": "error",
+  "effect/noFixedWaitInTests": "error",
   "effect/noGlobals": "error",
   "effect/noInlineProvide": "error",
   "effect/noKnownValueWidening": "error",

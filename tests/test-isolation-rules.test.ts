@@ -202,3 +202,47 @@ describe("noTestGlobals scope", () => {
     expect(findings.get("bootstrap.test.ts")).toHaveLength(1);
   });
 });
+
+describe("noFixedWaitInTests", () => {
+  test("reports waits a test blocks on and keeps sleeps used as values", () => {
+    const results = lintCases("noFixedWaitInTests", {
+      extension: "test.ts",
+      valid: [
+        'import { Effect } from "effect"; const fake = { frame: () => Effect.sleep("5 millis") };',
+        'import * as Effect from "effect/Effect"; const slow = Effect.sleep("1 minute").pipe(Effect.forkChild);',
+        'import { TestClock } from "effect/testing"; function* t() { yield* TestClock.adjust("1 minute"); }',
+        "const Effect = { sleep: () => 1 }; Effect.sleep(10);",
+        "const later = () => setTimeout(done, 10);",
+        "new Promise((resolve) => emitter.once('ready', resolve));",
+        'import { setTimeout } from "./fake-timers.js"; await setTimeout(10);',
+      ],
+      invalid: [
+        'import { Effect } from "effect"; function* t() { yield* Effect.sleep("200 millis"); }',
+        'import * as E from "effect/Effect"; function* t() { yield* E.sleep("200 millis"); }',
+        "async function t() { await Bun.sleep(100); }",
+        "Bun.sleepSync(100);",
+        "async function t() { await page.waitForTimeout(300); }",
+        "const wait = () => Effect.promise(() => page.waitForTimeout(100));",
+        "const settle = () => new Promise((r) => setTimeout(r, 0));",
+        "await new Promise(function (resolve) { setTimeout(resolve, 50); });",
+        'import { setTimeout as sleep } from "node:timers/promises"; await sleep(10);',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("skips application modules and explains the replacement", () => {
+    const findings = lintFixtures("noFixedWaitInTests", {
+      "poll.ts": "async function poll() { await Bun.sleep(100); }",
+      "poll.test.ts": "async function t() {\n  await Bun.sleep(100);\n}",
+    });
+    expect(findings.get("poll.ts")).toEqual([]);
+    expect(findings.get("poll.test.ts")).toEqual([
+      {
+        line: 2,
+        message:
+          "Avoid a fixed wait in tests (Bun.sleep). A fixed wait guesses when state changes, so it flakes under load and slows the suite. Advance virtual time with TestClock.adjust, or wait on the event itself: a Deferred, Latch, or Queue in Effect code, a condition or locator assertion (expect.poll, waitForFunction) in a browser.",
+      },
+    ]);
+  });
+});

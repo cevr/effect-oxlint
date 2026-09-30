@@ -19,6 +19,7 @@ export * from "./no-conditional-empty-object-spread.js";
 export * from "./no-dynamic-imports.js";
 export * from "./no-eager-acquire.js";
 export * from "./no-effect-run-in-tests.js";
+export * from "./no-fixed-wait-in-tests.js";
 export * from "./no-globals.js";
 export * from "./no-inline-provide.js";
 export * from "./no-known-value-widening.js";
