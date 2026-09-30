@@ -70,6 +70,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/preferEffectFn`                | Requires `Effect.fn` for a generator operation that adds a span                                                        |
 | `effect/preferMatchTagsExhaustive`     | Requires exhaustive `Match` for return-only `_tag` switches and if chains in Effect files                              |
 | `effect/preferPredicateIsTagged`       | Replaces combined `_tag` comparisons with a named `Predicate` refinement in Effect files                               |
+| `effect/preferSchemaTaggedUnion`       | Declares `_tag` unions with `Schema.TaggedUnion`, not hand-written type literals                                       |
 | `effect/preferServiceOf`               | Checks inline Layer implementations through `Service.of`                                                               |
 | `effect/requireNamedEffectFn`          | Requires stable names for `Effect.fn` operations                                                                       |
 | `effect/requireSuppressionReason`      | Requires lint, Effect, and TS suppressions to name their target and give a `--` reason                                 |

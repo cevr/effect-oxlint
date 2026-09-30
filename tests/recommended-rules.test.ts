@@ -76,6 +76,7 @@ describe("recommended preset", () => {
       "effect/preferCatchTag": "error",
       "effect/preferMatchTagsExhaustive": "error",
       "effect/preferPredicateIsTagged": "error",
+      "effect/preferSchemaTaggedUnion": "error",
       "effect/preferServiceOf": "error",
       "effect/requireNamedEffectFn": "error",
       "effect/requireSuppressionReason": "error",

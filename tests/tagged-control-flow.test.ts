@@ -321,3 +321,24 @@ describe("tag comparisons in parsed source", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 });
+
+describe("tagged union declarations", () => {
+  test("report a union of two or more type literals with PascalCase tags", () => {
+    const results = lintCases("preferSchemaTaggedUnion", {
+      valid: [
+        'type One = { readonly _tag: "Only"; readonly value: number } | undefined;',
+        'type Wire = { _tag: "regular" } | { _tag: "interjection" };',
+        "type Named = Ok | Err;",
+        'type Loose = { _tag: string } | { _tag: "Err" };',
+        'type Kinds = { kind: "Ok" } | { kind: "Err" };',
+        "const Result = Schema.TaggedUnion({ Ok: { value: Schema.Number }, Err: { error: Schema.String } });",
+      ],
+      invalid: [
+        'type Result = { readonly _tag: "Ok"; readonly value: number } | { readonly _tag: "Err"; readonly error: string };',
+        'type Quoted = { "_tag": "Ok" } | { "_tag": "Err" } | undefined;',
+        'const handle = (event: { _tag: "Opened" } | { _tag: "Closed"; code: number }) => event;',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+});

@@ -58,6 +58,7 @@ export * from "./prefer-catch-tag.js";
 export * from "./prefer-effect-fn.js";
 export * from "./prefer-match-tags-exhaustive.js";
 export * from "./prefer-predicate-is-tagged.js";
+export * from "./prefer-schema-tagged-union.js";
 export * from "./prefer-service-of.js";
 export * from "./require-named-effect-fn.js";
 export * from "./require-suppression-reason.js";
