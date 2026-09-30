@@ -184,3 +184,51 @@ describe("acquired handles", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 });
+
+describe("withX wrapper calls", () => {
+  test("report wrapped invocations and callbacks, not pipeable adapters", () => {
+    const results = lintCases("noWithWrapperCall", {
+      valid: [
+        'loadUser(id).pipe(Effect.withSpan("load"));',
+        "loadUser(id).pipe(withRetry(3));",
+        'const traced = Effect.withSpan("load");',
+        "withTimeout(duration);",
+        "const withRetry = (times: number) => (self) => self;",
+        "Effect.withConcurrency(effect, () => 2);",
+      ],
+      invalid: [
+        'Effect.withSpan(loadUser(id), "load");',
+        "withRetry(loadUser(id), 3);",
+        "withRetry(3)(loadUser(id));",
+        "withTransaction(() => save(user));",
+        "withLock(key, (release) => run(release));",
+        "const withTracing = (self: Effect.Effect<void>) => self;",
+        "const withCleanup = (cleanup: () => void) => cleanup;",
+        "const withLayer = (layer) => (self: Effect.Effect<void>) => self;",
+        'const withSpan2 = Effect.fn("x")(function* (self: Effect.Effect<void>) { return yield* self; });',
+        "function withAudit(self: Effect.Effect<void>) { return self; }",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("let test modules keep callback helpers but not wrapped invocations", () => {
+    const findings = lintFixtures("noWithWrapperCall", {
+      "fixture.test.ts": [
+        "const withTempDir = (use: (dir: string) => void) => use;",
+        'withTempDir((dir) => write(dir, "x"));',
+        "withRetry(loadUser(id));",
+      ].join("\n"),
+    });
+    expect(reportedLines(findings, "fixture.test.ts")).toEqual([3]);
+  });
+
+  test("skip the adapters the allow option names", () => {
+    const findings = lintFixtures(
+      "noWithWrapperCall",
+      { "server.ts": "withBoundary(handle(request));\nwithRetry(handle(request));" },
+      { options: [{ allow: ["withBoundary"] }] },
+    );
+    expect(reportedLines(findings, "server.ts")).toEqual([2]);
+  });
+});
