@@ -21,7 +21,7 @@ import * as Str from "effect/String";
 export const isLine = (comment: Comment): boolean => comment.type === "Line";
 
 /**
- * Check whether a comment is a block comment (`/* ... *​/`).
+ * Check whether a comment is a block comment (`/* ... *\/`).
  *
  * @since 0.2.0
  */
@@ -46,7 +46,7 @@ export const isShebang = (comment: Comment): boolean => comment.type === "Sheban
 export const text = (comment: Comment): string => comment.value;
 
 /**
- * Check whether a comment is a JSDoc comment (`/** ... *​/`).
+ * Check whether a comment is a JSDoc comment (`/** ... *\/`).
  *
  * A JSDoc comment is a block comment whose value starts with `*`.
  *
@@ -59,7 +59,7 @@ export const isJSDoc = (comment: Comment): boolean =>
  * Check whether a comment is an eslint/oxlint disable directive.
  *
  * Matches line comments like `// eslint-disable-next-line ...`
- * and block comments like `/* eslint-disable ... *​/`.
+ * and block comments like `/* eslint-disable ... *\/`.
  *
  * @since 0.2.0
  */

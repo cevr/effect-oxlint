@@ -29,6 +29,13 @@
         "typescript/no-explicit-any": "off",
         "typescript/no-unsafe-type-assertion": "off"
       }
+    },
+    {
+      // Lint fixtures call the APIs the rules ban, including ones Effect 4 removed.
+      "files": ["tests/integration/**"],
+      "rules": {
+        "import/namespace": "off"
+      }
     }
   ]
 }
