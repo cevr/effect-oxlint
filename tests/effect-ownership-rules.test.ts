@@ -9,6 +9,7 @@ import { noSilentCatchAll } from "../src/rules/no-silent-catch-all.js";
 import { noUnboundedRetry } from "../src/rules/no-unbounded-retry.js";
 import { requireNamedEffectFn } from "../src/rules/require-named-effect-fn.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
+import { lintCases } from "./support/lint-fixtures.js";
 
 const insideEffectFn = (expression: ReturnType<typeof Testing.callOfMember>) => {
   const statement = Testing.exprStmt(expression);
@@ -102,6 +103,28 @@ describe("failure visibility", () => {
     ]);
     expect(Testing.runRule(noSilentCatchAll, "CallExpression", silent)).toHaveLength(1);
     expect(Testing.runRule(noSilentCatchAll, "CallExpression", observed)).toHaveLength(0);
+  });
+});
+
+describe("log messages", () => {
+  test("reports positional arguments after an Effect.log* message", () => {
+    const results = lintCases("noPositionalLogArguments", {
+      valid: [
+        'Effect.logWarning("request failed").pipe(Effect.annotateLogs({ error: String(error) }));',
+        "Effect.logError(cause);",
+        'logger.logWarning("request failed", error);',
+        'Console.log("a", "b");',
+        'const Effect = { log: (...parts) => parts }; Effect.log("a", "b");',
+      ],
+      invalid: [
+        'Effect.logWarning("request failed", error);',
+        'Effect.logError("failed", cause);',
+        'Effect.log("a", "b");',
+        'import { Effect as E } from "effect"; E.logInfo("ready", port);',
+        'import * as Fx from "effect/Effect"; Fx.logDebug("state", state);',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 });
 

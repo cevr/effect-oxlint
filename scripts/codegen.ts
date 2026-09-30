@@ -3,7 +3,8 @@
  *
  * Scans src/rules/ for rule files (ignoring _*.ts and index.ts),
  * extracts the exported const name, loads the rule to read its
- * `meta.docs.recommendedOptions`, and writes the barrel and the preset.
+ * `meta.docs` preset fields, and writes the barrel and the preset. A rule
+ * with `recommended: false` is exported but left out of the preset.
  *
  * Usage: bun run scripts/codegen.ts
  */
@@ -33,18 +34,27 @@ const RuleOptions = Schema.Record(
 );
 type RuleOptions = typeof RuleOptions.Type;
 
-/** A rule's `meta.docs.recommendedOptions`: absent when the preset enables it without options. */
-const RecommendedOptions = Schema.OptionFromUndefinedOr(RuleOptions);
-type RecommendedOptions = typeof RecommendedOptions.Type;
+/** A rule's `meta.docs.recommendedOptions`: none when the preset enables it without options. */
+type RecommendedOptions = Option.Option<RuleOptions>;
 
 const nativeRules: ReadonlyArray<readonly [name: string, options: RecommendedOptions]> = [
   ["complexity", Option.some({ max: 21 })],
 ];
 
+/**
+ * The preset fields of a rule's `meta.docs`. A rule joins the recommended
+ * preset unless it sets `recommended: false`, which leaves it opt-in.
+ */
+const PresetDocs = Schema.Struct({
+  recommended: Schema.optionalKey(Schema.Boolean),
+  recommendedOptions: Schema.optionalKey(RuleOptions),
+});
+
 interface RuleEntry {
   fileName: string;
   exportName: string;
   category: string;
+  recommended: boolean;
   recommendedOptions: RecommendedOptions;
 }
 
@@ -86,16 +96,14 @@ const files = readdirSync(RULES_DIR)
 
 // The barrel re-exports each rule module whole, so a second export would
 // register as a plugin rule. Every rule module exports exactly its rule.
-const loadRecommendedOptions = (file: string, exportName: string) =>
+const loadPresetDocs = (file: string, exportName: string) =>
   Effect.promise((): Promise<Record<string, CreateRule>> => import(join(RULES_DIR, file))).pipe(
     Effect.filterOrFail(
       (module) => Object.keys(module).length === 1 && exportName in module,
       () => `${file} must export only ${exportName}`,
     ),
     Effect.flatMap((module) =>
-      Schema.decodeUnknownEffect(RecommendedOptions)(
-        module[exportName]?.meta?.docs?.recommendedOptions,
-      ),
+      Schema.decodeUnknownEffect(PresetDocs)(module[exportName]?.meta?.docs ?? {}),
     ),
     Effect.orDie,
   );
@@ -108,14 +116,15 @@ const loadEntry = (file: string) => {
       return Effect.succeed<ReadonlyArray<RuleEntry>>([]);
     },
     onSome: (exportName) =>
-      loadRecommendedOptions(file, exportName).pipe(
+      loadPresetDocs(file, exportName).pipe(
         Effect.map(
-          (recommendedOptions): ReadonlyArray<RuleEntry> => [
+          (docs): ReadonlyArray<RuleEntry> => [
             {
               fileName: file.replace(".ts", ""),
               exportName,
               category: detectCategory(content, file),
-              recommendedOptions,
+              recommended: docs.recommended !== false,
+              recommendedOptions: Option.fromUndefinedOr(docs.recommendedOptions),
             },
           ],
         ),
@@ -155,6 +164,7 @@ const jsonPresetEntry = (name: string, options: RecommendedOptions): string =>
 
 const main = Effect.gen(function* () {
   const entries = (yield* Effect.forEach(files, loadEntry, { concurrency: 8 })).flat();
+  const presetEntries = entries.filter((entry) => entry.recommended);
 
   // Group by category
   const grouped = new Map<string, RuleEntry[]>();
@@ -193,7 +203,9 @@ const main = Effect.gen(function* () {
     " */",
     "export const recommended = {",
     ...nativeRules.map(([name, options]) => presetEntry(name, options)),
-    ...entries.map((entry) => presetEntry(`effect/${entry.exportName}`, entry.recommendedOptions)),
+    ...presetEntries.map((entry) =>
+      presetEntry(`effect/${entry.exportName}`, entry.recommendedOptions),
+    ),
     "} as const;",
     "",
   ].join("\n");
@@ -209,7 +221,7 @@ const main = Effect.gen(function* () {
     '  "rules": {',
     [
       ...nativeRules.map(([name, options]) => jsonPresetEntry(name, options)),
-      ...entries.map((entry) =>
+      ...presetEntries.map((entry) =>
         jsonPresetEntry(`effect/${entry.exportName}`, entry.recommendedOptions),
       ),
     ].join(",\n"),

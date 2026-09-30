@@ -36,6 +36,7 @@ export * from "./no-node-builtin-import.js";
 export * from "./no-nullish.js";
 export * from "./no-object-parameters.js";
 export * from "./no-per-call-cache-construction.js";
+export * from "./no-positional-log-arguments.js";
 export * from "./no-promise-chains-in-tests.js";
 export * from "./no-reduce-accumulator-copy.js";
 export * from "./no-reflect-apply.js";

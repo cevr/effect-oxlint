@@ -12,6 +12,7 @@ import {
   noNewError,
   noNewPromise,
   noNullish,
+  noPositionalLogArguments,
   noTernary,
   noTestLifecycleHooks,
   noThrowStatement,
@@ -20,6 +21,9 @@ import {
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
 import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
 import { runCommand } from "./support/run-command.js";
+
+/** Rules that encode a project policy the preset cannot assume; a project enables each by name. */
+const optInRules = { noPositionalLogArguments };
 
 describe("recommended preset", () => {
   test("enables the complete maintained rule set at error severity", () => {
@@ -84,6 +88,13 @@ describe("recommended preset", () => {
       "effect/requireNamedEffectFn": "error",
       "effect/requireSuppressionReason": "error",
     });
+  });
+
+  test("leaves opt-in rules out while the plugin still registers them", () => {
+    for (const [name, rule] of Object.entries(optInRules)) {
+      expect(recommended).not.toHaveProperty(`effect/${name}`);
+      expect(rule.meta?.docs?.recommended).toBe(false);
+    }
   });
 
   test("ships the same rules as a JSON preset that loads the plugin", () => {
