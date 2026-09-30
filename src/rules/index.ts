@@ -18,6 +18,7 @@ export * from "./no-chained-type-assertions.js";
 export * from "./no-conditional-empty-object-spread.js";
 export * from "./no-dynamic-imports.js";
 export * from "./no-eager-acquire.js";
+export * from "./no-effect-bun-test-it-call.js";
 export * from "./no-effect-run-in-tests.js";
 export * from "./no-fixed-wait-in-tests.js";
 export * from "./no-globals.js";

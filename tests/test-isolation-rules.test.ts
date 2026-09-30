@@ -192,6 +192,29 @@ describe("noTestGlobals", () => {
   });
 });
 
+describe("noEffectBunTestItCall", () => {
+  test("reports a call of effect-bun-test's it under any local name", () => {
+    const results = lintCases("noEffectBunTestItCall", {
+      extension: "test.ts",
+      valid: [
+        'import { it } from "effect-bun-test"; it.live("runs", () => Effect.void);',
+        'import { it } from "effect-bun-test"; it.effect("runs", () => Effect.void);',
+        'import { it } from "bun:test"; it("runs", () => {});',
+        'import { it } from "@effect/vitest"; it("runs", () => {});',
+        'import { it } from "effect-bun-test"; const run = (it) => it("x"); run(test);',
+        'import * as ebt from "effect-bun-test"; ebt.it.live("runs", () => Effect.void);',
+        'it("uses the runner global", () => {});',
+      ],
+      invalid: [
+        'import { it } from "effect-bun-test"; it("runs", () => {});',
+        'import { it as spec } from "effect-bun-test"; spec("runs", () => {});',
+        'import * as ebt from "effect-bun-test"; ebt.it("runs", () => {});',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+});
+
 describe("noTestGlobals scope", () => {
   test("skips application modules", () => {
     const findings = lintFixtures("noTestGlobals", {

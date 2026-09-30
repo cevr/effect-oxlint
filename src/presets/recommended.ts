@@ -15,6 +15,7 @@ export const recommended = {
   "effect/noDynamicImports": "error",
   "effect/noEagerAcquire": "error",
   "effect/noEffectBind": "error",
+  "effect/noEffectBunTestItCall": "error",
   "effect/noEffectDo": "error",
   "effect/noEffectRunInTests": "error",
   "effect/noFixedWaitInTests": "error",
