@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.17.1
+
+### Patch Changes
+
+- [`8a39b4c`](https://github.com/cevr/effect-oxlint/commit/8a39b4c6346c9941b8573e0fbb6c4bd84c713aa4) Thanks [@cevr](https://github.com/cevr)! - `presets/recommended.json` declares `"plugins": []`. Without it, oxlint 1.86 gave a config that extends the preset oxlint's default plugins (unicorn, oxc, ...) on top of its own `plugins`, so rules such as `unicorn/consistent-function-scoping` and `unicorn/no-array-sort` fired in projects that never enabled unicorn. The extending config's `plugins` list now decides the built-in plugins.
+
 ## 0.17.0
 
 ### Minor Changes
