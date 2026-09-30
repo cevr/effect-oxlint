@@ -178,6 +178,101 @@ describe("platform capability rules", () => {
   });
 });
 
+describe("platform layer provisions", () => {
+  test("report a layer read through every binding shape, and leave other members alone", () => {
+    const results = lintCases("noPlatformLayerOutsideEntry", {
+      valid: [
+        'import { BunRuntime } from "@effect/platform-bun"; BunRuntime.runMain(program);',
+        'import { BunSocket } from "@effect/platform-bun"; const socket = BunSocket.makeNet(options);',
+        'import * as Platform from "@effect/platform-bun"; Platform.BunRuntime.runMain(program);',
+        'import { makeNet } from "@effect/platform-bun/BunSocket"; makeNet(options);',
+        'import type { BunFileSystem } from "@effect/platform-bun"; type Fs = typeof BunFileSystem;',
+        'import { BunFileSystem } from "@effect/platform-bun"; type Layer = typeof BunFileSystem.layer;',
+        "const BunWidget = { layer: 1 }; BunWidget.layer;",
+      ],
+      invalid: [
+        'import { BunFileSystem } from "@effect/platform-bun"; BunFileSystem.layer;',
+        'import { BunFileSystem as Fs } from "@effect/platform-bun"; Fs?.layerNoop;',
+        'import * as Platform from "@effect/platform-bun"; Platform.BunPath.layer;',
+        'import * as Platform from "@effect/platform-bun"; const { BunPath } = Platform; BunPath.layer;',
+        'import { layer } from "@effect/platform-bun/BunCrypto";',
+        'import * as BunPath from "@effect/platform-bun/BunPath"; BunPath.layer;',
+        'import { BunCrypto } from "@effect/platform-bun"; const Crypto = BunCrypto; Crypto.layer;',
+        'import { BunCrypto } from "@effect/platform-bun"; const { layer } = BunCrypto;',
+        'import { NodePath } from "@effect/platform-node"; NodePath.layer;',
+        'const PlatformBun = await import("@effect/platform-bun"); PlatformBun.BunPath.layer;',
+        '(await import("@effect/platform-bun/BunPath")).layer;',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("report a platform module handed on, and a re-export of a platform package", () => {
+    const results = lintCases("noPlatformLayerOutsideEntry", {
+      valid: [
+        'import { BunFileSystem } from "@effect/platform-bun"; export type Fs = typeof BunFileSystem;',
+        'export type { BunFileSystem } from "@effect/platform-bun";',
+      ],
+      invalid: [
+        'import { BunFileSystem } from "@effect/platform-bun"; pick(BunFileSystem);',
+        'import { BunFileSystem } from "@effect/platform-bun"; [BunFileSystem][0].layer;',
+        'import { BunFileSystem } from "@effect/platform-bun"; BunFileSystem[key];',
+        'import { BunFileSystem } from "@effect/platform-bun"; export { BunFileSystem };',
+        'import { BunFileSystem } from "@effect/platform-bun"; const { ...rest } = BunFileSystem;',
+        'export * from "@effect/platform-bun";',
+        'export { BunPath } from "@effect/platform-bun";',
+        'export * as BunCrypto from "@effect/platform-bun/BunCrypto";',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("read computed members by their literal name", () => {
+    const findings = lintFixtures("noPlatformLayerOutsideEntry", {
+      "computed.ts": [
+        'import { BunFileSystem } from "@effect/platform-bun";',
+        'BunFileSystem["layer"];',
+        'BunFileSystem["make"];',
+      ].join("\n"),
+    });
+    expect(reportedLines(findings, "computed.ts")).toEqual([2]);
+  });
+
+  test("report a project's own layers, and skip test modules", () => {
+    const findings = lintFixtures(
+      "noPlatformLayerOutsideEntry",
+      {
+        "app.ts": [
+          'import { HostPlatformLive } from "./host.js";',
+          'import * as Host from "./host.js";',
+          "Host.HostPlatformLive;",
+          'import { HostService } from "./host.js";',
+        ].join("\n"),
+        "app.test.ts": 'import { BunFileSystem } from "@effect/platform-bun"; BunFileSystem.layer;',
+      },
+      { options: [{ layers: ["HostPlatformLive"] }] },
+    );
+    expect(reportedLines(findings, "app.ts")).toEqual([1, 3]);
+    expect(reportedLines(findings, "app.test.ts")).toEqual([]);
+  });
+
+  test("read only the packages the packages option names", () => {
+    const findings = lintFixtures(
+      "noPlatformLayerOutsideEntry",
+      {
+        "app.ts": [
+          'import { BunPath } from "@effect/platform-bun";',
+          "BunPath.layer;",
+          'import { DenoPath } from "@example/platform-deno";',
+          "DenoPath.layer;",
+        ].join("\n"),
+      },
+      { options: [{ packages: ["@example/platform-deno"] }] },
+    );
+    expect(reportedLines(findings, "app.ts")).toEqual([4]);
+  });
+});
+
 describe("syntax rules", () => {
   test("noChainedTypeAssertions allows a single assertion", () => {
     const results = lintCases("noChainedTypeAssertions", {

@@ -12,6 +12,7 @@ import {
   noNewError,
   noNewPromise,
   noNullish,
+  noPlatformLayerOutsideEntry,
   noPositionalLogArguments,
   noRunPromise,
   noTernary,
@@ -27,6 +28,7 @@ import { runCommand } from "./support/run-command.js";
 
 /** Rules that encode a project policy the preset cannot assume; a project enables each by name. */
 const optInRules = {
+  noPlatformLayerOutsideEntry,
   noPositionalLogArguments,
   noRunPromise,
   noTimeoutDieInTests,

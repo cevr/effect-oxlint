@@ -87,12 +87,13 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 
 These rules encode a project policy the preset cannot assume. The plugin registers them, and the preset leaves them off; enable each by name.
 
-| Rule                              | Contract                                                                                            |
-| --------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `effect/noPositionalLogArguments` | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                    |
-| `effect/noRunPromise`             | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts     |
-| `effect/noTimeoutDieInTests`      | Fails a test's timeout with a typed error instead of `Effect.die`                                   |
-| `effect/noWithWrapperCall`        | Pipes values through `withX` adapters instead of wrapping calls or callbacks; `allow` exempts names |
+| Rule                                 | Contract                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `effect/noPlatformLayerOutsideEntry` | Provides `@effect/platform-*` layers (and the `layers` option names) only in entry files an override exempts |
+| `effect/noPositionalLogArguments`    | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                             |
+| `effect/noRunPromise`                | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts              |
+| `effect/noTimeoutDieInTests`         | Fails a test's timeout with a typed error instead of `Effect.die`                                            |
+| `effect/noWithWrapperCall`           | Pipes values through `withX` adapters instead of wrapping calls or callbacks; `allow` exempts names          |
 
 ## Test Files
 
