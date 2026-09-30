@@ -117,6 +117,65 @@ describe("platform capability rules", () => {
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
+
+  test("noGlobals bans the members a project configures", () => {
+    const findings = lintFixtures(
+      "noGlobals",
+      {
+        "host.ts": [
+          "const version = Bun.version;",
+          "const executable = process.execPath;",
+          "const pid = process.pid;",
+          "const title = process.title;",
+          "{ const Bun = { version: 1 }; Bun.version; }",
+          "const env = process.env;",
+        ].join("\n"),
+      },
+      {
+        options: [
+          {
+            members: {
+              Bun: { use: "an Effect platform service" },
+              process: { properties: ["execPath", "pid"], use: "a platform service" },
+            },
+          },
+        ],
+      },
+    );
+    expect(reportedLines(findings, "host.ts")).toEqual([1, 2, 3, 6]);
+  });
+
+  test("noNodeBuiltinImport bans the modules and members a project configures", () => {
+    const findings = lintFixtures(
+      "noNodeBuiltinImport",
+      {
+        "host.ts": [
+          'import { $ } from "bun";',
+          'import { Database } from "bun:sqlite";',
+          'import { createHash } from "node:crypto";',
+          'import { hostname, EOL } from "node:os";',
+          'import * as os from "os"; os.homedir(); os.EOL;',
+          'import { fileURLToPath } from "url";',
+          'import { join } from "node:path";',
+          'import { lookup } from "dns";',
+        ].join("\n"),
+      },
+      {
+        options: [
+          {
+            modules: {
+              bun: { use: "an Effect platform service" },
+              "bun:*": { use: "an Effect platform service" },
+              crypto: { use: "Crypto" },
+              os: { members: ["hostname", "homedir"], use: "a platform service" },
+              "node:url": { use: "Path.fromFileUrl" },
+            },
+          },
+        ],
+      },
+    );
+    expect(reportedLines(findings, "host.ts")).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
 });
 
 describe("syntax rules", () => {

@@ -78,8 +78,8 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/requireNamedEffectFn`          | Requires stable names for `Effect.fn` operations                                                                       |
 | `effect/requireSuppressionReason`      | Requires lint, Effect, and TS suppressions to name their target and give a `--` reason                                 |
 | `effect/noLintEvasion`                 | Bans `undefined` and `unknown` spelled through `Option.none()` or `Schema.Unknown`                                     |
-| `effect/noGlobals`                     | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`                                 |
-| `effect/noNodeBuiltinImport`           | Bans fully replaced Node modules and replaced operations from partial modules                                          |
+| `effect/noGlobals`                     | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`; `members` bans more            |
+| `effect/noNodeBuiltinImport`           | Bans fully replaced Node modules and replaced operations from partial modules; `modules` bans more                     |
 
 `effect/requireSuppressionReason` also rejects `@effect-diagnostics effect/name:off`: @effect/tsgo ignores the `effect/` prefix, so write the bare rule name. A blanket directive that covers its own line, such as a bare `// oxlint-disable-line` or a file-leading `/* eslint-disable */`, suppresses this rule's report too; oxlint applies the directive before the rule can report it.
 
@@ -177,6 +177,44 @@ Put unmatched host calls in named adapter files and disable only the relevant ru
       }
     }
   ]
+}
+```
+
+A project that keeps a runtime behind adapters bans more with options: `noGlobals` takes `members` (a global's members, all of them or the listed `properties`), and `noNodeBuiltinImport` takes `modules` (a module, or a `*` prefix such as `bun:*`; `members` narrows the ban to those named imports and alias reads). The adapter override then turns the rules off, or configures them without the options to keep only the built-in bans:
+
+```jsonc
+{
+  "rules": {
+    "effect/noGlobals": [
+      "error",
+      {
+        "members": {
+          "Bun": { "use": "an Effect platform service" },
+          "process": {
+            "properties": ["cwd", "execPath", "pid", "platform"],
+            "use": "a platform service",
+          },
+        },
+      },
+    ],
+    "effect/noNodeBuiltinImport": [
+      "error",
+      {
+        "modules": {
+          "bun": { "use": "an Effect platform service" },
+          "bun:*": { "use": "an Effect platform service" },
+          "os": { "members": ["homedir", "hostname"], "use": "a platform service" },
+        },
+      },
+    ],
+  },
+  "overrides": [
+    // Only the built-in bans apply in adapters.
+    {
+      "files": ["src/**/*-adapter.ts"],
+      "rules": { "effect/noGlobals": "error", "effect/noNodeBuiltinImport": "error" },
+    },
+  ],
 }
 ```
 

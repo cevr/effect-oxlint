@@ -1,8 +1,29 @@
-/** Ban ambient runtime capabilities that have direct Effect replacements. */
+/**
+ * Ban ambient runtime capabilities that have direct Effect replacements.
+ *
+ * The `members` option bans more members of a global, on top of the built-in
+ * list: `{ "Bun": { "use": "an Effect platform service" } }` bans every
+ * member of `Bun`, and `{ "process": { "properties": ["cwd", "pid"], "use":
+ * "..." } }` bans the listed ones. A project exempts its adapter files with
+ * an override that turns the rule off, or configures it without the option to
+ * keep only the built-in list there.
+ */
 import type { ESTree } from "@oxlint/plugins";
 import { AST, Diagnostic, Rule, RuleContext, Scope } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+
+const MemberOption = Schema.Struct({
+  properties: Schema.optionalKey(Schema.Array(Schema.String)),
+  use: Schema.String,
+});
+
+const Options = Schema.UndefinedOr(
+  Schema.Struct({
+    members: Schema.optionalKey(Schema.Record(Schema.String, MemberOption)),
+  }),
+);
 
 type MemberBan = readonly [object: string, properties: ReadonlySet<string>, alternative: string];
 
@@ -135,9 +156,42 @@ export const noGlobals = Rule.define({
   meta: Rule.meta({
     type: "problem",
     description: "Avoid ambient runtime capabilities that Effect provides as services.",
+    schema: [
+      {
+        type: "object",
+        properties: {
+          members: {
+            type: "object",
+            additionalProperties: {
+              type: "object",
+              properties: {
+                properties: { type: "array", items: { type: "string" } },
+                use: { type: "string" },
+              },
+              required: ["use"],
+              additionalProperties: false,
+            },
+          },
+        },
+        additionalProperties: false,
+      },
+    ],
+    defaultOptions: [{ members: {} }],
   }),
-  create: function* () {
+  options: Options,
+  create: function* (options) {
     const ctx = yield* RuleContext;
+    const configuredMembers = new Map(Object.entries(options?.members ?? {}));
+    /** The replacement a configured ban names for `object.property`, if one applies. */
+    const configuredBan = (object: string, property: string): Option.Option<string> =>
+      Option.flatMap(Option.fromUndefinedOr(configuredMembers.get(object)), (ban) =>
+        Option.liftPredicate(ban.use, () =>
+          Option.match(Option.fromUndefinedOr(ban.properties), {
+            onNone: () => true,
+            onSome: (listed) => listed.includes(property),
+          }),
+        ),
+      );
     const report = (node: ESTree.Node, used: string, alternative: string) =>
       ctx.report(
         Diagnostic.make({
@@ -166,7 +220,10 @@ export const noGlobals = Rule.define({
               return report(memberExpression, `${object}.${property}`, alternative);
             }
           }
-          return Effect.void;
+          return Option.match(configuredBan(object, property), {
+            onNone: () => Effect.void,
+            onSome: (alternative) => report(memberExpression, `${object}.${property}`, alternative),
+          });
         },
       });
     };
