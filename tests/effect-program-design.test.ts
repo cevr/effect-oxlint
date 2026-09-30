@@ -19,6 +19,27 @@ describe("service implementation checks", () => {
     const layer = Testing.callOfMember("Layer", "succeed", [Testing.id("Jobs"), implementation]);
     expect(Testing.runRule(preferServiceOf, "CallExpression", layer)).toHaveLength(0);
   });
+
+  test("reports an alternative layer static that aliases the live layer", () => {
+    const results = lintCases("noAliasTestLayer", {
+      valid: [
+        "class Jobs { static Live = Layer.succeed(Jobs, live); static Test = Layer.succeed(Jobs, fake); }",
+        "class Jobs { static Test = Jobs.fromEntries([]); }",
+        "class Jobs { static Live = Jobs.layer; }",
+        "class Jobs { Test = Jobs.Live; }",
+        "class Jobs { static Test = (entries) => Jobs.make(entries); }",
+        "class Jobs { static TestLive = Jobs.Live; }",
+      ],
+      invalid: [
+        "class Jobs { static Live = build(); static Test = Jobs.Live; }",
+        "class Jobs { static readonly Fake: Layer.Layer<Jobs> = Jobs.Live; }",
+        "class Jobs { static Stub = () => Jobs.Live; }",
+        "class Jobs { static Mock = this.Live; }",
+        "class Jobs { static layer = build(); static layerTest = Jobs.layer; }",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
 });
 
 describe("bounded concurrency", () => {

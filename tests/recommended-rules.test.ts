@@ -27,6 +27,7 @@ describe("recommended preset", () => {
       complexity: ["error", { max: 21 }],
       "effect/maxCognitiveComplexity": ["error", { max: 21 }],
       "effect/maxHalsteadDifficulty": ["error", { max: 79 }],
+      "effect/noAliasTestLayer": "error",
       "effect/noArrayFilterMap": "error",
       "effect/noAs": "error",
       "effect/noAsyncFunction": "error",

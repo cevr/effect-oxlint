@@ -74,6 +74,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/preferPredicateIsTagged`       | Replaces combined `_tag` comparisons with a named `Predicate` refinement in Effect files                               |
 | `effect/preferSchemaTaggedUnion`       | Declares `_tag` unions with `Schema.TaggedUnion`, not hand-written type literals                                       |
 | `effect/preferServiceOf`               | Checks inline Layer implementations through `Service.of`                                                               |
+| `effect/noAliasTestLayer`              | Bans a `Test`/`Fake`/`Stub`/`Mock` layer static that only returns the live layer                                       |
 | `effect/requireNamedEffectFn`          | Requires stable names for `Effect.fn` operations                                                                       |
 | `effect/requireSuppressionReason`      | Requires lint, Effect, and TS suppressions to name their target and give a `--` reason                                 |
 | `effect/noLintEvasion`                 | Bans `undefined` and `unknown` spelled through `Option.none()` or `Schema.Unknown`                                     |

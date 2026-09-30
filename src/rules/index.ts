@@ -11,6 +11,7 @@ export * from "./no-effect-do.js";
 // --- AST pattern rules ---
 export * from "./max-cognitive-complexity.js";
 export * from "./max-halstead-difficulty.js";
+export * from "./no-alias-test-layer.js";
 export * from "./no-array-filter-map.js";
 export * from "./no-as.js";
 export * from "./no-async-function.js";
