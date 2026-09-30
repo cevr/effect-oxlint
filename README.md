@@ -65,7 +65,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/noSilentCatchAll`              | Keeps swallowed failures visible or recovers them truthfully                                                           |
 | `effect/noUnboundedConcurrency`        | Requires finite concurrency for collections that can grow                                                              |
 | `effect/noUnboundedRetry`              | Requires an attempt or duration bound on retry schedules                                                               |
-| `effect/noDynamicImports`              | Allows import() only behind a named lazy-loading boundary; bans require()                                              |
+| `effect/noDynamicImports`              | Allows import() only behind a named lazy-loading boundary (none with `allowNamedBoundaries: false`); bans require()    |
 | `effect/noEffectDo`                    | Bans Effect.Do                                                                                                         |
 | `effect/noEffectBind`                  | Bans Effect.bind                                                                                                       |
 | `effect/preferCatchTag`                | Replaces manual `_tag` predicates and `catchAll` dispatch with tagged recovery                                         |

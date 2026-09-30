@@ -1,9 +1,25 @@
-/** Allow dynamic imports only at named lazy-loading boundaries. */
+/**
+ * Allow dynamic imports only at named lazy-loading boundaries.
+ *
+ * `require()`, `module.require()` and `createRequire` bridges are always
+ * reported. An `import()` is allowed when it is bound to a name, returned from
+ * a named function, or loaded inside `Effect.promise`/`Effect.tryPromise`.
+ *
+ * `allowNamedBoundaries: false` makes the rule strict: every `import()` is
+ * reported, named or not. A project whose build needs a static module graph
+ * (a compiled single-file binary, for example) keeps each deliberate load
+ * visible with a reasoned line suppression instead.
+ */
 import type { ESTree } from "@oxlint/plugins";
 import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+
+const Options = Schema.UndefinedOr(
+  Schema.Struct({ allowNamedBoundaries: Schema.optionalKey(Schema.Boolean) }),
+);
 
 import { ancestors, parentOf } from "./_ast-ancestors.js";
 
@@ -107,9 +123,19 @@ export const noDynamicImports = Rule.define({
   meta: Rule.meta({
     type: "problem",
     description: "Keep dynamic imports behind named lazy-loading boundaries.",
+    schema: [
+      {
+        type: "object",
+        properties: { allowNamedBoundaries: { type: "boolean" } },
+        additionalProperties: false,
+      },
+    ],
+    defaultOptions: [{ allowNamedBoundaries: true }],
   }),
-  create: function* () {
+  options: Options,
+  create: function* (options) {
     const ctx = yield* RuleContext;
+    const allowNamedBoundaries = options?.allowNamedBoundaries ?? true;
     const createRequireNames = new Set<string>();
     const requireAliases = new Set<string>();
     const report = (node: ESTree.Node, message: string) =>
@@ -156,6 +182,12 @@ export const noDynamicImports = Rule.define({
         Option.match(AST.narrow(node, "ImportExpression"), {
           onNone: () => Effect.void,
           onSome: (importExpression) => {
+            if (!allowNamedBoundaries) {
+              return report(
+                node,
+                "Avoid dynamic import(). Use a static import; a deliberate load keeps a line suppression that gives its reason.",
+              );
+            }
             if (isNamedLazyBoundary(importExpression)) return Effect.void;
             return report(
               node,

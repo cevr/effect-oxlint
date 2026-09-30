@@ -63,6 +63,25 @@ describe("noDynamicImports boundaries", () => {
     });
     expect(reportedLines(findings, "inline.ts")).toEqual([2]);
   });
+
+  test("reports every import() when named boundaries are not allowed", () => {
+    const findings = lintFixtures(
+      "noDynamicImports",
+      {
+        "strict.ts": [
+          'const loaded = await import("./module.js");',
+          'const loadModule = () => import("./module.js");',
+          'function loadOther() { return import("./module.js"); }',
+          'const effect = Effect.promise(() => import("./module.js"));',
+          "// oxlint-disable-next-line effect/noDynamicImports -- the compiled binary embeds this worker",
+          'const worker = await import("./worker.js");',
+          'import("./module.js");',
+        ].join("\n"),
+      },
+      { options: [{ allowNamedBoundaries: false }] },
+    );
+    expect(reportedLines(findings, "strict.ts")).toEqual([1, 2, 3, 4, 7]);
+  });
 });
 
 describe("platform capability rules", () => {
