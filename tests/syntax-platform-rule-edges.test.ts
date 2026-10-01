@@ -227,6 +227,25 @@ describe("platform layer provisions", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
+  test("report a platform module exported through a declarator", () => {
+    const results = lintCases("noPlatformLayerOutsideEntry", {
+      valid: [
+        'import { BunSocket } from "@effect/platform-bun"; export const socket = BunSocket.makeNet;',
+        'import { BunRuntime } from "@effect/platform-bun"; export const { runMain } = BunRuntime;',
+        'import { BunFileSystem } from "@effect/platform-bun"; const Fs = BunFileSystem; export type F = typeof Fs;',
+      ],
+      invalid: [
+        'import { BunFileSystem } from "@effect/platform-bun"; export const Fs = BunFileSystem;',
+        'import { BunFileSystem } from "@effect/platform-bun"; export let Fs = BunFileSystem;',
+        'import * as Platform from "@effect/platform-bun"; export const Fs = Platform.BunFileSystem;',
+        'import * as Platform from "@effect/platform-bun"; export const { BunPath } = Platform;',
+        'import * as Platform from "@effect/platform-bun"; export const P = Platform;',
+        'import { BunFileSystem } from "@effect/platform-bun"; const Fs = BunFileSystem; export const Again = Fs;',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
   test("read computed members by their literal name", () => {
     const findings = lintFixtures("noPlatformLayerOutsideEntry", {
       "computed.ts": [

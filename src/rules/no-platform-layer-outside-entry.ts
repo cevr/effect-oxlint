@@ -14,7 +14,8 @@
  *   named import from a module path (`import { layer } from ".../BunPath"`);
  * - a platform module or package value that leaves the rule's sight: passed
  *   to a function, put in an array or object, returned, read through a
- *   computed member it cannot name, or exported;
+ *   computed member it cannot name, or exported, by an `export` list or as
+ *   the value of an exported declaration;
  * - a re-export from a platform package.
  *
  * Other members (`BunRuntime.runMain`, `BunSocket.makeNet`) and type
@@ -96,6 +97,10 @@ const exportName = (name: ESTree.ModuleExportName): string => {
 
 const isTypePosition = (node: ESTree.Node): boolean =>
   node.type === "TSTypeQuery" || node.type === "TSQualifiedName";
+
+/** A declarator under an `export` declaration: its binding leaves the file, where its reads cannot be followed. */
+const isExportedDeclarator = (declarator: ESTree.VariableDeclarator): boolean =>
+  declarator.parent.parent?.type === "ExportNamedDeclaration";
 
 const provisionMessage = (text: string): string =>
   `\`${text}\` provides a platform layer outside the platform entry files. Yield the service the entry provides; a layer no entry can provide keeps a line suppression that gives its reason.`;
@@ -201,6 +206,9 @@ export const noPlatformLayerOutsideEntry = Rule.define({
                 if (!layerExport.test(name)) return Effect.void;
                 return report(property, provisionMessage(`${label}.${name}`));
               }
+              if (isExportedDeclarator(declarator)) {
+                return report(property, escapeMessage(`${label}.${name}`));
+              }
               return followDeclared(declarator, "module", () => `${label}.${name}`, property);
             },
           });
@@ -214,6 +222,7 @@ export const noPlatformLayerOutsideEntry = Rule.define({
       label: string,
     ): Effect.Effect<void> => {
       if (declarator.id.type === "Identifier") {
+        if (isExportedDeclarator(declarator)) return report(declarator, escapeMessage(label));
         return followDeclared(declarator, holder, (name) => name);
       }
       if (declarator.id.type === "ObjectPattern") {
