@@ -65,14 +65,20 @@ const lintRootPath = (context: RuleContext["Service"]): string => {
   return filename;
 };
 
-/** Whether the file a rule is linting is test code: a test module or a configured test file. */
-export const isTestModule = (context: RuleContext["Service"]): boolean => {
-  if (isTestFile(context.filename)) return true;
-  const globs = decodeEffectSettings(context.settings).effect?.testFiles ?? [];
+/** Whether the file a rule is linting matches one of `globs`, read like `effect.testFiles`. */
+export const matchesFileGlobs = (
+  context: RuleContext["Service"],
+  globs: ReadonlyArray<string>,
+): boolean => {
   if (globs.length === 0) return false;
   const path = lintRootPath(context);
   return globs.some((glob) => compiledGlob(glob).test(path));
 };
+
+/** Whether the file a rule is linting is test code: a test module or a configured test file. */
+export const isTestModule = (context: RuleContext["Service"]): boolean =>
+  isTestFile(context.filename) ||
+  matchesFileGlobs(context, decodeEffectSettings(context.settings).effect?.testFiles ?? []);
 
 /** Visitor for a file a rule does not apply to. */
 export const skipFile: Visitor.EffectVisitor = {};

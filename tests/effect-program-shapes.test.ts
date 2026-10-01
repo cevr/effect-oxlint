@@ -223,6 +223,44 @@ describe("withX wrapper calls", () => {
     expect(reportedLines(findings, "fixture.test.ts")).toEqual([3]);
   });
 
+  test("narrow the callback-helper exemption to the testFiles option's globs", () => {
+    const helpers = [
+      'import { Effect } from "effect";',
+      "withPath((path) => path);", // 2
+      "export const withThing = <A, E, R>(effect: Effect.Effect<A, E, R>) => effect;", // 3
+      'export const withScope = Effect.fn("withScope")(function* (effect: Effect.Effect<void>) {', // 4
+      "  return yield* effect;",
+      "});",
+      "",
+    ].join("\n");
+    const fixtures = {
+      "apps/tui/integration/session.test.ts": helpers,
+      "packages/core/src/test-utils/harness.ts": helpers,
+      "apps/tui/tests/session.test.ts": helpers,
+      "packages/core/tests/support/fixtures.ts": helpers,
+    };
+    const settings = {
+      effect: { testFiles: ["**/tests/**", "**/test-utils/**", "**/integration/**"] },
+    };
+    const findings = lintFixtures("noWithWrapperCall", fixtures, {
+      settings,
+      options: [{ testFiles: ["**/tests/**"] }],
+    });
+    expect(reportedLines(findings, "apps/tui/integration/session.test.ts")).toEqual([2, 3, 4]);
+    expect(reportedLines(findings, "packages/core/src/test-utils/harness.ts")).toEqual([2, 3, 4]);
+    expect(reportedLines(findings, "apps/tui/tests/session.test.ts")).toEqual([]);
+    expect(reportedLines(findings, "packages/core/tests/support/fixtures.ts")).toEqual([]);
+    expect(findings.get("apps/tui/integration/session.test.ts")?.[0]?.message).toBe(
+      "Avoid `withPath(callback)`. Expose an Effect value or a provider and continue with `.pipe(...)`.",
+    );
+    expect(findings.get("apps/tui/integration/session.test.ts")?.[1]?.message).toBe(
+      "`withThing(effect, ...)` wrapper helpers invert the pipeline. Expose a pipeable adapter or an Effect value and continue with `.pipe(...)`.",
+    );
+
+    const shared = lintFixtures("noWithWrapperCall", fixtures, { settings });
+    for (const file of Object.keys(fixtures)) expect(reportedLines(shared, file)).toEqual([]);
+  });
+
   test("skip the adapters the allow option names", () => {
     const findings = lintFixtures(
       "noWithWrapperCall",

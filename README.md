@@ -87,13 +87,13 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 
 These rules encode a project policy the preset cannot assume. The plugin registers them, and the preset leaves them off; enable each by name.
 
-| Rule                                 | Contract                                                                                                     |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `effect/noPlatformLayerOutsideEntry` | Provides `@effect/platform-*` layers (and the `layers` option names) only in entry files an override exempts |
-| `effect/noPositionalLogArguments`    | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                             |
-| `effect/noRunPromise`                | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts              |
-| `effect/noTimeoutDieInTests`         | Fails a test's timeout with a typed error instead of `Effect.die`                                            |
-| `effect/noWithWrapperCall`           | Pipes values through `withX` adapters instead of wrapping calls or callbacks; `allow` exempts names          |
+| Rule                                 | Contract                                                                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `effect/noPlatformLayerOutsideEntry` | Provides `@effect/platform-*` layers (and the `layers` option names) only in entry files an override exempts                                |
+| `effect/noPositionalLogArguments`    | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                                                            |
+| `effect/noRunPromise`                | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts                                             |
+| `effect/noTimeoutDieInTests`         | Fails a test's timeout with a typed error instead of `Effect.die`                                                                           |
+| `effect/noWithWrapperCall`           | Pipes values through `withX` adapters instead of wrapping calls or callbacks; `allow` exempts names, `testFiles` narrows the test exemption |
 
 ## Test Files
 
@@ -105,6 +105,12 @@ Rules that treat tests differently read one definition of a test: a `*.test.*` o
     "effect": { "testFiles": ["**/tests/**", "packages/e2e/**"] }
   }
 }
+```
+
+`effect/noWithWrapperCall` lets test code keep `withX(callback)` fixture helpers. Its `testFiles` option replaces the test definition for that exemption alone: only files matching its globs keep the helpers, so shared harness code the setting counts as test code is still held to the rule.
+
+```json
+{ "rules": { "effect/noWithWrapperCall": ["error", { "testFiles": ["**/tests/**"] }] } }
 ```
 
 ## Anti-Slop Rules

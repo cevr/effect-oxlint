@@ -14,6 +14,18 @@
  * wrapper. Test modules may keep callback helpers and their calls. The `allow`
  * option names adapters whose wrapping form is their intended API, such as a
  * library's `withBoundary(handler)`.
+ *
+ * The `testFiles` option narrows that exemption. By default it covers every
+ * test module (`*.test.*`, `*.spec.*` and the shared `effect.testFiles`
+ * setting). With `testFiles`, only files whose lint-root path matches one of
+ * its globs keep callback helpers; every other file, test modules included,
+ * is held to the callback and definition checks. A project can allow local
+ * fixture helpers in a `tests/` tree while shared harness code that the
+ * setting counts as test code is still held:
+ *
+ * ```json
+ * { "rules": { "effect/noWithWrapperCall": ["error", { "testFiles": ["**\/tests/**"] }] } }
+ * ```
  */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
@@ -21,10 +33,13 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
-import { isTestModule } from "./_test-files.js";
+import { isTestModule, matchesFileGlobs } from "./_test-files.js";
 
 const Options = Schema.UndefinedOr(
-  Schema.Struct({ allow: Schema.optionalKey(Schema.Array(Schema.String)) }),
+  Schema.Struct({
+    allow: Schema.optionalKey(Schema.Array(Schema.String)),
+    testFiles: Schema.optionalKey(Schema.Array(Schema.String)),
+  }),
 );
 
 const wrapperPattern = /^with[A-Z]/u;
@@ -138,7 +153,10 @@ export const noWithWrapperCall = Rule.define({
     schema: [
       {
         type: "object",
-        properties: { allow: { type: "array", items: { type: "string" } } },
+        properties: {
+          allow: { type: "array", items: { type: "string" } },
+          testFiles: { type: "array", items: { type: "string" } },
+        },
         additionalProperties: false,
       },
     ],
@@ -148,7 +166,10 @@ export const noWithWrapperCall = Rule.define({
   create: function* (options) {
     const ctx = yield* RuleContext;
     const allowed = new Set(options?.allow ?? []);
-    const inTest = isTestModule(ctx);
+    const inTest = Option.match(Option.fromUndefinedOr(options?.testFiles), {
+      onNone: () => isTestModule(ctx),
+      onSome: (globs) => matchesFileGlobs(ctx, globs),
+    });
 
     const report = (node: ESTree.Node, message: string) =>
       ctx.report(Diagnostic.make({ node, message }));
