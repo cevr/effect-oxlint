@@ -1,11 +1,44 @@
-/** Tests wait on the event they depend on or advance virtual time, never on a wall-clock guess. */
+/**
+ * Tests wait on the event they depend on or advance virtual time, never on a wall-clock guess.
+ *
+ * Reported in test modules: a sleep (`Effect.sleep`, `Bun.sleep`,
+ * `Bun.sleepSync`, `setTimeout` from `timers/promises`) a statement runs, and
+ * each sleep anywhere inside the argument of a `yield*` or an `await` (piped,
+ * raced, sequenced, or bound to a result); `waitForTimeout`; and a Promise
+ * only a timer settles. A sleep inside a nested function is a value the callee
+ * may never run, such as a mock's `read: () => Effect.sleep(...)`, and stays
+ * allowed.
+ */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { childNodesAt, isAstNode } from "./_ast-children.js";
 import { importedNamespaces, isStaticCall, visibleNamespaces } from "./_effect-namespaces.js";
 import { isTestModule, skipFile } from "./_test-files.js";
+
+type VisitorKeys = Readonly<Record<string, ReadonlyArray<string>>>;
+
+const isNode = (value: unknown): value is ESTree.Node => isAstNode(value);
+
+const isFunctionNode = (node: ESTree.Node): boolean =>
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "FunctionExpression" ||
+  node.type === "FunctionDeclaration";
+
+/** `node` and every node under it, without the subtrees whose root `stop` cuts off. */
+const descendants = (
+  node: ESTree.Node,
+  keys: VisitorKeys,
+  stop: (child: ESTree.Node) => boolean,
+): ReadonlyArray<ESTree.Node> => [
+  node,
+  ...(keys[node.type] ?? [])
+    .flatMap((key) => childNodesAt(node, key, isNode))
+    .filter((child) => !stop(child))
+    .flatMap((child) => descendants(child, keys, stop)),
+];
 
 const guidance =
   "A fixed wait guesses when state changes, so it flakes under load and slows the suite. Advance virtual time with TestClock.adjust, or wait on the event itself: a Deferred, Latch, or Queue in Effect code, a condition or locator assertion (expect.poll, waitForFunction) in a browser.";
@@ -83,13 +116,18 @@ export const noFixedWaitInTests = Rule.define({
     const effectNamespaces = new Set(["Effect"]);
     const timerPromiseNames = new Set<string>();
 
+    const keys: VisitorKeys = ctx.sourceCode.visitorKeys;
+    /** Sleeps already reported: a statement's sleep is also inside its `yield*` or `await`. */
+    const reported = new Set<ESTree.Node>();
+
     const report = (node: ESTree.Node, wait: string) =>
       ctx.report(
         Diagnostic.make({ node, message: `Avoid a fixed wait in tests (${wait}). ${guidance}` }),
       );
 
-    /** The wait a statement blocks on, when it is a sleep whose value the test never uses. */
-    const statementWait = (node: ESTree.Expression): Option.Option<string> => {
+    /** The sleep a call runs: `Effect.sleep`, `Bun.sleep`, or `setTimeout` from timers/promises. */
+    const sleepWait = (node: ESTree.Node): Option.Option<string> => {
+      if (node.type !== "CallExpression") return Option.none();
       const effects = visibleNamespaces(ctx, node, effectNamespaces);
       if (isStaticCall(node, effects, "sleep")) return Option.some("Effect.sleep");
       if (isMemberCall(node, "Bun", "sleep") || isMemberCall(node, "Bun", "sleepSync")) {
@@ -99,6 +137,22 @@ export const noFixedWaitInTests = Rule.define({
         return Option.some("setTimeout from timers/promises");
       return Option.none();
     };
+
+    const reportSleep = (node: ESTree.Node) =>
+      Option.match(
+        Option.filter(sleepWait(node), () => !reported.has(node)),
+        {
+          onNone: () => Effect.void,
+          onSome: (wait) => {
+            reported.add(node);
+            return report(node, wait);
+          },
+        },
+      );
+
+    /** Each sleep a `yield*` or `await` waits on, outside the functions its argument builds. */
+    const reportWaited = (argument: ESTree.Node) =>
+      Effect.forEach(descendants(argument, keys, isFunctionNode), reportSleep, { discard: true });
 
     return {
       ImportDeclaration: (node: ESTree.ImportDeclaration) => {
@@ -119,13 +173,13 @@ export const noFixedWaitInTests = Rule.define({
         }
         return Effect.void;
       },
-      ExpressionStatement: (node: ESTree.ExpressionStatement) => {
-        const expression = waited(node.expression);
-        return Option.match(statementWait(expression), {
-          onNone: () => Effect.void,
-          onSome: (wait) => report(expression, wait),
-        });
+      ExpressionStatement: (node: ESTree.ExpressionStatement) =>
+        reportSleep(waited(node.expression)),
+      YieldExpression: (node: ESTree.YieldExpression) => {
+        if (!node.delegate || !node.argument) return Effect.void;
+        return reportWaited(node.argument);
       },
+      AwaitExpression: (node: ESTree.AwaitExpression) => reportWaited(node.argument),
       CallExpression: (node: ESTree.CallExpression) => {
         if (!isPropertyCall(node, "waitForTimeout")) return Effect.void;
         return report(node, "waitForTimeout");

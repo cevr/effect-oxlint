@@ -330,6 +330,34 @@ describe("noFixedWaitInTests", () => {
       },
     ]);
   });
+
+  test("reports each sleep inside a waited expression, not one a nested function builds", () => {
+    const findings = lintFixtures("noFixedWaitInTests", {
+      "poll.test.ts": [
+        'import { Clock, Effect } from "effect";',
+        "export const poll = Effect.gen(function* () {",
+        '  yield* Effect.sleep("2 millis").pipe(Effect.provideService(Clock.Clock, wallClock));', // 3
+        '  yield* settled.pipe(Effect.raceFirst(Effect.sleep("300 millis")));', // 4
+        '  yield* Effect.andThen(Effect.sleep("10 millis"), settled);', // 5
+        '  const bound = yield* Effect.sleep("10 millis");', // 6
+        '  yield* Effect.all([Effect.sleep("1 millis"), Effect.sleep("2 millis")]);', // 7 (twice)
+        '  yield* withReader({ read: () => Effect.sleep("1 second") });',
+        '  yield* Effect.forEach(items, () => Effect.sleep("1 millis"));',
+        "  return bound;",
+        "});",
+        "export const host = async () => {",
+        "  await Promise.race([Bun.sleep(10), Promise.resolve()]);", // 13
+        "  await Promise.all([Bun.sleepSync(1)]);", // 14
+        "  await run(async () => Bun.sleep(10));",
+        "};",
+        "",
+      ].join("\n"),
+    });
+    expect(reportedLines(findings, "poll.test.ts")).toEqual([3, 4, 5, 6, 7, 7, 13, 14]);
+    expect(findings.get("poll.test.ts")?.[0]?.message).toContain(
+      "Avoid a fixed wait in tests (Effect.sleep).",
+    );
+  });
 });
 
 describe("effect.testFiles setting", () => {
