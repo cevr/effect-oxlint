@@ -16,11 +16,14 @@
  *
  * `import.meta.url` alone, `import.meta.main`, passing the URL or the URL
  * string to any function, and a `URL` that does not come from the module URL
- * (`new URL("https://x").pathname`) stay allowed.
+ * (`new URL("https://x").pathname`, or `new URL("https://x", import.meta.url)`,
+ * whose absolute first argument ignores the base) stay allowed.
  */
 import type { ESTree } from "@oxlint/plugins";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 
 import { AST, Diagnostic, Rule, RuleContext, Scope } from "../vendor/effect-oxlint/index.js";
 import { constResolver } from "./_const-bindings.js";
@@ -31,6 +34,18 @@ const pathFacts = new Set(["dir", "dirname", "filename", "path"]);
 
 /** String cuts that turn a URL string into a path by hand. */
 const stringCuts = new Set(["replace", "slice", "substring"]);
+
+/** A URL scheme at the start of a string: `https:`, `data:`, `file:`. */
+const absoluteUrl = /^[A-Za-z][A-Za-z\d+.-]*:/u;
+
+/** The text of a string literal or a template literal with no substitution. */
+const literalText = (node: ESTree.Node): Option.Option<string> => {
+  if (node.type === "Literal" && Predicate.isString(node.value)) return Option.some(node.value);
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return Option.fromNullishOr(node.quasis[0]?.value.cooked);
+  }
+  return Option.none();
+};
 
 const isImportMeta = (node: ESTree.Node): boolean =>
   node.type === "MetaProperty" && node.meta.name === "import" && node.property.name === "meta";
@@ -67,12 +82,21 @@ export const noModulePathFacts = Rule.define({
         onSome: (variable) => variable.defs.length === 0,
       });
 
-    /** `new URL(..., import.meta.url)` or `new URL(import.meta.url)`, inline or held in a const. */
+    /** A literal absolute URL (`"https://x"`, `` `data:x` ``), inline or held in a const. */
+    const isAbsoluteUrlLiteral = (node: ESTree.Argument): boolean =>
+      node.type !== "SpreadElement" &&
+      Option.exists(literalText(resolve(node)), (text) => absoluteUrl.test(text));
+
+    /**
+     * `new URL(..., import.meta.url)` or `new URL(import.meta.url)`, inline or
+     * held in a const. An absolute URL literal first ignores its base.
+     */
     const isModuleUrl = (node: ESTree.Expression): boolean => {
       const value = resolve(node);
       return (
         value.type === "NewExpression" &&
         isGlobalUrl(value.callee) &&
+        !Option.exists(Arr.head(value.arguments), isAbsoluteUrlLiteral) &&
         value.arguments.some(
           (argument) => argument.type !== "SpreadElement" && isModuleUrlString(argument),
         )

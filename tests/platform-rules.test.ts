@@ -141,6 +141,9 @@ describe("module file paths", () => {
         'const name = "file:///x".slice(7);',
         'class URL { constructor(a, b) {} pathname = "" }; new URL(".", import.meta.url).pathname;',
         'const u = new URL(".", import.meta.url); load(u);',
+        'const page = new URL("https://example.com/a%20b", import.meta.url).pathname;',
+        "const page = new URL(`data:text/plain,x`, import.meta.url).pathname;",
+        'const u = new URL("http://x/y", import.meta.url); u.pathname;',
       ],
       invalid: [
         "const dir = import.meta.dirname;",
