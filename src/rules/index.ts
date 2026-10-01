@@ -16,6 +16,7 @@ export * from "./no-array-filter-map.js";
 export * from "./no-as.js";
 export * from "./no-async-function.js";
 export * from "./no-chained-type-assertions.js";
+export * from "./no-code-unit-padding.js";
 export * from "./no-conditional-empty-object-spread.js";
 export * from "./no-dynamic-imports.js";
 export * from "./no-eager-acquire.js";

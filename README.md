@@ -95,6 +95,7 @@ These rules encode a project policy the preset cannot assume. The plugin registe
 
 | Rule                                 | Contract                                                                                                                                    |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `effect/noCodeUnitPadding`           | Pads text by display width, not with `padStart`/`padEnd` (UTF-16 code units); a number rendered with `String()` or `toString()` may pad     |
 | `effect/noPlatformLayerOutsideEntry` | Provides `@effect/platform-*` layers (and the `layers` option names) only in entry files an override exempts                                |
 | `effect/noPositionalLogArguments`    | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                                                            |
 | `effect/noRunPromise`                | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts                                             |

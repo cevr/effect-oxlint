@@ -216,3 +216,36 @@ describe("locale ordering", () => {
     ]);
   });
 });
+
+describe("display-width padding", () => {
+  test("rejects code-unit padding of text, and allows it on a number rendered as ASCII", () => {
+    const results = lintCases("noCodeUnitPadding", {
+      valid: [
+        "const gutter = String(lineNumber).padStart(4);",
+        'const hex = value.toString(16).padStart(2, "0");',
+        'const byte = ((value & 0x0f) | 0x40).toString(16).padStart(2, "0");',
+        "const price = (cents / 100).toFixed(2).padStart(8);",
+        'const minutes = String(Math.floor(secs / 60)).padStart(2, "0");',
+        "const width = label.length;",
+      ],
+      invalid: [
+        "const cell = name.padEnd(24);",
+        'const cell = `${name}`.padEnd(24, " ");',
+        "const cell = row.category.padEnd(16);",
+        "const cell = format(preset.worker).padEnd(34);",
+        'const cell = name["padStart"](8);',
+        "const pad = String.prototype.padEnd;",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("names display width as the measure", () => {
+    const findings = lintFixtures("noCodeUnitPadding", {
+      "table.ts": "const cell = name.padEnd(24);",
+    });
+    expect(findings.get("table.ts")).toEqual([
+      { line: 1, message: expect.stringContaining("Pad by display width") },
+    ]);
+  });
+});
