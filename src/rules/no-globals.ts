@@ -15,7 +15,11 @@
  * member of `Bun`, and `{ "process": { "properties": ["cwd", "pid"], "use":
  * "..." } }` bans the listed ones. A project exempts its adapter files with
  * an override that turns the rule off, or configures it without the option to
- * keep only the built-in list there.
+ * keep only the built-in list there. `builtins: false` drops the built-in
+ * list and keeps only the `members` bans: a plain script may use `console`
+ * and `process.env`, while `{ "builtins": false, "members": { "Bun": {
+ * "properties": ["Glob"], "use": "..." } } }` still holds `Bun.Glob` in
+ * every spelling.
  */
 import type { ESTree } from "@oxlint/plugins";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
@@ -32,6 +36,7 @@ const MemberOption = Schema.Struct({
 
 const Options = Schema.UndefinedOr(
   Schema.Struct({
+    builtins: Schema.optionalKey(Schema.Boolean),
     members: Schema.optionalKey(Schema.Record(Schema.String, MemberOption)),
   }),
 );
@@ -151,6 +156,7 @@ export const noGlobals = Rule.define({
       {
         type: "object",
         properties: {
+          builtins: { type: "boolean" },
           members: {
             type: "object",
             additionalProperties: {
@@ -167,12 +173,17 @@ export const noGlobals = Rule.define({
         additionalProperties: false,
       },
     ],
-    defaultOptions: [{ members: {} }],
+    defaultOptions: [{ builtins: true, members: {} }],
   }),
   options: Options,
   create: function* (options) {
     const ctx = yield* RuleContext;
     const configuredMembers = new Map(Object.entries(options?.members ?? {}));
+    /** `builtins: false` keeps only the configured bans. */
+    const builtins = options?.builtins !== false;
+    const activeMemberBans = memberBans.filter(() => builtins);
+    const activeCallBans = new Map([...callBans].filter(() => builtins));
+    const activeConstructorBans = new Map([...constructorBans].filter(() => builtins));
     /** The replacement a configured ban names for `object.property`, if one applies. */
     const configuredBan = (object: string, property: string): Option.Option<string> =>
       Option.flatMap(Option.fromUndefinedOr(configuredMembers.get(object)), (ban) =>
@@ -190,7 +201,7 @@ export const noGlobals = Rule.define({
       );
     /** The replacement for `object.property`: the built-in list first, then the configuration. */
     const memberBan = (object: string, property: string): Option.Option<string> => {
-      for (const [bannedObject, properties, alternative] of memberBans) {
+      for (const [bannedObject, properties, alternative] of activeMemberBans) {
         if (object === bannedObject && properties.has(property)) return Option.some(alternative);
       }
       return configuredBan(object, property);
@@ -213,13 +224,16 @@ export const noGlobals = Rule.define({
 
     return globalValueVisitor(ctx, {
       names: new Set([
-        ...memberBans.map(([object]) => object),
-        ...callBans.keys(),
-        ...constructorBans.keys(),
+        ...activeMemberBans.map(([object]) => object),
+        ...activeCallBans.keys(),
+        ...activeConstructorBans.keys(),
         ...configuredMembers.keys(),
       ]),
       memberValue: (owner, name) =>
-        Option.liftPredicate(cryptoSubtle, () => owner === "crypto" && name === "subtle"),
+        Option.liftPredicate(
+          cryptoSubtle,
+          () => builtins && owner === "crypto" && name === "subtle",
+        ),
       member: (node, owner, name) => {
         if (owner === cryptoSubtle) {
           if (name === "digest") return report(node, "crypto.subtle.digest", "Crypto.digest");
@@ -236,12 +250,12 @@ export const noGlobals = Rule.define({
         });
       },
       call: (node, held) =>
-        Option.match(Option.fromUndefinedOr(callBans.get(held)), {
+        Option.match(Option.fromUndefinedOr(activeCallBans.get(held)), {
           onNone: () => reportEscape(node, held),
           onSome: (alternative) => report(node, `${held}()`, alternative),
         }),
       construct: (node, held) =>
-        Option.match(Option.fromUndefinedOr(constructorBans.get(held)), {
+        Option.match(Option.fromUndefinedOr(activeConstructorBans.get(held)), {
           onNone: () => reportEscape(node, held),
           onSome: (alternative) => report(node, `new ${held}()`, alternative),
         }),

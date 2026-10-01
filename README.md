@@ -221,9 +221,24 @@ A project that keeps a runtime behind adapters bans more with options: `noGlobal
       "files": ["src/**/*-adapter.ts"],
       "rules": { "effect/noGlobals": "error", "effect/noNodeBuiltinImport": "error" },
     },
+    // A plain script may use the host directly, but not the retired members.
+    {
+      "files": ["scripts/**"],
+      "rules": {
+        "effect/noGlobals": [
+          "error",
+          {
+            "builtins": false,
+            "members": { "Bun": { "properties": ["Glob"], "use": "Effect FileSystem" } },
+          },
+        ],
+      },
+    },
   ],
 }
 ```
+
+`builtins: false` drops the built-in list, so only the `members` bans apply there.
 
 ## Effect tsgo Pairing
 

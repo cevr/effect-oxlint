@@ -295,6 +295,38 @@ describe("platform capability rules", () => {
     expect(reportedLines(findings, "host.ts")).toEqual([1, 2, 3, 6]);
   });
 
+  test("noGlobals with builtins off bans only the members a project configures", () => {
+    const findings = lintFixtures(
+      "noGlobals",
+      {
+        "script.ts": [
+          "console.log(Date.now());",
+          "const env = process.env;",
+          "setTimeout(run, 1);",
+          "new Date();",
+          'crypto.subtle.digest("SHA-256", bytes);',
+          "const file = Bun.file(path);",
+          'const files = new Bun.Glob("*");',
+          'const id = globalThis["Bun"].randomUUIDv7();',
+          "const B = Bun; B.Glob;",
+          "const pid = process.pid;",
+        ].join("\n"),
+      },
+      {
+        options: [
+          {
+            builtins: false,
+            members: {
+              Bun: { properties: ["Glob", "randomUUIDv7"], use: "an Effect platform service" },
+              process: { properties: ["pid"], use: "a platform service" },
+            },
+          },
+        ],
+      },
+    );
+    expect(reportedLines(findings, "script.ts")).toEqual([7, 8, 9, 10]);
+  });
+
   test("noNodeBuiltinImport bans the modules and members a project configures", () => {
     const findings = lintFixtures(
       "noNodeBuiltinImport",
