@@ -1,5 +1,15 @@
 # oxlint-plugin-effect
 
+## 0.23.0
+
+### Minor Changes
+
+- [`5d50805`](https://github.com/cevr/effect-oxlint/commit/5d50805f3411d4ab732da36d7457f2cbf8194b50) Thanks [@cevr](https://github.com/cevr)! - `noNewPromise` follows the global `Promise` as `noGlobals` follows the globals it bans, through one shared walk. It reports `new globalThis.Promise()`, `new globalThis["Promise"]()`, `new self.Promise()`, `globalThis.Promise.all([])`, `Promise["resolve"](1)`, `new (Promise as PromiseConstructor)()`, an alias (`const P = Promise; new P()`) and a destructure (`const { resolve } = Promise; resolve(1)`, `const { Promise: { all } } = globalThis`). A local binding named `Promise` is no longer reported, and an alias that is reassigned to another value is not followed. Code that passed only because of the spelling now reports.
+
+### Patch Changes
+
+- [`0ff27ce`](https://github.com/cevr/effect-oxlint/commit/0ff27ce55acde1aaaf82633bcf60b93076c84663) Thanks [@cevr](https://github.com/cevr)! - `noPlatformLayerOutsideEntry` reports a non-layer member of a platform module that a file exports: `export const socket = BunSocket.makeNet`, `export const { runMain } = BunRuntime`, `export default BunSocket.makeNet`, a named import exported again (`import { makeNet } from "@effect/platform-bun/BunSocket"; export const socket = makeNet`), and each of these through a local alias or an `export { name }` list. Every importer of such an export reaches the platform package where no rule follows it. A member used in place (`BunRuntime.runMain(program)`, `BunSocket.makeNet(options)`) is still not reported.
+
 ## 0.22.0
 
 ### Minor Changes
