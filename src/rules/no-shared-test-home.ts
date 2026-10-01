@@ -15,7 +15,8 @@
  * The value is shared when it holds a string or template that starts with a
  * shared root (`"/tmp/case"`, `path.join("/tmp", "case")`) or calls
  * `tmpdir()`, unless it makes a unique directory (`mkdtemp*`,
- * `makeTempDirectory*`).
+ * `makeTempDirectory*`). Each branch of a conditional or logical value is
+ * read on its own: `isolated ? mkdtempSync(p) : "/tmp/shared"` is shared.
  *
  * Test code (`*.test.*`, `*.spec.*` and the `effect.testFiles` setting) is
  * read whole. Elsewhere only a test layer is read: the value of a `static`
@@ -68,6 +69,21 @@ const keyName = (key: ESTree.Node, computed: boolean): Option.Option<string> => 
   if (key.type === "PrivateIdentifier") return Option.some(key.name);
   if (key.type === "Literal" && Predicate.isString(key.value)) return Option.some(key.value);
   return Option.none();
+};
+
+/** The expression under parentheses, type assertions and a JSX `{...}` container. */
+const unwrap = (node: ESTree.Node): ESTree.Node => {
+  if (
+    node.type === "ParenthesizedExpression" ||
+    node.type === "TSAsExpression" ||
+    node.type === "TSNonNullExpression" ||
+    node.type === "TSSatisfiesExpression" ||
+    node.type === "TSTypeAssertion" ||
+    node.type === "JSXExpressionContainer"
+  ) {
+    return unwrap(node.expression);
+  }
+  return node;
 };
 
 /** The name a call reads: `tmpdir` in `tmpdir()` and `os.tmpdir()`. */
@@ -138,8 +154,19 @@ export const noSharedTestHome = Rule.define({
       node.type === "CallExpression" &&
       Option.exists(calleeName(node), (name) => uniqueTempCall.test(name));
 
-    /** A value under the shared temp root that makes no unique directory. */
-    const isSharedValue = (value: ESTree.Node): boolean => {
+    /**
+     * A value under the shared temp root that makes no unique directory. Each
+     * branch of a conditional or logical expression is read on its own, so a
+     * unique directory in one branch does not mask a shared path in another.
+     */
+    const isSharedValue = (node: ESTree.Node): boolean => {
+      const value = unwrap(node);
+      if (value.type === "ConditionalExpression") {
+        return isSharedValue(value.consequent) || isSharedValue(value.alternate);
+      }
+      if (value.type === "LogicalExpression") {
+        return isSharedValue(value.left) || isSharedValue(value.right);
+      }
       const nodes = descendants(value);
       return nodes.some(namesSharedRoot) && !nodes.some(isUniqueTemp);
     };

@@ -719,6 +719,23 @@ describe("noSharedTestHome", () => {
     expect(lines(sources)).toEqual([[], [], [], [], [], []]);
   });
 
+  test("a unique temp directory in one branch does not mask a shared path in another", () => {
+    const reported = [
+      'const a = { home: isolated ? mkdtempSync("/tmp/test-") : "/tmp/shared" }',
+      'const b = { home: isolated ? "/tmp/shared" : mkdtempSync("/tmp/test-") }',
+      'const c = { home: override ?? (isolated ? mkdtempSync("/tmp/test-") : tmpdir()) }',
+      'const d = { home: (mkdtempSync("/tmp/test-") as string) || "/tmp/shared" }',
+    ].join("\n");
+    const unique = [
+      'const e = { home: isolated ? mkdtempSync("/tmp/a-") : mkdtempSync("/tmp/b-") }',
+      'const f = { home: isolated ? mkdtempSync("/tmp/a-") : root }',
+      'const g = { home: override ?? mkdtempSync(join(tmpdir(), "gent-home-")) }',
+    ].join("\n");
+    const jsx = 'const view = <Provider home={isolated ? mkdtempSync("/tmp/a-") : "/tmp"} />;';
+    expect(lines([reported, unique])).toEqual([[1, 2, 3, 4], []]);
+    expect(lines([jsx], "test.tsx")).toEqual([[1]]);
+  });
+
   test("a test layer in product source is read, the product code around it is not", () => {
     const source = [
       "export class GentPlatform extends Context.Service<GentPlatform>()(TAG) {",
