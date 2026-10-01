@@ -58,6 +58,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/noEffectBunTestItCall`         | Bans calling effect-bun-test's `it`; it holds the runners and throws when called                                                   |
 | `effect/noFixedWaitInTests`            | Bans fixed waits in tests (waited or stored sleeps, `waitForTimeout`, timer-only Promises); use `TestClock` or wait on the event   |
 | `effect/noRepoTempDirectory`           | Bans test temp directories under the repo (a repo `directory`, a relative `mkdtemp` prefix, a `tmp` segment joined to a repo path) |
+| `effect/noSharedTestHome`              | Bans a test home, data or working directory under the shared temp root (`/tmp`, `tmpdir()`); `keys` names more home keys           |
 | `effect/noInlineProvide`               | Keeps dependency provisioning at explicit composition boundaries                                                                   |
 | `effect/noNestedEffectGen`             | Flattens directly yielded nested generators                                                                                        |
 | `effect/noPerCallCacheConstruction`    | Constructs shared caches once in their owning layer                                                                                |
@@ -115,6 +116,12 @@ Rules that treat tests differently read one definition of a test: a `*.test.*` o
 
 ```json
 { "rules": { "effect/noWithWrapperCall": ["error", { "testFiles": ["**/tests/**"] }] } }
+```
+
+`effect/noSharedTestHome` reads test code whole, and in other files only the test layers (a `static Test`, a `…TestLayer` binding, a `Test:` key). It knows the generic home keys (`home`, `HOME`, `homeDir`, `homeDirectory`, `dataDir`, `cwd`, any `…Cwd`); a project adds its own with `keys`:
+
+```json
+{ "rules": { "effect/noSharedTestHome": ["error", { "keys": ["MYAPP_DATA_DIR", "userDir"] }] } }
 ```
 
 ## Anti-Slop Rules

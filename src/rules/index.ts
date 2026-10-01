@@ -50,6 +50,7 @@ export * from "./no-run-promise.js";
 export * from "./no-runtime-typeof.js";
 export * from "./no-sequential-effect-all.js";
 export * from "./no-shape-in-symbol-names.js";
+export * from "./no-shared-test-home.js";
 export * from "./no-silent-catch-all.js";
 export * from "./no-ternary.js";
 export * from "./no-test-globals.js";

@@ -599,3 +599,217 @@ describe("noRepoTempDirectory", () => {
     expect(reportedLines(findings, "tests/runtime/x.test.ts")).toEqual([1]);
   });
 });
+
+describe("noSharedTestHome", () => {
+  /** gent's project keys, on top of the generic defaults. */
+  const gentKeys = { options: [{ keys: ["GENT_DATA_DIR", "userDir", "projectDir"] }] };
+  const lines = (sources: ReadonlyArray<string>, extension = "test.ts") =>
+    linesOf("noSharedTestHome", sources, extension, gentKeys);
+
+  test("a home or data directory under the shared temp root is reported, in every shape", () => {
+    const source = inGen(
+      'const env = { cwd: "/tmp", home: "/tmp" }',
+      'RuntimeEnvironment.Live({ home: "/tmp/test-home", cwd: "/tmp" })',
+      'const logs = logDirFor({ GENT_DATA_DIR: "/var/tmp/gent-scratch" })',
+      'const platform = (home: string = "/private/tmp") => home',
+      'const a = { home: overrides?.home ?? "/tmp" }',
+      'const b = { homeDirectory: Effect.succeed("/dev/shm/x") }',
+      "const facts = { home: tmpdir() }",
+      'process.env.HOME = "/tmp"',
+    );
+    const jsx = [
+      "const view = (",
+      '  <WorkspaceProvider cwd={cwd} home="/tmp" services={services}></WorkspaceProvider>',
+      ");",
+    ].join("\n");
+    // Each key is its own finding, so a line with two keys reports twice.
+    expect(lines([source])).toEqual([[2, 2, 3, 3, 4, 5, 6, 7, 8, 9]]);
+    expect(lines([jsx], "test.tsx")).toEqual([[2]]);
+  });
+
+  test("a working or extension directory under the shared temp root is reported like a home", () => {
+    const source = inGen(
+      'const { sessionId } = yield* client.session.create({ cwd: "/tmp" })',
+      'const alphaCwd = "/tmp/gent-alpha-profile"',
+      'loadClientExtensions({ userDir: "/tmp/user", projectDir: "/tmp/project" })',
+      'const host = { ...(yield* runtimeHostContext({ ...parent, sessionCwd: "/tmp" })) }',
+      "const facts = { cwd: tmpdir() }",
+    );
+    expect(lines([source])).toEqual([[2, 3, 4, 4, 5, 6]]);
+  });
+
+  test("the project keys come from the option", () => {
+    const source = [
+      'const logs = logDirFor({ GENT_DATA_DIR: "/tmp/gent" })',
+      'const env = { HOME: "/tmp" }',
+    ].join("\n");
+    expect(linesOf("noSharedTestHome", [source])).toEqual([[2]]);
+    expect(lines([source])).toEqual([[1, 2]]);
+  });
+
+  test("a scoped temp home, a path no test can create, or a temp path under another name is not reported", () => {
+    const source = inGen(
+      'const home = yield* fs.makeTempDirectoryScoped({ prefix: "gent-home-" })',
+      'const env = { cwd: "/nonexistent/gent-test-cwd", home: "/nonexistent/gent-test-home" }',
+      "RuntimeEnvironment.Live({ home, cwd })",
+      'RuntimeEnvironment.Live({ home: root, cwd: yield* makeTempDirectoryScoped("gent-cwd-") })',
+      'const workspace = workspaceIdForCwd("/tmp/run-workspace")',
+      'const loaded = { extension, scope: "user", sourcePath: "/tmp/good.ts" }',
+      'const home2 = mkdtempSync(join(tmpdir(), "gent-home-"))',
+      'const homePage = "/tmp/page"',
+      '// home: "/tmp" in a comment',
+      'if (home === "/tmp/x") return',
+      'const probe = home => "/tmp/x"',
+      'const temp = "/tmpfiles"',
+    );
+    expect(lines([source])).toEqual([[]]);
+  });
+
+  test("the value is read as an expression: across a line break, in a template or a join", () => {
+    const source = [
+      "const env = {",
+      "  home:",
+      '    "/tmp",',
+      "}",
+      "const a = { home: `${tmpdir()}/case` }",
+      'const b = { home: Path.join(tmpdir(), "case") }',
+      'const c = { home: path.join("/tmp", "case") }',
+      "const d = { home: `/tmp/${name}` }",
+    ].join("\n");
+    expect(lines([source])).toEqual([[2, 5, 6, 7, 8]]);
+  });
+
+  test("a shared path in a sibling property does not make a unique home shared", () => {
+    const sources = [
+      'const home = mkdtempSync(join(tmpdir(), "gent-home-")); const opts = { directory: "/tmp" }',
+      inGen(
+        'const env = { home: yield* makeTempDirectoryScoped("gent-home-"), directory: "/tmp" }',
+      ),
+      'const env2 = { home: root, directory: "/tmp" }',
+      inGen('const env3 = { home: yield* fs.makeTempDirectoryScoped({ directory: "/tmp" }) }'),
+      'const env4 = { home: mkdtempSync("/tmp/gent-home-") }',
+      'const env5 = { home: `${root}/it\'s`, directory: "/tmp" }',
+    ];
+    expect(lines(sources)).toEqual([[], [], [], [], [], []]);
+  });
+
+  test("a test layer in product source is read, the product code around it is not", () => {
+    const source = [
+      "export class GentPlatform extends Context.Service<GentPlatform>()(TAG) {",
+      "  static Live = Layer.succeed(GentPlatform, {",
+      '    homeDirectory: Effect.succeed("/tmp"),',
+      "  })",
+      '  static Test = (prefix = "id"): Layer.Layer<GentPlatform> =>',
+      "    Layer.effect(",
+      "      GentPlatform,",
+      "      Effect.gen(function* () {",
+      "        return GentPlatform.of({",
+      '          homeDirectory: Effect.succeed("/tmp"),',
+      "        })",
+      "      }),",
+      "    )",
+      "  static Other = Layer.succeed(GentPlatform, {",
+      '    homeDirectory: Effect.succeed("/tmp"),',
+      "  })",
+      "}",
+      "export const FakeTestActor = (config: {",
+      "  readonly id: string",
+      "}) =>",
+      '  Layer.succeed(Actor, { home: "/tmp" })',
+      'const fallback = { home: "/tmp", cwd: "/tmp" }',
+    ].join("\n");
+    expect(lines([source], "ts")).toEqual([[10, 21]]);
+  });
+
+  test("a `static readonly Test` member and a `Test:` object key are test layers", () => {
+    const source = [
+      "export class Platform extends Context.Service<Platform>()(TAG) {",
+      "  static readonly Test = Layer.succeed(Platform, {",
+      '    homeDirectory: Effect.succeed("/tmp"),',
+      "  })",
+      "}",
+      "export const Layers = {",
+      '  Live: Layer.succeed(Platform, { home: "/tmp" }),',
+      "  Test: Layer.succeed(Platform, {",
+      '    home: "/tmp",',
+      "  }),",
+      "}",
+    ].join("\n");
+    expect(lines([source], "ts")).toEqual([[3, 9]]);
+  });
+
+  test("an example extension's test layer is read as product source is", () => {
+    const source = [
+      'const live = { home: "/tmp" }',
+      "export const NotesTest = Layer.succeed(Notes, {",
+      '  home: "/tmp",',
+      "})",
+    ].join("\n");
+    expect(lines([source], "ts")).toEqual([[3]]);
+  });
+
+  test("a binding with a `Test` word part that is no layer is product code", () => {
+    const source = [
+      "const runTestTool = (toolCall: ToolCall) =>",
+      '  run(toolCall, { cwd: "/tmp" })',
+      "export const isTestMode = (config: Config) =>",
+      '  config.home === "/tmp"',
+      "const TestModeLabel = {",
+      '  cwd: "/tmp",',
+      "}",
+      "const makeTestLayer = () =>",
+      '  Layer.succeed(Platform, { home: "/tmp" })',
+    ].join("\n");
+    expect(lines([source], "ts")).toEqual([[9]]);
+  });
+
+  test("a configured test harness is test code", () => {
+    const findings = lintFixtures(
+      "noSharedTestHome",
+      {
+        "src/test-utils/harness.ts": 'const facts = { homeDirectory: Effect.succeed("/tmp") }',
+        "src/runtime/platform.ts": 'const facts = { homeDirectory: Effect.succeed("/tmp") }',
+      },
+      { settings: { effect: { testFiles: ["src/test-utils/**"] } } },
+    );
+    expect(reportedLines(findings, "src/test-utils/harness.ts")).toEqual([1]);
+    expect(reportedLines(findings, "src/runtime/platform.ts")).toEqual([]);
+  });
+
+  test("regex, division, JSX and type parameter forms around a home are read as code", () => {
+    const home = '\nconst env = { cwd: "/tmp" }';
+    expect(
+      lines(
+        [
+          "if (ok) /[/*]/.test(s)",
+          "while (next()) /[/*]/.test(s)",
+          "for (const s of all) /[/*]/.test(s)",
+          "if (ok) f(); else /[/*]/.test(s)",
+          "const re = /*comment*/ /[/*]/",
+          "const re = // a note\n  /[/*]/",
+          "const half = (a + b) / 2 /* a note */",
+          "const half = f(a) / 2 /* a note */",
+          "const f = <Row>(a: Row) => a",
+        ].map((source) => `${source}${home}`),
+      ).map((reported) => reported.length),
+    ).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    expect(
+      lines(
+        [
+          'const f = <A,>(a: A) => a; const env = { cwd: "/tmp" }',
+          'const f = <A extends object>(a: A) => a; const env = { cwd: "/tmp" }',
+          'const f = <Row = unknown,>(x: Row) => x; const env = { cwd: "/tmp" }',
+          'const f = <Row=unknown,>(x: Row) => x; const env = { cwd: "/tmp" }',
+          'type F = <Row>(x: Row) => Row; const env = { cwd: "/tmp" }',
+          'mount({ cwd: pick(dir), note: "/tmp/log" })',
+          'mount({ cwd: pick(<box></box>, dir), note: "/tmp/log" })',
+          'mount({ cwd: pick(<text>it\'s</text>, dir), note: "/tmp/log" })',
+          'mount({ cwd: pick(<box title="a/b" />, dir), note: "/tmp/log" })',
+          'mount({ cwd: pick(<><text>{`it\'s`}</text></>, dir), note: "/tmp/log" })',
+          'mount({ cwd: pick(<X>it\'s</X>, dir), note: "/tmp/log" })',
+        ],
+        "test.tsx",
+      ).map((reported) => reported.length),
+    ).toEqual([1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]);
+  });
+});

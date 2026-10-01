@@ -78,6 +78,7 @@ describe("recommended preset", () => {
       "effect/noRuntimeTypeof": "error",
       "effect/noSequentialEffectAll": "error",
       "effect/noShapeInSymbolNames": "error",
+      "effect/noSharedTestHome": "error",
       "effect/noSilentCatchAll": "error",
       "effect/preferEffectFn": "error",
       "effect/noTernary": "error",

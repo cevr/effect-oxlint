@@ -45,6 +45,7 @@ export const recommended = {
   "effect/noRuntimeTypeof": "error",
   "effect/noSequentialEffectAll": "error",
   "effect/noShapeInSymbolNames": "error",
+  "effect/noSharedTestHome": "error",
   "effect/noSilentCatchAll": "error",
   "effect/noTernary": "error",
   "effect/noTestGlobals": "error",
