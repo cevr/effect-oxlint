@@ -29,6 +29,7 @@ export * from "./no-lint-evasion.js";
 export * from "./no-managed-runtime-in-effect.js";
 export * from "./no-module-level-mutable-state.js";
 export * from "./no-module-mocks.js";
+export * from "./no-module-path-facts.js";
 export * from "./no-nested-effect-gen.js";
 export * from "./no-new-error.js";
 export * from "./no-new-promise.js";

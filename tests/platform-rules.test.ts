@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { noNodeBuiltinImport } from "../src/rules/index.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
-import { lintCases } from "./support/lint-fixtures.js";
+import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
 
 describe("ambient platform APIs", () => {
   test("rejects general JavaScript globals with Effect replacements", () => {
@@ -123,5 +123,56 @@ describe("Node builtins", () => {
         ["MemberExpression", createHmac],
       ]),
     ).toHaveLength(0);
+  });
+});
+
+describe("module file paths", () => {
+  test("rejects host path facts and hand-read module URLs", () => {
+    const results = lintCases("noModulePathFacts", {
+      valid: [
+        'const file = path.fromFileUrl(new URL("./x.ts", import.meta.url));',
+        "const url = import.meta.url;",
+        "load(import.meta.url);",
+        'load(new URL("./x.ts", import.meta.url));',
+        'const href = new URL(".", import.meta.url).href;',
+        "if (import.meta.main) run();",
+        'const host = new URL("https://x").pathname;',
+        'const u = new URL("https://x", base); u.pathname;',
+        'const name = "file:///x".slice(7);',
+        'class URL { constructor(a, b) {} pathname = "" }; new URL(".", import.meta.url).pathname;',
+        'const u = new URL(".", import.meta.url); load(u);',
+      ],
+      invalid: [
+        "const dir = import.meta.dirname;",
+        "const file = import.meta.filename;",
+        "const dir = import.meta.dir;",
+        "const file = import.meta.path;",
+        'const dir = import.meta["dirname"];',
+        'const file = new URL("./x.ts", import.meta.url).pathname;',
+        'const dir = new URL(".", import.meta.url).pathname;',
+        "const file = new URL(import.meta.url).pathname;",
+        'const u = new URL("./x.ts", import.meta.url);\nconst file = u.pathname;',
+        "const url = import.meta.url; const file = new URL(url).pathname;",
+        'const file = new URL(".", import.meta.url).href.slice(7);',
+        'const u = new URL(".", import.meta.url); u.href.substring(7);',
+        "const file = import.meta.url.slice(7);",
+        "const file = import.meta.url.substring(7);",
+        'const file = import.meta.url.replace("file://", "");',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("points to Path.fromFileUrl at the read", () => {
+    const findings = lintFixtures("noModulePathFacts", {
+      "paths.ts": [
+        'const u = new URL("./x.ts", import.meta.url);',
+        "const ok = u.href;",
+        "const file = u.pathname;",
+      ].join("\n"),
+    });
+    expect(findings.get("paths.ts")).toEqual([
+      { line: 3, message: expect.stringContaining("Path.fromFileUrl") },
+    ]);
   });
 });

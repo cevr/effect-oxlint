@@ -27,6 +27,7 @@ export const recommended = {
   "effect/noManagedRuntimeInEffect": "error",
   "effect/noModuleLevelMutableState": "error",
   "effect/noModuleMocks": "error",
+  "effect/noModulePathFacts": "error",
   "effect/noNestedEffectGen": "error",
   "effect/noNewError": "error",
   "effect/noNewPromise": "error",

@@ -80,6 +80,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/noLintEvasion`                 | Bans `undefined` and `unknown` spelled through `Option.none()` or `Schema.Unknown`                                               |
 | `effect/noGlobals`                     | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`; `members` bans more                      |
 | `effect/noNodeBuiltinImport`           | Bans fully replaced Node modules and replaced operations from partial modules; `modules` bans more                               |
+| `effect/noModulePathFacts`             | Bans `import.meta.dirname`/`filename`/`dir`/`path` and hand-read module URLs (`.pathname`, string cuts); use `Path.fromFileUrl`  |
 
 `effect/requireSuppressionReason` also rejects `@effect-diagnostics effect/name:off`: @effect/tsgo ignores the `effect/` prefix, so write the bare rule name. A blanket directive that covers its own line, such as a bare `// oxlint-disable-line` or a file-leading `/* eslint-disable */`, suppresses this rule's report too; oxlint applies the directive before the rule can report it.
 
