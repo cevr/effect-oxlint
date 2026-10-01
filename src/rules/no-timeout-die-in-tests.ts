@@ -9,8 +9,10 @@
  *
  * Whether a die is a timeout is a statement of intent, so the rule reads the
  * message: a string, template, concatenation, or error constructor argument of
- * `Effect.die` or `Effect.dieMessage` that says "timed out", "timeout",
- * "waiting for", or "gave up". Dying on an impossible state, such as a missing
+ * `Effect.die` or `Effect.dieMessage`, and the property values and elements of
+ * an object or array among them (`new WaitError({ message: "..." })`), that
+ * says "timed out", "timeout", "waiting for", or "gave up". Property keys and
+ * spreads are not read. Dying on an impossible state, such as a missing
  * fixture, is a real defect and stays allowed.
  */
 import type { ESTree } from "@oxlint/plugins";
@@ -25,7 +27,7 @@ import { isTestModule, skipFile } from "./_test-files.js";
 
 const timeoutText = /tim(?:ed|e)\s*out|timeout|waiting for|gave up/iu;
 
-/** The message text an argument spells: literals, templates, concatenations, and constructor arguments. */
+/** The message text an argument spells: literals, templates, concatenations, constructor arguments, and object and array values. */
 const messageTexts = (node: ESTree.Node): ReadonlyArray<string> => {
   if (node.type === "Literal") return [node.value].filter(Predicate.isString);
   if (node.type === "TemplateLiteral") {
@@ -37,8 +39,19 @@ const messageTexts = (node: ESTree.Node): ReadonlyArray<string> => {
   if (node.type === "NewExpression" || node.type === "CallExpression") {
     return node.arguments.flatMap(messageTexts);
   }
+  if (node.type === "ObjectExpression") {
+    return node.properties
+      .filter(isObjectProperty)
+      .flatMap((property) => messageTexts(property.value));
+  }
+  if (node.type === "ArrayExpression") {
+    return node.elements.filter(Predicate.isNotNullish).flatMap(messageTexts);
+  }
   return [];
 };
+
+const isObjectProperty = (property: ESTree.ObjectPropertyKind): property is ESTree.ObjectProperty =>
+  property.type === "Property";
 
 const dieMethods = ["die", "dieMessage"];
 
