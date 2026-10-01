@@ -65,6 +65,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/noSilentCatchAll`              | Keeps swallowed failures visible or recovers them truthfully                                                                     |
 | `effect/noUnboundedConcurrency`        | Requires finite concurrency for collections that can grow                                                                        |
 | `effect/noUnboundedRetry`              | Requires an attempt or duration bound on retry schedules                                                                         |
+| `effect/requireForceKillAfter`         | Requires `forceKillAfter` on `ChildProcess.make` so a child that ignores SIGTERM cannot hold its scope open                      |
 | `effect/noDynamicImports`              | Allows import() only behind a named lazy-loading boundary (none with `allowNamedBoundaries: false`); bans require()              |
 | `effect/noEffectDo`                    | Bans Effect.Do                                                                                                                   |
 | `effect/noEffectBind`                  | Bans Effect.bind                                                                                                                 |

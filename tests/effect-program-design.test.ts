@@ -207,3 +207,60 @@ describe("Promise edges", () => {
     expect(reportedLines(findings, "main.test.ts")).toEqual([]);
   });
 });
+
+describe("child process termination", () => {
+  const barrel = 'import { ChildProcess } from "effect/process";\n';
+  const kill = '{ forceKillAfter: "5 seconds" }';
+
+  test("requires forceKillAfter on every ChildProcess.make command", () => {
+    const results = lintCases("requireForceKillAfter", {
+      valid: [
+        `${barrel}ChildProcess.make("git", ${kill});`,
+        `${barrel}ChildProcess.make("git", ["status"], ${kill});`,
+        `${barrel}ChildProcess.make({ cwd: "/app", forceKillAfter: "5 seconds" })\`ls -la\`;`,
+        `${barrel}const options = ${kill}; ChildProcess.make("git", ["status"], options);`,
+        `${barrel}const base = ${kill}; ChildProcess.make("git", ["status"], { ...base, cwd: "/app" });`,
+        `${barrel}ChildProcess.make("git", ["status"], { ...options, cwd: "/app" });`,
+        `${barrel}const forceKillAfter = "5 seconds"; ChildProcess.make("git", { forceKillAfter });`,
+        `${barrel}const run = (options) => ChildProcess.make("git", ["status"], options);`,
+        `${barrel}const run = (args) => ChildProcess.make("git", args);`,
+        `${barrel}ChildProcess.make("git", ...rest);`,
+        'import * as ChildProcess from "effect/process/ChildProcess";\nChildProcess.make("git", { forceKillAfter: 5000 });',
+        'const ChildProcess = { make: (cmd) => cmd }; ChildProcess.make("git");',
+        'import { make } from "./local";\nmake("git");',
+        'import { ChildProcess } from "effect/process";\nconst run = (ChildProcess) => ChildProcess.make("git");',
+      ],
+      invalid: [
+        `${barrel}ChildProcess.make("git");`,
+        `${barrel}ChildProcess.make("git", ["status"]);`,
+        `${barrel}ChildProcess.make("git", { cwd: "/app" });`,
+        `${barrel}ChildProcess.make("git", ["status"], { cwd: "/app" });`,
+        `${barrel}ChildProcess.make({ cwd: "/app" })\`ls -la\`;`,
+        `${barrel}ChildProcess.make\`ls -la\`;`,
+        `${barrel}const options = { cwd: "/app" }; ChildProcess.make("git", ["status"], options);`,
+        `${barrel}const base = { cwd: "/app" }; ChildProcess.make("git", ["status"], { ...base });`,
+        `${barrel}ChildProcess.make("git", ["status"], { killSignal: "SIGKILL" });`,
+        'import * as CP from "effect/process/ChildProcess";\nCP.make("git", ["status"]);',
+        'import { make } from "effect/process/ChildProcess";\nmake("git");',
+        'import { make as command } from "effect/process/ChildProcess";\ncommand`ls -la`;',
+        'import * as P from "effect/process";\nP.ChildProcess.make("git");',
+        'import { ChildProcess as CP } from "effect/process";\nCP.make("git", []);',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("names the unbounded wait and the fix", () => {
+    const findings = lintFixtures("requireForceKillAfter", {
+      "spawn.ts": [
+        'import { ChildProcess } from "effect/process";',
+        'const status = ChildProcess.make("git", ["status"]);',
+        "const list = ChildProcess.make`ls -la`;",
+      ].join("\n"),
+    });
+    expect(findings.get("spawn.ts")).toEqual([
+      { line: 2, message: expect.stringContaining("waits for exit with no bound") },
+      { line: 3, message: expect.stringContaining("template form") },
+    ]);
+  });
+});
