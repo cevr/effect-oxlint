@@ -16,9 +16,12 @@
  *   to a function, put in an array or object, returned, read through a
  *   computed member it cannot name, or exported, by an `export` list or as
  *   the value of an exported declaration;
- * - a re-export from a platform package.
+ * - a re-export from a platform package;
+ * - another member of a platform module (`BunSocket.makeNet`), read,
+ *   destructured or imported by name, and exported, through an alias too:
+ *   every importer then reaches the platform package where no rule follows it.
  *
- * Other members (`BunRuntime.runMain`, `BunSocket.makeNet`) and type
+ * Other members used in place (`BunRuntime.runMain(program)`) and type
  * positions are not provisions. The `packages` option lists the platform
  * packages (default: the `@effect/platform-*` runtimes), and `layers` names
  * a project's own platform layers, reported wherever they are imported or
@@ -50,8 +53,11 @@ const defaultPackages = [
   "@effect/platform-node-shared",
 ];
 
-/** A package binding holds modules; a module binding holds layers. */
-type Holder = "package" | "module";
+/**
+ * A package binding holds modules; a module binding holds layers and other
+ * members; a member binding holds no layer, and only its export is reported.
+ */
+type Holder = "package" | "module" | "member";
 
 const layerExport = /^layer/u;
 
@@ -107,6 +113,13 @@ const provisionMessage = (text: string): string =>
 
 const escapeMessage = (text: string): string =>
   `\`${text}\` hands a platform module on, where its layers can no longer be followed. Read the member you need here, or yield the service the entry provides.`;
+
+const memberExportMessage = (text: string): string =>
+  `\`${text}\` exports a platform member, which hands the platform package to every importer where no rule follows it. Import it where it is used, or yield the service the entry provides.`;
+
+/** A use of a value that exports it: `export { name }` or `export default value`. */
+const isExportUse = (parent: ESTree.Node): boolean =>
+  parent.type === "ExportSpecifier" || parent.type === "ExportDefaultDeclaration";
 
 const reExportMessage = (source: string): string =>
   `Re-exporting '${source}' hands its layers to every importer. Import the package where it is used, or yield the service the entry provides.`;
@@ -176,15 +189,17 @@ export const noPlatformLayerOutsideEntry = Rule.define({
       member: ESTree.MemberExpression,
       holder: Holder,
       label: string,
-    ): Effect.Effect<void> =>
-      Option.match(staticMemberName(member), {
+    ): Effect.Effect<void> => {
+      if (holder === "member") return Effect.void;
+      return Option.match(staticMemberName(member), {
         onNone: () => report(member, escapeMessage(`${label}[...]`)),
         onSome: (name) => {
           if (holder === "package") return inspect(member, "module", `${label}.${name}`);
           if (layerExport.test(name)) return report(member, provisionMessage(`${label}.${name}`));
-          return Effect.void;
+          return inspect(member, "member", `${label}.${name}`);
         },
       });
+    };
 
     /** `const { a, b: c } = platformValue`: modules from a package, layers from a module. */
     const inspectDestructure = (
@@ -202,14 +217,16 @@ export const noPlatformLayerOutsideEntry = Rule.define({
           return Option.match(propertyKeyName(property.key), {
             onNone: () => report(property, escapeMessage(`${label}[...]`)),
             onSome: (name) => {
-              if (holder === "module") {
-                if (!layerExport.test(name)) return Effect.void;
-                return report(property, provisionMessage(`${label}.${name}`));
+              const text = `${label}.${name}`;
+              if (holder === "package") {
+                if (isExportedDeclarator(declarator)) return report(property, escapeMessage(text));
+                return followDeclared(declarator, "module", () => text, property);
               }
+              if (layerExport.test(name)) return report(property, provisionMessage(text));
               if (isExportedDeclarator(declarator)) {
-                return report(property, escapeMessage(`${label}.${name}`));
+                return report(property, memberExportMessage(text));
               }
-              return followDeclared(declarator, "module", () => `${label}.${name}`, property);
+              return followDeclared(declarator, "member", () => text, property);
             },
           });
         },
@@ -221,6 +238,13 @@ export const noPlatformLayerOutsideEntry = Rule.define({
       holder: Holder,
       label: string,
     ): Effect.Effect<void> => {
+      if (holder === "member") {
+        if (isExportedDeclarator(declarator)) {
+          return report(declarator, memberExportMessage(label));
+        }
+        if (declarator.id.type !== "Identifier") return Effect.void;
+        return followDeclared(declarator, holder, (name) => name);
+      }
       if (declarator.id.type === "Identifier") {
         if (isExportedDeclarator(declarator)) return report(declarator, escapeMessage(label));
         return followDeclared(declarator, holder, (name) => name);
@@ -242,7 +266,9 @@ export const noPlatformLayerOutsideEntry = Rule.define({
       if (parent.type === "VariableDeclarator" && parent.init === value) {
         return inspectDeclarator(parent, holder, label);
       }
-      return report(value, escapeMessage(label));
+      if (holder !== "member") return report(value, escapeMessage(label));
+      if (isExportUse(parent)) return report(value, memberExportMessage(label));
+      return Effect.void;
     };
 
     const inspectSpecifier = (
@@ -256,7 +282,7 @@ export const noPlatformLayerOutsideEntry = Rule.define({
       if (specifier.importKind === "type") return Effect.void;
       if (holder === "package") return followDeclared(specifier, "module", (name) => name);
       const imported = exportName(specifier.imported);
-      if (!layerExport.test(imported)) return Effect.void;
+      if (!layerExport.test(imported)) return followDeclared(specifier, "member", (name) => name);
       const module = Option.getOrElse(Arr.last(source.split("/")), () => source);
       return report(specifier, provisionMessage(`${module}.${imported}`));
     };

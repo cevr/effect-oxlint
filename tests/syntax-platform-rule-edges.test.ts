@@ -380,8 +380,6 @@ describe("platform layer provisions", () => {
   test("report a platform module exported through a declarator", () => {
     const results = lintCases("noPlatformLayerOutsideEntry", {
       valid: [
-        'import { BunSocket } from "@effect/platform-bun"; export const socket = BunSocket.makeNet;',
-        'import { BunRuntime } from "@effect/platform-bun"; export const { runMain } = BunRuntime;',
         'import { BunFileSystem } from "@effect/platform-bun"; const Fs = BunFileSystem; export type F = typeof Fs;',
       ],
       invalid: [
@@ -391,6 +389,33 @@ describe("platform layer provisions", () => {
         'import * as Platform from "@effect/platform-bun"; export const { BunPath } = Platform;',
         'import * as Platform from "@effect/platform-bun"; export const P = Platform;',
         'import { BunFileSystem } from "@effect/platform-bun"; const Fs = BunFileSystem; export const Again = Fs;',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("report a platform member exported, and leave a member used in place alone", () => {
+    const results = lintCases("noPlatformLayerOutsideEntry", {
+      valid: [
+        'import { BunSocket } from "@effect/platform-bun"; export const socket = BunSocket.makeNet(options);',
+        'import { BunSocket } from "@effect/platform-bun"; const make = BunSocket.makeNet; make(options);',
+        'import { BunSocket } from "@effect/platform-bun"; pick(BunSocket.makeNet);',
+        'import { BunSocket } from "@effect/platform-bun"; export type Make = typeof BunSocket.makeNet;',
+        'import { makeNet } from "@effect/platform-bun/BunSocket"; export const socket = makeNet(options);',
+        'import { BunRuntime } from "@effect/platform-bun"; const { runMain } = BunRuntime; runMain(program);',
+      ],
+      invalid: [
+        'import { BunSocket } from "@effect/platform-bun"; export const socket = BunSocket.makeNet;',
+        'import { BunSocket } from "@effect/platform-bun"; export const socket = BunSocket["makeNet"];',
+        'import { BunSocket } from "@effect/platform-bun"; export const socket = BunSocket.makeNet as Make;',
+        'import { BunRuntime } from "@effect/platform-bun"; export const { runMain } = BunRuntime;',
+        'import * as Platform from "@effect/platform-bun"; export const socket = Platform.BunSocket.makeNet;',
+        'import { BunSocket } from "@effect/platform-bun"; const Local = BunSocket; export const socket = Local.makeNet;',
+        'import { BunSocket } from "@effect/platform-bun"; const make = BunSocket.makeNet; export const socket = make;',
+        'import { BunSocket } from "@effect/platform-bun"; const make = BunSocket.makeNet; export { make };',
+        'import { BunSocket } from "@effect/platform-bun"; export default BunSocket.makeNet;',
+        'import { makeNet } from "@effect/platform-bun/BunSocket"; export const socket = makeNet;',
+        'import { BunRuntime } from "@effect/platform-bun"; const { runMain } = BunRuntime; export const run = runMain;',
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
