@@ -37,54 +37,55 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 
 ## Recommended Rules
 
-| Rule                                   | Contract                                                                                                                           |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `effect/noAs`                          | Bans TypeScript `as` and `<T>x` assertions; use `satisfies` (`as const` and `<const>x` are allowed)                                |
-| `effect/noAsyncFunction`               | Bans async functions and await expressions                                                                                         |
-| `effect/noTryCatch`                    | Bans every try/catch/finally statement                                                                                             |
-| `effect/noTestLifecycleHooks`          | Bans `beforeEach`, `afterEach`, `beforeAll`, and `afterAll`; use Effect scopes instead                                             |
-| `effect/noThrowStatement`              | Bans every throw statement                                                                                                         |
-| `effect/noNewPromise`                  | Bans new Promise, Promise calls, and Promise static APIs                                                                           |
-| `effect/noPromiseChainsInTests`        | Bans `.then`, `.catch`, and `.finally` Promise chains in test files                                                                |
-| `effect/noNewError`                    | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die                                          |
-| `effect/noNullish`                     | Bans null and undefined; permits `Object.create(null)` for prototype-free dictionaries                                             |
-| `effect/noModuleMocks`                 | Bans Vitest, Jest, and bun:test module mocks, mock functions, and spies; use test layers                                           |
-| `effect/noTestGlobals`                 | Bans global writes, global stubs, and implicit runner globals in test files                                                        |
-| `effect/noTernary`                     | Bans conditional expressions while allowing ordinary if statements                                                                 |
-| `effect/noManagedRuntimeInEffect`      | Keeps ManagedRuntime construction at non-Effect host boundaries                                                                    |
-| `effect/noModuleLevelMutableState`     | Bans module-level `let` and `var` outside tests; hold shared state in a Layer-owned `Ref`                                          |
-| `effect/noEagerAcquire`                | Bans `acquireRelease` acquires that build or capture the resource before acquire runs                                              |
-| `effect/noEffectRunInTests`            | Bans `Effect.run*`, a runtime's `run*` methods, and `ManagedRuntime.make` in tests; use `it.effect` or `it.layer`                  |
-| `effect/noEffectBunTestItCall`         | Bans calling effect-bun-test's `it`; it holds the runners and throws when called                                                   |
-| `effect/noFixedWaitInTests`            | Bans fixed waits in tests (waited or stored sleeps, `waitForTimeout`, timer-only Promises); use `TestClock` or wait on the event   |
-| `effect/noRepoTempDirectory`           | Bans test temp directories under the repo (a repo `directory`, a relative `mkdtemp` prefix, a `tmp` segment joined to a repo path) |
-| `effect/noSharedTestHome`              | Bans a test home, data or working directory under the shared temp root (`/tmp`, `tmpdir()`); `keys` names more home keys           |
-| `effect/noInlineProvide`               | Keeps dependency provisioning at explicit composition boundaries                                                                   |
-| `effect/noNestedEffectGen`             | Flattens directly yielded nested generators                                                                                        |
-| `effect/noPerCallCacheConstruction`    | Constructs shared caches once in their owning layer                                                                                |
-| `effect/noRunCollectOnUnboundedStream` | Requires termination before collecting a clearly unbounded Stream                                                                  |
-| `effect/noSequentialEffectAll`         | Uses explicit sequencing when serial aggregation discards its result                                                               |
-| `effect/noSilentCatchAll`              | Keeps swallowed failures visible or recovers them truthfully                                                                       |
-| `effect/noUnboundedConcurrency`        | Requires finite concurrency for collections that can grow                                                                          |
-| `effect/noUnboundedRetry`              | Requires an attempt or duration bound on retry schedules                                                                           |
-| `effect/requireForceKillAfter`         | Requires `forceKillAfter` on `ChildProcess.make` so a child that ignores SIGTERM cannot hold its scope open                        |
-| `effect/noDynamicImports`              | Allows import() only behind a named lazy-loading boundary (none with `allowNamedBoundaries: false`); bans require()                |
-| `effect/noEffectDo`                    | Bans Effect.Do                                                                                                                     |
-| `effect/noEffectBind`                  | Bans Effect.bind                                                                                                                   |
-| `effect/preferCatchTag`                | Replaces manual `_tag` predicates and `catchAll` dispatch with tagged recovery                                                     |
-| `effect/preferEffectFn`                | Requires `Effect.fn` for a generator operation that adds a span                                                                    |
-| `effect/preferMatchTagsExhaustive`     | Requires exhaustive `Match` for return-only `_tag` switches and if chains in Effect files                                          |
-| `effect/preferPredicateIsTagged`       | Replaces combined `_tag` comparisons with a named `Predicate` refinement in Effect files                                           |
-| `effect/preferSchemaTaggedUnion`       | Declares `_tag` unions of any tag case with `Schema.TaggedUnion` or `toTaggedUnion`, not hand-written type literals                |
-| `effect/preferServiceOf`               | Checks inline Layer implementations through `Service.of`                                                                           |
-| `effect/noAliasTestLayer`              | Bans a `Test`/`Fake`/`Stub`/`Mock` layer static that only returns the live layer                                                   |
-| `effect/requireNamedEffectFn`          | Requires stable names for `Effect.fn` operations                                                                                   |
-| `effect/requireSuppressionReason`      | Requires lint, Effect, and TS suppressions to name their target and give a `--` reason                                             |
-| `effect/noLintEvasion`                 | Bans `undefined` and `unknown` spelled through `Option.none()` or `Schema.Unknown`                                                 |
-| `effect/noGlobals`                     | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`; `members` bans more                        |
-| `effect/noNodeBuiltinImport`           | Bans fully replaced Node modules and replaced operations from partial modules; `modules` bans more                                 |
-| `effect/noModulePathFacts`             | Bans `import.meta.dirname`/`filename`/`dir`/`path` and hand-read module URLs (`.pathname`, string cuts); use `Path.fromFileUrl`    |
-| `effect/noLocaleCompare`               | Bans `localeCompare` and `Intl.Collator`, which order by the process locale; use `Order.String`                                    |
+| Rule                                   | Contract                                                                                                                                |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `effect/noAs`                          | Bans TypeScript `as` and `<T>x` assertions; use `satisfies` (`as const` and `<const>x` are allowed)                                     |
+| `effect/noAsyncFunction`               | Bans async functions and await expressions                                                                                              |
+| `effect/noTryCatch`                    | Bans every try/catch/finally statement                                                                                                  |
+| `effect/noTestLifecycleHooks`          | Bans `beforeEach`, `afterEach`, `beforeAll`, and `afterAll`; use Effect scopes instead                                                  |
+| `effect/noThrowStatement`              | Bans every throw statement                                                                                                              |
+| `effect/noNewPromise`                  | Bans new Promise, Promise calls, and Promise static APIs                                                                                |
+| `effect/noPromiseChainsInTests`        | Bans `.then`, `.catch`, and `.finally` Promise chains in test files                                                                     |
+| `effect/noNewError`                    | Allows native Error values only as direct arguments to Effect.die, Cause.die, or Exit.die                                               |
+| `effect/noNullish`                     | Bans null and undefined; permits `Object.create(null)` for prototype-free dictionaries                                                  |
+| `effect/noModuleMocks`                 | Bans Vitest, Jest, and bun:test module mocks, mock functions, and spies; use test layers                                                |
+| `effect/noTestGlobals`                 | Bans global writes, global stubs, and implicit runner globals in test files                                                             |
+| `effect/noTernary`                     | Bans conditional expressions while allowing ordinary if statements                                                                      |
+| `effect/noManagedRuntimeInEffect`      | Keeps ManagedRuntime construction at non-Effect host boundaries                                                                         |
+| `effect/noModuleLevelMutableState`     | Bans module-level `let` and `var` outside tests; hold shared state in a Layer-owned `Ref`                                               |
+| `effect/noEagerAcquire`                | Bans `acquireRelease` acquires that build or capture the resource before acquire runs                                                   |
+| `effect/noEffectRunInTests`            | Bans `Effect.run*`, a runtime's `run*` methods, and `ManagedRuntime.make` in tests; use `it.effect` or `it.layer`                       |
+| `effect/noEffectBunTestItCall`         | Bans calling effect-bun-test's `it`; it holds the runners and throws when called                                                        |
+| `effect/noFixedWaitInTests`            | Bans fixed waits in tests (waited or stored sleeps, `waitForTimeout`, timer-only Promises); use `TestClock` or wait on the event        |
+| `effect/noRepoTempDirectory`           | Bans test temp directories under the repo (a repo `directory`, a relative `mkdtemp` prefix, a `tmp` segment joined to a repo path)      |
+| `effect/noSharedTestHome`              | Bans a test home, data or working directory under the shared temp root (`/tmp`, `tmpdir()`); `keys` names more home keys                |
+| `effect/noInlineProvide`               | Keeps dependency provisioning at explicit composition boundaries                                                                        |
+| `effect/noNestedEffectGen`             | Flattens directly yielded nested generators                                                                                             |
+| `effect/noPerCallCacheConstruction`    | Constructs shared caches once in their owning layer                                                                                     |
+| `effect/noInterruptibleMemo`           | Bans `Effect.cached*` over an interruptible effect, which keeps its first caller's interruption; memoize a started fiber or use `Cache` |
+| `effect/noRunCollectOnUnboundedStream` | Requires termination before collecting a clearly unbounded Stream                                                                       |
+| `effect/noSequentialEffectAll`         | Uses explicit sequencing when serial aggregation discards its result                                                                    |
+| `effect/noSilentCatchAll`              | Keeps swallowed failures visible or recovers them truthfully                                                                            |
+| `effect/noUnboundedConcurrency`        | Requires finite concurrency for collections that can grow                                                                               |
+| `effect/noUnboundedRetry`              | Requires an attempt or duration bound on retry schedules                                                                                |
+| `effect/requireForceKillAfter`         | Requires `forceKillAfter` on `ChildProcess.make` so a child that ignores SIGTERM cannot hold its scope open                             |
+| `effect/noDynamicImports`              | Allows import() only behind a named lazy-loading boundary (none with `allowNamedBoundaries: false`); bans require()                     |
+| `effect/noEffectDo`                    | Bans Effect.Do                                                                                                                          |
+| `effect/noEffectBind`                  | Bans Effect.bind                                                                                                                        |
+| `effect/preferCatchTag`                | Replaces manual `_tag` predicates and `catchAll` dispatch with tagged recovery                                                          |
+| `effect/preferEffectFn`                | Requires `Effect.fn` for a generator operation that adds a span                                                                         |
+| `effect/preferMatchTagsExhaustive`     | Requires exhaustive `Match` for return-only `_tag` switches and if chains in Effect files                                               |
+| `effect/preferPredicateIsTagged`       | Replaces combined `_tag` comparisons with a named `Predicate` refinement in Effect files                                                |
+| `effect/preferSchemaTaggedUnion`       | Declares `_tag` unions of any tag case with `Schema.TaggedUnion` or `toTaggedUnion`, not hand-written type literals                     |
+| `effect/preferServiceOf`               | Checks inline Layer implementations through `Service.of`                                                                                |
+| `effect/noAliasTestLayer`              | Bans a `Test`/`Fake`/`Stub`/`Mock` layer static that only returns the live layer                                                        |
+| `effect/requireNamedEffectFn`          | Requires stable names for `Effect.fn` operations                                                                                        |
+| `effect/requireSuppressionReason`      | Requires lint, Effect, and TS suppressions to name their target and give a `--` reason                                                  |
+| `effect/noLintEvasion`                 | Bans `undefined` and `unknown` spelled through `Option.none()` or `Schema.Unknown`                                                      |
+| `effect/noGlobals`                     | Bans ambient capabilities with direct Effect replacements; allows `process.std*.isTTY`; `members` bans more                             |
+| `effect/noNodeBuiltinImport`           | Bans fully replaced Node modules and replaced operations from partial modules; `modules` bans more                                      |
+| `effect/noModulePathFacts`             | Bans `import.meta.dirname`/`filename`/`dir`/`path` and hand-read module URLs (`.pathname`, string cuts); use `Path.fromFileUrl`         |
+| `effect/noLocaleCompare`               | Bans `localeCompare` and `Intl.Collator`, which order by the process locale; use `Order.String`                                         |
 
 `effect/requireSuppressionReason` also rejects `@effect-diagnostics effect/name:off`: @effect/tsgo ignores the `effect/` prefix, so write the bare rule name. A blanket directive that covers its own line, such as a bare `// oxlint-disable-line` or a file-leading `/* eslint-disable */`, suppresses this rule's report too; oxlint applies the directive before the rule can report it.
 

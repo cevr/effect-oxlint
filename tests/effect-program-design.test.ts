@@ -268,3 +268,48 @@ describe("child process termination", () => {
     ]);
   });
 });
+
+describe("interruptible memos", () => {
+  const effect = 'import { Effect, pipe } from "effect";\n';
+
+  test("rejects a memo whose first caller's interruption every later caller gets back", () => {
+    const results = lintCases("noInterruptibleMemo", {
+      valid: [
+        `${effect}const memo = Effect.cached(Effect.uninterruptible(load));`,
+        `${effect}const memo = Effect.cached(load.pipe(Effect.retry(policy), Effect.uninterruptible));`,
+        `${effect}const memo = load.pipe(Effect.uninterruptible, Effect.cached);`,
+        `${effect}const memo = Effect.uninterruptible(load).pipe(Effect.cached);`,
+        `${effect}const memo = pipe(load, Effect.uninterruptible, Effect.cachedWithTTL("5 minutes"));`,
+        `${effect}const safe = Effect.uninterruptible(load);\nconst memo = Effect.cached(safe);`,
+        `${effect}const memo = Effect.cachedWithTTL(load, (exit) => (Exit.hasInterrupts(exit) ? 0 : "5 minutes"));`,
+        `${effect}const memo = load.pipe(Effect.cachedInvalidateWithTTL(function ttl(exit) { return 0; }));`,
+        "const Effect = { cached: (x) => x }; const memo = Effect.cached(load);",
+        `${effect}const fiber = Effect.forkDetach(load);`,
+      ],
+      invalid: [
+        `${effect}const memo = Effect.cached(load);`,
+        `${effect}const scan = Effect.gen(function* () {\n  return yield* Effect.cached(finder.waitForScan);\n});`,
+        `${effect}const memo = Effect.cachedWithTTL(loadCatalog(home), "5 minutes");`,
+        `${effect}const pair = Effect.gen(function* () {\n  return yield* Effect.cachedInvalidateWithTTL(load, "1 hour");\n});`,
+        `${effect}const memo = load.pipe(Effect.cached);`,
+        `${effect}const memo = load.pipe(Effect.cachedWithTTL("5 minutes"));`,
+        `${effect}const memo = pipe(load, Effect.cached);`,
+        `${effect}const memo = load.pipe(Effect.uninterruptible, Effect.retry(policy), Effect.cached);`,
+        `${effect}const memo = Effect.cached(Effect.uninterruptible(load).pipe(Effect.timeout("1 second")));`,
+        `${effect}const memo = Effect.cached(Effect.uninterruptibleMask((restore) => restore(load)));`,
+        'import * as E from "effect/Effect";\nconst memo = E.cached(load);',
+        `${effect}const make = Effect.cached;`,
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("names the started fiber and Cache as the fix", () => {
+    const findings = lintFixtures("noInterruptibleMemo", {
+      "memo.ts": `${effect}const memo = Effect.cached(load);`,
+    });
+    expect(findings.get("memo.ts")).toEqual([
+      { line: 2, message: expect.stringContaining("Memoize a started fiber") },
+    ]);
+  });
+});

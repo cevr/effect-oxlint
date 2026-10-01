@@ -22,6 +22,7 @@ export const recommended = {
   "effect/noFixedWaitInTests": "error",
   "effect/noGlobals": "error",
   "effect/noInlineProvide": "error",
+  "effect/noInterruptibleMemo": "error",
   "effect/noKnownValueWidening": "error",
   "effect/noLintEvasion": "error",
   "effect/noLocaleCompare": "error",

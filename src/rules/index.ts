@@ -24,6 +24,7 @@ export * from "./no-effect-run-in-tests.js";
 export * from "./no-fixed-wait-in-tests.js";
 export * from "./no-globals.js";
 export * from "./no-inline-provide.js";
+export * from "./no-interruptible-memo.js";
 export * from "./no-known-value-widening.js";
 export * from "./no-lint-evasion.js";
 export * from "./no-locale-compare.js";
