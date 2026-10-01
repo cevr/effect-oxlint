@@ -27,8 +27,20 @@ import { isTestModule, skipFile } from "./_test-files.js";
 
 const timeoutText = /tim(?:ed|e)\s*out|timeout|waiting for|gave up/iu;
 
-/** The message text an argument spells: literals, templates, concatenations, constructor arguments, and object and array values. */
+/**
+ * The message text an argument spells: literals, templates, concatenations, constructor arguments, and object and array values,
+ * through type-only wrappers (`as`, `satisfies`, `<T>`, `!`) and parentheses.
+ */
 const messageTexts = (node: ESTree.Node): ReadonlyArray<string> => {
+  if (
+    node.type === "ParenthesizedExpression" ||
+    node.type === "TSAsExpression" ||
+    node.type === "TSTypeAssertion" ||
+    node.type === "TSNonNullExpression" ||
+    node.type === "TSSatisfiesExpression"
+  ) {
+    return messageTexts(node.expression);
+  }
   if (node.type === "Literal") return [node.value].filter(Predicate.isString);
   if (node.type === "TemplateLiteral") {
     return node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw);

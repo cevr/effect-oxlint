@@ -165,4 +165,30 @@ describe("noEffectRunInTests", () => {
     expect(reportedLines(runtimeFindings, "harness.ts")).toEqual([]);
     expect(reportedLines(runtimeFindings, "server-boundary.test.ts")).toEqual([]);
   });
+
+  test("reports a runner read through a computed key that names it", () => {
+    const computed = [
+      'import { Effect, ManagedRuntime } from "effect";',
+      "declare const runtime: ManagedRuntime.ManagedRuntime<never, never>;",
+      'const runPromise = "runPromise";',
+      'const method = "runSync" as const;',
+      "export const viaConst = runtime[runPromise](Effect.void);", // 5
+      'export const viaLiteral = runtime["runPromiseExit"](Effect.void);', // 6
+      "export const viaAsConst = runtime[method](Effect.void);", // 7
+      "export const viaTemplate = runtime[`runFork`](Effect.void);", // 8
+      'let mutable = "runPromise";',
+      "export const reassignable = runtime[mutable];",
+      "export const unknownKey = runtime[otherKey];",
+      'export const notARunner = settings["runPromiseTimeout"];',
+      "export const indexed = runners[0];",
+      "",
+    ].join("\n");
+    const computedFindings = lintFixtures("noEffectRunInTests", {
+      "computed.test.ts": computed,
+    });
+    expect(reportedLines(computedFindings, "computed.test.ts")).toEqual([5, 6, 7, 8]);
+    expect(computedFindings.get("computed.test.ts")?.[0]?.message).toContain(
+      "(runtime.runPromise)",
+    );
+  });
 });

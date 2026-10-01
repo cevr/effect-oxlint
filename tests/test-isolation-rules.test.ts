@@ -270,6 +270,11 @@ describe("noTimeoutDieInTests", () => {
         'Effect.die(new Error("Timeout: " + label));',
         'Effect.die("still " + "waiting for idle");',
         'import { Effect as E } from "effect"; E.die("Time out");',
+        'Effect.die({ message: "timed out waiting for event" satisfies string });',
+        'Effect.die("gave up" as string);',
+        'Effect.die(<string>"waiting for idle");',
+        'Effect.die(new WaitError({ message: ("timed out" as const) }));',
+        'Effect.die(["poll", "timeout"]!);',
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });

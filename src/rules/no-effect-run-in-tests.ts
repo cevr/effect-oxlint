@@ -4,15 +4,19 @@
  * Reported in test modules: the `Effect.run*` statics, `ManagedRuntime.make`,
  * and a runner method (`runPromise`, `runSync`, `runFork`, ...) on any other
  * value, such as `runtime.runPromise` or `ui.clientRuntime.runPromiseExit`,
- * whether called or passed as a reference. A test's Promise edge kept in a
+ * whether called or passed as a reference. A computed key that names a runner
+ * counts too: a string literal or template (`runtime["runPromise"]`) or a
+ * const bound to one (`runtime[runPromise]`). A test's Promise edge kept in a
  * boundary file takes an override that turns this rule off there.
  */
 import type { ESTree } from "@oxlint/plugins";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { type ResolveConst, constResolver } from "./_const-bindings.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
 import { isTestModule, skipFile } from "./_test-files.js";
 
@@ -40,13 +44,32 @@ const receiverName = (node: ESTree.Node): string => {
   return "runtime";
 };
 
-/** A runner method read from a value that is not an Effect namespace: `runtime.runPromise`. */
-const runtimeRunnerName = (node: ESTree.MemberExpression): Option.Option<string> => {
-  if (node.computed || node.property.type !== "Identifier") return Option.none();
-  const method = node.property.name;
-  if (!effectRunners.includes(method)) return Option.none();
-  return Option.some(`${receiverName(node.object)}.${method}`);
+/** The string a computed key spells: a string literal, a template without substitutions, or a const bound to either. */
+const computedKeyText = (key: ESTree.Expression, resolve: ResolveConst): Option.Option<string> => {
+  const node = resolve(key);
+  if (node.type === "Literal") return Option.liftPredicate(node.value, Predicate.isString);
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return Option.fromNullishOr(node.quasis[0]?.value.cooked);
+  }
+  return Option.none();
 };
+
+/** The member a key reads: `runPromise` for `.runPromise`, `["runPromise"]` and `[runPromise]` with a const key. */
+const memberKey = (node: ESTree.MemberExpression, resolve: ResolveConst): Option.Option<string> => {
+  if (node.computed) return computedKeyText(node.property, resolve);
+  if (node.property.type !== "Identifier") return Option.none();
+  return Option.some(node.property.name);
+};
+
+/** A runner method read from a value that is not an Effect namespace: `runtime.runPromise`. */
+const runtimeRunnerName = (
+  node: ESTree.MemberExpression,
+  resolve: ResolveConst,
+): Option.Option<string> =>
+  memberKey(node, resolve).pipe(
+    Option.filter((method) => effectRunners.includes(method)),
+    Option.map((method) => `${receiverName(node.object)}.${method}`),
+  );
 
 export const noEffectRunInTests = Rule.define({
   name: "no-effect-run-in-tests",
@@ -60,6 +83,7 @@ export const noEffectRunInTests = Rule.define({
     if (!isTestModule(ctx)) return skipFile;
     const effectNamespaces = new Set(["Effect"]);
     const managedRuntimeNamespaces = new Set(["ManagedRuntime"]);
+    const resolve = constResolver(ctx);
 
     const runnerName = (node: ESTree.MemberExpression): Option.Option<string> => {
       const runtimes = visibleNamespaces(ctx, node, managedRuntimeNamespaces);
@@ -69,7 +93,7 @@ export const noEffectRunInTests = Rule.define({
         isStaticMember(node, effects, runner),
       );
       if (Option.isSome(effectRunner)) return effectRunner;
-      return runtimeRunnerName(node);
+      return runtimeRunnerName(node, resolve);
     };
 
     return {
