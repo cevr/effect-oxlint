@@ -39,7 +39,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 
 | Rule                                   | Contract                                                                                                                         |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `effect/noAs`                          | Bans TypeScript `as` assertions; use `satisfies` (`as const` is allowed)                                                         |
+| `effect/noAs`                          | Bans TypeScript `as` and `<T>x` assertions; use `satisfies` (`as const` and `<const>x` are allowed)                              |
 | `effect/noAsyncFunction`               | Bans async functions and await expressions                                                                                       |
 | `effect/noTryCatch`                    | Bans every try/catch/finally statement                                                                                           |
 | `effect/noTestLifecycleHooks`          | Bans `beforeEach`, `afterEach`, `beforeAll`, and `afterAll`; use Effect scopes instead                                           |

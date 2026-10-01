@@ -215,6 +215,27 @@ describe("unconditional syntax", () => {
     expect(Testing.runRule(noAs, "TSAsExpression", namedAssertion)).toHaveLength(1);
   });
 
+  test("rejects angle-bracket assertions with the as exemptions", () => {
+    const results = lintCases("noAs", {
+      valid: [
+        "const pair = <const>[1, 2];",
+        "const pair = [1, 2] as const;",
+        "const checked = value satisfies Expected;",
+      ],
+      invalid: [
+        "const typed = <Expected>value;",
+        "const typed = <unknown>value;",
+        "const typed = <Constant>value;",
+        "const typed = <Expected>(<unknown>value);",
+        "const typed = value as Expected;",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+    expect(
+      lintFixtures("noAs", { "value.ts": "const typed = <Expected>value;" }).get("value.ts"),
+    ).toEqual([{ line: 1, message: "Avoid as assertions. Use satisfies instead." }]);
+  });
+
   test("rejects test lifecycle hooks", () => {
     for (const hook of ["afterAll", "afterEach", "beforeAll", "beforeEach"]) {
       expect(
