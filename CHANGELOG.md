@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.21.1
+
+### Patch Changes
+
+- [`8c04f25`](https://github.com/cevr/effect-oxlint/commit/8c04f25b58fc7dbf6c37ddddc3710b0a13e3bec2) Thanks [@cevr](https://github.com/cevr)! - `noEffectRunInTests` reports a runner read through a computed key that names it: a string literal or template (`runtime["runPromise"]`) or a const bound to one (`const runPromise = "runPromise"; runtime[runPromise]`). `noTimeoutDieInTests` reads a die message through `satisfies`, `as`, `<T>`, `!` and parentheses (`Effect.die({ message: "timed out" satisfies string })`).
+
 ## 0.21.0
 
 ### Minor Changes
