@@ -117,6 +117,17 @@ describe("retry schedules held in named values", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
+  test("checks HttpClient retries under an aliased effect/http/HttpClient import", () => {
+    const http = 'import * as Http from "effect/http/HttpClient";\n';
+    const results = lintCases("noUnboundedRetry", {
+      valid: [
+        `${header}${http}Http.retryTransient({ schedule: Schedule.spaced("1 second"), times: 3 });`,
+      ],
+      invalid: [`${header}${http}Http.retryTransient({ schedule: Schedule.spaced("1 second") });`],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
   test("reports the retry call so a suppression above the call applies", () => {
     const source = [
       header.trimEnd(),

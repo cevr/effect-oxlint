@@ -150,7 +150,7 @@ export const noUnboundedRetry = Rule.define({
         for (const name of importedNamespaces(
           node,
           "HttpClient",
-          "effect/unstable/http/HttpClient",
+          "effect/http/HttpClient",
         )) {
           httpClientNamespaces.add(name);
         }

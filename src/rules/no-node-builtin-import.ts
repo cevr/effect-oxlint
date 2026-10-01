@@ -44,17 +44,17 @@ const moduleKeyMatches = (key: string, source: string): boolean => {
 import * as Predicate from "effect/Predicate";
 
 const replacedModules = new Map([
-  ["child_process", "ChildProcessSpawner from 'effect/unstable/process'"],
+  ["child_process", "ChildProcessSpawner from 'effect/process'"],
   ["console", "Console or Effect logging"],
   ["fs", "FileSystem"],
-  ["http", "HttpClient or HttpServer from 'effect/unstable/http'"],
-  ["https", "HttpClient or HttpServer from 'effect/unstable/http'"],
+  ["http", "HttpClient or HttpServer from 'effect/http'"],
+  ["https", "HttpClient or HttpServer from 'effect/http'"],
   ["path", "Path"],
   ["readline", "Terminal or Stdio"],
   ["stream", "Stream, Sink, or Channel"],
   ["timers", "Effect.sleep or Schedule"],
   ["tty", "Terminal or Stdio"],
-  ["worker_threads", "Worker from 'effect/unstable/workers'"],
+  ["worker_threads", "Worker from 'effect/workers'"],
 ]);
 
 const cryptoOperations = new Set([
