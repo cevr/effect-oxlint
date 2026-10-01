@@ -147,6 +147,27 @@ describe("platform capability rules", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
+  test("noGlobals follows an alias only while it holds the global, and walks nested destructures", () => {
+    const results = lintCases("noGlobals", {
+      valid: [
+        "let p = process; p = { env: {} }; p.env;",
+        "var g = globalThis; g = { process: { env: {} } }; g.process.env;",
+        "const { process: { platform } } = globalThis;",
+        "const { process: { platform } = fallback } = globalThis;",
+        "var p = process; var p = { env: {} }; p.env;",
+      ],
+      invalid: [
+        "var g = globalThis; var g = g; g.process.env;",
+        "var g = globalThis; var h = g; var g = h; h.process.env;",
+        "const { process: { env } } = globalThis; use(env);",
+        "const { process: { env } = fallback } = globalThis;",
+        'const { crypto: { subtle } } = globalThis; subtle.digest("SHA-256", bytes);',
+        "const { process: { env: { HOME } } } = globalThis;",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
   test("noGlobals reports a wholly banned global read as a value", () => {
     const findings = lintFixtures(
       "noGlobals",

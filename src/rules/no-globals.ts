@@ -5,7 +5,8 @@
  * follows the value: through the global object (`globalThis`, `self`,
  * `window`, `global`), static and computed string members (`process["env"]`),
  * `as`/`!`/`satisfies`/`?.` wrappers, and each alias or destructure
- * (`const { env } = process`, `const D = Date; new D()`). A value that leaves
+ * (`const { env } = process`, `const D = Date; new D()`), nested ones too,
+ * while every write to the alias stores the same global. A value that leaves
  * its sight (an argument, a return) is a use only of a global the `members`
  * option bans whole. `typeof` probes and type positions are not uses.
  *
@@ -16,7 +17,7 @@
  * an override that turns the rule off, or configures it without the option to
  * keep only the built-in list there.
  */
-import type { ESTree } from "@oxlint/plugins";
+import type { ESTree, Reference, Variable } from "@oxlint/plugins";
 import { AST, Diagnostic, Rule, RuleContext, Scope } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -157,6 +158,20 @@ const climbTransparent = (node: ESTree.Node): ESTree.Node => {
     current = current.parent;
   }
   return current;
+};
+
+/** The expression inside the wrappers that keep its value. */
+const unwrapTransparent = (node: ESTree.Node): ESTree.Node => {
+  if (
+    node.type === "ChainExpression" ||
+    node.type === "TSAsExpression" ||
+    node.type === "TSNonNullExpression" ||
+    node.type === "TSSatisfiesExpression" ||
+    node.type === "TSTypeAssertion"
+  ) {
+    return unwrapTransparent(node.expression);
+  }
+  return node;
 };
 
 /** A member's name when it is static: `a.b`, `a["b"]`, or a template with no substitution. */
@@ -301,28 +316,108 @@ export const noGlobals = Rule.define({
         onSome: (alternative) => report(node, held, alternative),
       });
 
-    /** Follows every read of the variables a declaration binds inside `within`. */
+    /**
+     * Whether `expression` stores `held`, assuming each variable in
+     * `assuming` holds it: the global itself, a member of the global object,
+     * or a variable every write to which stores it.
+     */
+    const stores = (
+      expression: ESTree.Node,
+      held: Held,
+      assuming: ReadonlySet<Variable>,
+    ): boolean => {
+      const value = unwrapTransparent(expression);
+      if (value.type === "MemberExpression") {
+        return Option.match(staticMemberName(value), {
+          onNone: () => false,
+          onSome: (name) => {
+            if (name === held) return stores(value.object, globalObject, assuming);
+            return (
+              held === cryptoSubtle && name === "subtle" && stores(value.object, "crypto", assuming)
+            );
+          },
+        });
+      }
+      if (value.type !== "Identifier") return false;
+      return Option.match(Scope.findVariableUp(ctx.sourceCode.getScope(value), value.name), {
+        onNone: () => heldByName(value.name) === held,
+        onSome: (variable) => {
+          if (variable.defs.length === 0) return heldByName(value.name) === held;
+          return everyWriteStores(variable, held, assuming, () => false);
+        },
+      });
+    };
+
+    /**
+     * Whether every write to `variable` stores `held`. `trusted` names the
+     * writes already known to store it; a write through any other pattern,
+     * or of any other value, ends the alias.
+     */
+    const everyWriteStores = (
+      variable: Variable,
+      held: Held,
+      assuming: ReadonlySet<Variable>,
+      trusted: (reference: Reference) => boolean,
+    ): boolean => {
+      if (assuming.has(variable)) return true;
+      const next = new Set([...assuming, variable]);
+      return variable.references.every((reference) => {
+        if (!reference.isWrite() || trusted(reference)) return true;
+        const target = reference.identifier;
+        const parent = target.parent;
+        const plainWrite =
+          (parent?.type === "VariableDeclarator" && parent.id === target) ||
+          (parent?.type === "AssignmentExpression" &&
+            parent.left === target &&
+            parent.operator === "=");
+        return (
+          plainWrite &&
+          Predicate.isNotNull(reference.writeExpr) &&
+          stores(reference.writeExpr, held, next)
+        );
+      });
+    };
+
+    /** The variables already followed with each value: an alias cycle ends at a second visit. */
+    const followed = new Map<Variable, Set<Held>>();
+
+    /**
+     * Follows every read of the variables a declaration binds inside
+     * `within`, while every write to the variable stores `held`.
+     */
     const followDeclared = (
       declarator: ESTree.VariableDeclarator,
       within: ESTree.Node,
       held: Held,
-    ): Effect.Effect<void> =>
-      Effect.forEach(
+    ): Effect.Effect<void> => {
+      const inside = (node: ESTree.Node) => node.start >= within.start && node.end <= within.end;
+      return Effect.forEach(
         ctx.sourceCode
           .getDeclaredVariables(declarator)
-          .filter((variable) =>
-            variable.identifiers.some(
-              (identifier) => identifier.start >= within.start && identifier.end <= within.end,
-            ),
-          ),
-        (variable) =>
-          Effect.forEach(
+          .filter((variable) => variable.identifiers.some(inside)),
+        (variable) => {
+          const seen = followed.get(variable) ?? new Set<Held>();
+          if (seen.has(held)) return Effect.void;
+          followed.set(variable, seen.add(held));
+          if (
+            !everyWriteStores(
+              variable,
+              held,
+              new Set(),
+              (reference) => reference.init && inside(reference.identifier),
+            )
+          ) {
+            return Effect.void;
+          }
+          return Effect.forEach(
             variable.references.filter((reference) => !reference.init && reference.isRead()),
             (reference) => inspect(reference.identifier, held),
             { discard: true },
-          ),
+          );
+        },
         { discard: true },
       );
+    };
 
     /**
      * What `held.name` is: the global a global-object member names, the
@@ -350,7 +445,21 @@ export const noGlobals = Rule.define({
       });
     };
 
-    /** `const { a, "b": c, ...rest } = held`. */
+    /** A property's binding: a nested pattern walks on with the member's value. */
+    const bindMember = (
+      declarator: ESTree.VariableDeclarator,
+      property: ESTree.Node,
+      binding: ESTree.BindingPattern,
+      member: Held,
+    ): Effect.Effect<void> => {
+      if (binding.type === "AssignmentPattern") {
+        return bindMember(declarator, property, binding.left, member);
+      }
+      if (binding.type === "ObjectPattern") return inspectDestructure(declarator, binding, member);
+      return followDeclared(declarator, property, member);
+    };
+
+    /** `const { a, "b": c, d: { e }, ...rest } = held`. */
     const inspectDestructure = (
       declarator: ESTree.VariableDeclarator,
       pattern: ESTree.ObjectPattern,
@@ -373,7 +482,7 @@ export const noGlobals = Rule.define({
                 property,
                 held,
                 name,
-                (member) => followDeclared(declarator, property, member),
+                (member) => bindMember(declarator, property, property.value, member),
                 false,
               ),
           });
