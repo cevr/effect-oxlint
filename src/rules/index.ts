@@ -44,6 +44,7 @@ export * from "./no-promise-chains-in-tests.js";
 export * from "./no-reduce-accumulator-copy.js";
 export * from "./no-reflect-apply.js";
 export * from "./no-reflect-get.js";
+export * from "./no-repo-temp-directory.js";
 export * from "./no-run-collect-on-unbounded-stream.js";
 export * from "./no-run-promise.js";
 export * from "./no-runtime-typeof.js";

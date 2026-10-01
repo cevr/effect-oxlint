@@ -40,6 +40,7 @@ export const recommended = {
   "effect/noReduceAccumulatorCopy": "error",
   "effect/noReflectApply": "error",
   "effect/noReflectGet": "error",
+  "effect/noRepoTempDirectory": "error",
   "effect/noRunCollectOnUnboundedStream": "error",
   "effect/noRuntimeTypeof": "error",
   "effect/noSequentialEffectAll": "error",

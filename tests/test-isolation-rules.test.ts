@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { lintCases, lintFixtures, reportedLines } from "./support/lint-fixtures.js";
+import {
+  type LintConfig,
+  lintCases,
+  lintFixtures,
+  reportedLines,
+} from "./support/lint-fixtures.js";
 
 describe("noModuleMocks", () => {
   test("reports every Vitest and Jest mocking entry point", () => {
@@ -440,5 +445,157 @@ describe("effect.testFiles setting", () => {
       { settings: { effect: { testFiles: ["tests/**"] } } },
     );
     expect(reportedLines(findings, "tests/support/wait.ts")).toEqual([1]);
+  });
+});
+
+/** Lint each source as its own test file in one oxlint run: the reported lines of each. */
+const linesOf = (
+  rule: string,
+  sources: ReadonlyArray<string>,
+  extension = "test.ts",
+  config: LintConfig = {},
+): ReadonlyArray<ReadonlyArray<number>> => {
+  const files = sources.map((source, index) => [`case-${index}.${extension}`, source] as const);
+  const findings = lintFixtures(rule, Object.fromEntries(files), config);
+  return files.map(([file]) => reportedLines(findings, file));
+};
+
+/** A generator body for cases that `yield*`: its first line is line 2 of the file. */
+const inGen = (...lines: ReadonlyArray<string>): string =>
+  ["Effect.gen(function* () {", ...lines, "});"].join("\n");
+
+describe("noRepoTempDirectory", () => {
+  const lines = (sources: ReadonlyArray<string>) => linesOf("noRepoTempDirectory", sources);
+
+  test("a directory option under import.meta is reported", () => {
+    const source = inGen(
+      "const root = yield* fs.makeTempDirectoryScoped({",
+      '  directory: path.resolve(import.meta.dir, "../.."),',
+      '  prefix: "gent-x-",',
+      "})",
+    );
+    expect(lines([source])).toEqual([[3]]);
+  });
+
+  test("a bound name spelled inside a string literal is no repo path", () => {
+    expect(
+      lines([
+        inGen(
+          'const login = path.resolve(import.meta.dir, "fixtures")',
+          'const dir = yield* fs.makeTempDirectoryScoped({ prefix: "gent-login-" })',
+        ),
+        inGen(
+          'const login = path.resolve(import.meta.dir, "fixtures")',
+          'const label = "login screen"',
+          "const dir = yield* fs.makeTempDirectoryScoped({ prefix: label })",
+        ),
+      ]),
+    ).toEqual([[], []]);
+  });
+
+  test("a directory option naming a binding from import.meta is reported", () => {
+    const source = inGen(
+      'const packageRoot = path.resolve(import.meta.dir, "../../..")',
+      'const dir = yield* fs.makeTempDirectoryScoped({ directory: packageRoot, prefix: "x-" })',
+    );
+    expect(lines([source])).toEqual([[3]]);
+  });
+
+  test("a tmp path of any spelling joined to a repo path is reported", () => {
+    expect(
+      lines([
+        'const TEST_DIR = join(import.meta.dir, "../../.tmp-ext-integration")',
+        'const dir = join(import.meta.dir, ".tmp")',
+        'const dir = join(__dirname, "tmp", "case")',
+        'const dir = path.resolve(import.meta.dirname, "../temp-fixtures")',
+        "const dir = `${import.meta.dir}/.tmp`",
+      ]),
+    ).toEqual([[1], [1], [1], [1], [1]]);
+  });
+
+  test("a temp directory call rooted in the repo is reported, whatever its prefix", () => {
+    expect(
+      lines([
+        'const dir = mkdtempSync(join(__dirname, "fixture-"))',
+        'const dir = mkdtempSync(path.join("packages/core/tests", "case-"))',
+        inGen('const dir = yield* fs.makeTempDirectory({ directory: resolve("./apps/tui") })'),
+        inGen(
+          "const packageRoot = path.resolve(__dirname, '..')",
+          "const dir = yield* fs.makeTempDirectoryScoped({",
+          '  prefix: "case-",',
+          "  directory: packageRoot,",
+          "})",
+        ),
+        'const options = { directory: "./scratch" }; const dir = mkdtempSync(options);',
+      ]),
+    ).toEqual([[1], [1], [2], [5], [1]]);
+  });
+
+  test("a temp directory rooted in the working directory is reported", () => {
+    expect(
+      lines([
+        'const dir = mkdtempSync(join(process.cwd(), "tmp-"))',
+        inGen("const dir = yield* fs.makeTempDirectoryScoped({ directory: process.cwd() })"),
+        inGen('const dir = yield* fs.makeTempDirectoryScoped({ directory: path.resolve("out") })'),
+        inGen('const dir = yield* fs.makeTempDirectoryScoped({ directory: "./scratch" })'),
+        'const dir = mkdtempSync("case-")',
+        ["const here = process.cwd()", 'const dir = mkdtempSync(join(here, "case-"))'].join("\n"),
+      ]),
+    ).toEqual([[1], [2], [2], [2], [1], [2]]);
+  });
+
+  test("an absolute prefix and a helper that takes a prefix pass", () => {
+    const source = inGen(
+      'const a = mkdtempSync("/tmp/gent-case-")',
+      "const b = mkdtempSync(`${tmpdir()}/gent-case-`)",
+      'const c = yield* fs.makeTempDirectoryScoped({ directory: "/nonexistent/gent-probe-x" })',
+      'const d = yield* makeTempDirectoryScoped("gent-case-")',
+    );
+    expect(lines([source])).toEqual([[]]);
+  });
+
+  test("a system temp directory and a read of the source tree pass", () => {
+    const source = inGen(
+      'const root = yield* fs.makeTempDirectoryScoped({ prefix: "gent-x-" })',
+      'const dir = path.resolve(import.meta.dir, "../../src/extensions")',
+      "const other = yield* fs.makeTempDirectoryScoped({ directory: root })",
+      'const sys = mkdtempSync(join(tmpdir(), "gent-case-"))',
+      'const template = path.join(import.meta.dir, "templates", "prompt.md")',
+    );
+    expect(lines([source])).toEqual([[]]);
+  });
+
+  test("an array joined with a separator is no path literal", () => {
+    expect(
+      lines([
+        inGen(
+          'const suffix = ["a", "b"].join("")',
+          "const dir = yield* fs.makeTempDirectoryScoped({ prefix: `gent-${suffix}-` })",
+        ),
+        'const text = ["tmp", "x"].join("\\n")',
+        [
+          'const label = parts.join(", ")',
+          "const d = mkdtempSync(`/nonexistent/gent-probe-x/${label}`)",
+        ].join("\n"),
+      ]),
+    ).toEqual([[], [], []]);
+  });
+
+  test("a local __dirname binding is no repo path", () => {
+    expect(
+      lines(['const __dirname = "/nonexistent/x"; const dir = join(__dirname, "tmp")']),
+    ).toEqual([[]]);
+  });
+
+  test("product source is out of scope", () => {
+    const source = 'const dir = join(import.meta.dir, ".tmp")';
+    const findings = lintFixtures("noRepoTempDirectory", {
+      "src/runtime/x.ts": source,
+      "src/runtime/y.ts": 'const dir = { directory: path.resolve(import.meta.dir, "..") }',
+      "tests/runtime/x.test.ts": source,
+    });
+    expect(reportedLines(findings, "src/runtime/x.ts")).toEqual([]);
+    expect(reportedLines(findings, "src/runtime/y.ts")).toEqual([]);
+    expect(reportedLines(findings, "tests/runtime/x.test.ts")).toEqual([1]);
   });
 });
