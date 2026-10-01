@@ -1,5 +1,13 @@
 # oxlint-plugin-effect
 
+## 0.26.0
+
+### Minor Changes
+
+- [`88f6561`](https://github.com/cevr/effect-oxlint/commit/88f6561fece82dc255fa4aec2313924e0beeb7b6) Thanks [@cevr](https://github.com/cevr)! - New opt-in rule `noCodeUnitPadding`: it reports `padStart` and `padEnd` on any receiver but a number rendered as ASCII (`String(n)`, `n.toString(…)`, `toFixed`, `toPrecision`, `toExponential`). Both count UTF-16 code units, so a wide, combining or emoji character misaligns a padded column; pad by display width instead. A project enables it for the files that draw columns (a terminal UI, a CLI table) with an override.
+
+- [`0e6728d`](https://github.com/cevr/effect-oxlint/commit/0e6728df579ee6a5d387a13eab128b087f7b25c4) Thanks [@cevr](https://github.com/cevr)! - New recommended rule `noInterruptibleMemo`: it reports `Effect.cached`, `Effect.cachedWithTTL` and `Effect.cachedInvalidateWithTTL`, data-first or as a `.pipe(...)`/`pipe(...)` operator. Each runs the memoized effect in its first caller's fiber and keeps the exit that fiber reaches, so once that caller is interrupted every later caller gets the interruption back until the TTL ends. The message names the fixes: memoize a started fiber (fork once, then `Fiber.join` in each caller) or use `Cache`, which runs each lookup in a fiber of its own. An effect whose last step is `Effect.uninterruptible`, and a TTL given as a function (it can give an interruption no lifetime), are not reported.
+
 ## 0.25.0
 
 ### Minor Changes
