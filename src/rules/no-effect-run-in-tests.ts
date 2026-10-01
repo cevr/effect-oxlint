@@ -1,4 +1,12 @@
-/** Run test Effects through the test runner's Effect integration, not by hand. */
+/**
+ * Run test Effects through the test runner's Effect integration, not by hand.
+ *
+ * Reported in test modules: the `Effect.run*` statics, `ManagedRuntime.make`,
+ * and a runner method (`runPromise`, `runSync`, `runFork`, ...) on any other
+ * value, such as `runtime.runPromise` or `ui.clientRuntime.runPromiseExit`,
+ * whether called or passed as a reference. A test's Promise edge kept in a
+ * boundary file takes an override that turns this rule off there.
+ */
 import type { ESTree } from "@oxlint/plugins";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
@@ -23,12 +31,29 @@ const effectRunners = [
   "runSyncWith",
 ];
 
+/** The rightmost name of a runtime receiver: `runtime`, or `ui.clientRuntime` → `clientRuntime`. */
+const receiverName = (node: ESTree.Node): string => {
+  if (node.type === "Identifier") return node.name;
+  if (node.type === "MemberExpression" && !node.computed && node.property.type === "Identifier") {
+    return node.property.name;
+  }
+  return "runtime";
+};
+
+/** A runner method read from a value that is not an Effect namespace: `runtime.runPromise`. */
+const runtimeRunnerName = (node: ESTree.MemberExpression): Option.Option<string> => {
+  if (node.computed || node.property.type !== "Identifier") return Option.none();
+  const method = node.property.name;
+  if (!effectRunners.includes(method)) return Option.none();
+  return Option.some(`${receiverName(node.object)}.${method}`);
+};
+
 export const noEffectRunInTests = Rule.define({
   name: "no-effect-run-in-tests",
   meta: Rule.meta({
     type: "problem",
     description:
-      "Run Effects in tests through it.effect or it.layer instead of Effect.run* or ManagedRuntime.make.",
+      "Run Effects in tests through it.effect or it.layer instead of Effect.run*, a runtime's run* methods, or ManagedRuntime.make.",
   }),
   create: function* () {
     const ctx = yield* RuleContext;
@@ -40,7 +65,11 @@ export const noEffectRunInTests = Rule.define({
       const runtimes = visibleNamespaces(ctx, node, managedRuntimeNamespaces);
       if (isStaticMember(node, runtimes, "make")) return Option.some("ManagedRuntime.make");
       const effects = visibleNamespaces(ctx, node, effectNamespaces);
-      return Arr.findFirst(effectRunners, (runner) => isStaticMember(node, effects, runner));
+      const effectRunner = Arr.findFirst(effectRunners, (runner) =>
+        isStaticMember(node, effects, runner),
+      );
+      if (Option.isSome(effectRunner)) return effectRunner;
+      return runtimeRunnerName(node);
     };
 
     return {

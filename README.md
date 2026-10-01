@@ -54,7 +54,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/noManagedRuntimeInEffect`      | Keeps ManagedRuntime construction at non-Effect host boundaries                                                        |
 | `effect/noModuleLevelMutableState`     | Bans module-level `let` and `var` outside tests; hold shared state in a Layer-owned `Ref`                              |
 | `effect/noEagerAcquire`                | Bans `acquireRelease` acquires that build or capture the resource before acquire runs                                  |
-| `effect/noEffectRunInTests`            | Bans `Effect.run*` and `ManagedRuntime.make` in tests; use `it.effect` or `it.layer`                                   |
+| `effect/noEffectRunInTests`            | Bans `Effect.run*`, a runtime's `run*` methods, and `ManagedRuntime.make` in tests; use `it.effect` or `it.layer`      |
 | `effect/noEffectBunTestItCall`         | Bans calling effect-bun-test's `it`; it holds the runners and throws when called                                       |
 | `effect/noFixedWaitInTests`            | Bans fixed waits in tests (waited sleeps, `waitForTimeout`, timer-only Promises); use `TestClock` or wait on the event |
 | `effect/noInlineProvide`               | Keeps dependency provisioning at explicit composition boundaries                                                       |

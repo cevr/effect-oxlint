@@ -127,4 +127,42 @@ describe("noEffectRunInTests", () => {
     expect(reportedLines(findings, "program.ts")).toEqual([]);
     expect(reportedLines(findings, "main.ts")).toEqual([]);
   });
+
+  const runtimeRunners = [
+    'import { Effect, ManagedRuntime } from "effect";',
+    "declare const runtime: ManagedRuntime.ManagedRuntime<never, never>;",
+    'export const direct = runtime.runPromise(Effect.succeed("work"));', // 3
+    'export const nested = ui.clientRuntime.runPromiseExit(Effect.succeed("work"));', // 4
+    'export const anyReceiver = rt.runPromiseWith(Effect.succeed("work"));', // 5
+    'export const piped = Effect.succeed("work").pipe(runtime.runPromise);', // 6
+    'export const sync = runtime.runSync(Effect.succeed("work"));', // 7
+    "export const named = { runPromise: 1 };",
+    "export const read = settings.runPromiseTimeout;",
+    "",
+  ].join("\n");
+
+  test("reports runners on a runtime value in test files, called or passed", () => {
+    const runtimeFindings = lintFixtures(
+      "noEffectRunInTests",
+      {
+        "harness.test.ts": runtimeRunners,
+        "harness.ts": runtimeRunners,
+        "server-boundary.test.ts": runtimeRunners,
+      },
+      {
+        overrides: [
+          { files: ["**/*-boundary.test.ts"], rules: { "effect/noEffectRunInTests": "off" } },
+        ],
+      },
+    );
+    expect(reportedLines(runtimeFindings, "harness.test.ts")).toEqual([3, 4, 5, 6, 7]);
+    expect(runtimeFindings.get("harness.test.ts")?.[0]?.message).toBe(
+      "Do not run Effects by hand in tests (runtime.runPromise). Use the test runner's Effect integration: it.effect(...) or it.layer(layer)(...) from @effect/vitest or effect-bun-test.",
+    );
+    expect(runtimeFindings.get("harness.test.ts")?.[1]?.message).toContain(
+      "(clientRuntime.runPromiseExit)",
+    );
+    expect(reportedLines(runtimeFindings, "harness.ts")).toEqual([]);
+    expect(reportedLines(runtimeFindings, "server-boundary.test.ts")).toEqual([]);
+  });
 });

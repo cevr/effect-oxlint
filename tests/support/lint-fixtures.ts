@@ -24,6 +24,8 @@ export interface LintConfig {
   /** The rule's options, after its severity. */
   readonly options?: ReadonlyArray<ConfigValue>;
   readonly settings?: { readonly [key: string]: ConfigValue };
+  /** oxlint `overrides`, such as a boundary file that turns the rule off. */
+  readonly overrides?: ReadonlyArray<ConfigValue>;
 }
 
 /**
@@ -50,6 +52,7 @@ export const lintFixtures = (
       jsPlugins: [pluginPath],
       settings: config.settings ?? {},
       rules: { [`effect/${rule}`]: ["error", ...(config.options ?? [])] },
+      overrides: config.overrides ?? [],
     }),
   );
   const result = runCommand(
