@@ -71,7 +71,7 @@
     "@types/bun": "latest",
     "@typescript/native-preview": "latest",
     "concurrently": "latest",
-    "effect": "4.0.0-beta.66",
+    "effect": "4.0.0",
     "lefthook": "latest",
     "oxfmt": "latest",
     "oxlint": "latest",
@@ -81,7 +81,7 @@
     "vitest": "latest"
   },
   "peerDependencies": {
-    "effect": ">=4.0.0-beta.66 <5"
+    "effect": ">=4.0.0 <5"
   },
   "packageManager": "bun@1.3.13"
 }
