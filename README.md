@@ -62,7 +62,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/noInlineProvide`               | Keeps dependency provisioning at explicit composition boundaries                                                                        |
 | `effect/noNestedEffectGen`             | Flattens directly yielded nested generators                                                                                             |
 | `effect/noPerCallCacheConstruction`    | Constructs shared caches once in their owning layer                                                                                     |
-| `effect/noInterruptibleMemo`           | Bans `Effect.cached*` over an interruptible effect, which keeps its first caller's interruption; memoize a started fiber or use `Cache` |
+| `effect/noInterruptibleMemo`           | Bans `Effect.cached*`, named imports included; uninterruptible inputs and function TTLs do not prove safe settlement                      |
 | `effect/noRunCollectOnUnboundedStream` | Requires termination before collecting a clearly unbounded Stream                                                                       |
 | `effect/noSequentialEffectAll`         | Uses explicit sequencing when serial aggregation discards its result                                                                    |
 | `effect/noSilentCatchAll`              | Keeps swallowed failures visible or recovers them truthfully                                                                            |
@@ -95,7 +95,6 @@ These rules encode a project policy the preset cannot assume. The plugin registe
 
 | Rule                                 | Contract                                                                                                                                    |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `effect/noCodeUnitPadding`           | Pads text by display width, not with `padStart`/`padEnd` (UTF-16 code units); a number rendered with `String()` or `toString()` may pad     |
 | `effect/noPlatformLayerOutsideEntry` | Provides `@effect/platform-*` layers (and the `layers` option names) only in entry files an override exempts                                |
 | `effect/noPositionalLogArguments`    | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                                                            |
 | `effect/noRunPromise`                | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts                                             |

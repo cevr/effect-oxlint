@@ -275,6 +275,13 @@ describe("interruptible memos", () => {
   test("rejects a memo whose first caller's interruption every later caller gets back", () => {
     const results = lintCases("noInterruptibleMemo", {
       valid: [
+        "const Effect = { cached: (x) => x }; const memo = Effect.cached(load);",
+        `${effect}const fiber = Effect.forkDetach(load);`,
+        'import { cached as memoize } from "effect/Effect"; function local(memoize) { return memoize(load); }',
+        'import { cached as memoize } from "another-package"; const memo = memoize(load);',
+        'import { cached as memoize } from "effect/Effect"; const fields = { memoize: 1 }; object.memoize(load);',
+      ],
+      invalid: [
         `${effect}const memo = Effect.cached(Effect.uninterruptible(load));`,
         `${effect}const memo = Effect.cached(load.pipe(Effect.retry(policy), Effect.uninterruptible));`,
         `${effect}const memo = load.pipe(Effect.uninterruptible, Effect.cached);`,
@@ -283,11 +290,13 @@ describe("interruptible memos", () => {
         `${effect}const safe = Effect.uninterruptible(load);\nconst memo = Effect.cached(safe);`,
         `${effect}const memo = Effect.cachedWithTTL(load, (exit) => (Exit.hasInterrupts(exit) ? 0 : "5 minutes"));`,
         `${effect}const memo = load.pipe(Effect.cachedInvalidateWithTTL(function ttl(exit) { return 0; }));`,
-        "const Effect = { cached: (x) => x }; const memo = Effect.cached(load);",
-        `${effect}const fiber = Effect.forkDetach(load);`,
-      ],
-      invalid: [
+        `${effect}const memo = Effect.cachedWithTTL(load, () => "1 hour");`,
+        'import { cached as memoize } from "effect/Effect"; const memo = memoize(load);',
+        'import { cachedWithTTL as memoize } from "effect/Effect"; const memo = load.pipe(memoize("1 hour"));',
+        'import { cachedInvalidateWithTTL } from "effect/Effect"; const memo = cachedInvalidateWithTTL(load, "1 hour");',
+        'import { cached as memoize } from "effect/Effect"; const operator = memoize; const memo = load.pipe(operator);',
         `${effect}const memo = Effect.cached(load);`,
+        `${effect}const memo = Effect["cached"](load);`,
         `${effect}const scan = Effect.gen(function* () {\n  return yield* Effect.cached(finder.waitForScan);\n});`,
         `${effect}const memo = Effect.cachedWithTTL(loadCatalog(home), "5 minutes");`,
         `${effect}const pair = Effect.gen(function* () {\n  return yield* Effect.cachedInvalidateWithTTL(load, "1 hour");\n});`,

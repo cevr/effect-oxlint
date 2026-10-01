@@ -5,7 +5,6 @@ import { recommended } from "../src/presets/recommended.js";
 import {
   noAs,
   noAsyncFunction,
-  noCodeUnitPadding,
   noDynamicImports,
   noEffectBind,
   noEffectDo,
@@ -28,7 +27,6 @@ import { runCommand } from "./support/run-command.js";
 
 /** Rules that encode a project policy the preset cannot assume; a project enables each by name. */
 const optInRules = {
-  noCodeUnitPadding,
   noPlatformLayerOutsideEntry,
   noPositionalLogArguments,
   noRunPromise,
