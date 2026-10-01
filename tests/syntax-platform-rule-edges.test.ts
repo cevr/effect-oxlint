@@ -85,6 +85,41 @@ describe("noDynamicImports boundaries", () => {
 });
 
 describe("platform capability rules", () => {
+  test("noNewPromise follows the global Promise through the global object and aliases", () => {
+    const results = lintCases("noNewPromise", {
+      valid: [
+        "value instanceof Promise;",
+        "type Later = Promise<number>;",
+        "async function run(): Promise<void> {}",
+        "typeof Promise;",
+        "const Promise = Local; new Promise(run);",
+        "const options = { Promise: 1 };",
+        "Promise.prototype.then.call(value, run);",
+        "let P = Promise; P = Local; new P(run);",
+        "var g = globalThis; var g = g; g.structuredClone(value);",
+      ],
+      invalid: [
+        "new Promise(run);",
+        "Promise(run);",
+        "Promise.all([]);",
+        'Promise["resolve"](1);',
+        "new globalThis.Promise(run);",
+        'new globalThis["Promise"](run);',
+        "new self.Promise(run);",
+        "globalThis.Promise.all([]);",
+        "new (Promise as PromiseConstructor)(run);",
+        "const P = Promise; new P(run);",
+        "const P = globalThis.Promise; new P(run);",
+        "const g = globalThis; new g.Promise(run);",
+        "const { Promise: P } = globalThis; new P(run);",
+        "const { resolve } = Promise; resolve(1);",
+        "const { Promise: { all } } = globalThis; all([]);",
+        "var P = Promise; var Q = P; var P = Q; new Q(run);",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
   test("noGlobals ignores a shadowed banned call", () => {
     const results = lintCases("noGlobals", {
       valid: ["const fetch = () => 1; fetch();"],

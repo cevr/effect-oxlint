@@ -10,7 +10,6 @@ import {
   noEffectDo,
   noModuleMocks,
   noNewError,
-  noNewPromise,
   noNullish,
   noPlatformLayerOutsideEntry,
   noPositionalLogArguments,
@@ -266,12 +265,11 @@ describe("unconditional syntax", () => {
   });
 
   test("rejects global Promise construction and static APIs", () => {
-    expect(Testing.runRule(noNewPromise, "NewExpression", Testing.newExpr("Promise"))).toHaveLength(
-      1,
-    );
-    expect(
-      Testing.runRule(noNewPromise, "CallExpression", Testing.callOfMember("Promise", "all", [])),
-    ).toHaveLength(1);
+    const results = lintCases("noNewPromise", {
+      valid: [],
+      invalid: ["new Promise(run);", "Promise.all([]);"],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
   test("rejects ternaries but does not own ordinary if statements", () => {

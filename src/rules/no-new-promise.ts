@@ -1,11 +1,31 @@
-/** Ban the global Promise constructor and its static APIs. */
+/**
+ * Ban the global Promise constructor and its static APIs.
+ *
+ * The rule follows the global `Promise` wherever its value goes, as
+ * `noGlobals` follows the globals it bans: through the global object
+ * (`new globalThis.Promise()`, `globalThis["Promise"]`), wrappers, aliases
+ * (`const P = Promise; new P()`) and destructures
+ * (`const { resolve } = Promise`). It reports `new Promise()`, a call of
+ * `Promise()`, and a call of a static member (`Promise.all([])`). A local
+ * binding named `Promise`, type positions and `instanceof` checks are not
+ * uses.
+ */
 import type { ESTree } from "@oxlint/plugins";
-import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-const isPromiseIdentifier = (node: ESTree.Node): boolean =>
-  node.type === "Identifier" && "name" in node && node.name === "Promise";
+import { globalValueVisitor, type Held } from "./_global-values.js";
+
+const promise: Held = "Promise";
+
+/** The value of a static member of `Promise`: `Promise.all` holds `Promise.all`. */
+const staticMember = (owner: Held, name: string): Option.Option<Held> =>
+  Option.liftPredicate(`${promise}.${name}`, () => owner === promise);
+
+const isPromiseApi = (held: Held): boolean =>
+  held === promise ||
+  (held.startsWith(`${promise}.`) && !held.slice(promise.length + 1).includes("."));
 
 export const noNewPromise = Rule.define({
   name: "no-new-promise",
@@ -24,29 +44,20 @@ export const noNewPromise = Rule.define({
         }),
       );
 
-    return {
-      NewExpression: (node) =>
-        Option.match(AST.narrow(node, "NewExpression"), {
-          onNone: () => Effect.void,
-          onSome: (expression) => {
-            if (!isPromiseIdentifier(expression.callee)) return Effect.void;
-            return report(expression);
-          },
-        }),
-      CallExpression: (node) =>
-        Option.match(AST.narrow(node, "CallExpression"), {
-          onNone: () => Effect.void,
-          onSome: (call) => {
-            if (isPromiseIdentifier(call.callee)) return report(call);
-            if (call.callee.type !== "MemberExpression") return Effect.void;
-            const isPromiseStatic = Option.exists(
-              AST.memberNames(call.callee),
-              ([object]) => object === "Promise",
-            );
-            if (!isPromiseStatic) return Effect.void;
-            return report(call);
-          },
-        }),
-    };
+    return globalValueVisitor(ctx, {
+      names: new Set([promise]),
+      memberValue: staticMember,
+      member: () => Effect.void,
+      call: (node, held) => {
+        if (!isPromiseApi(held)) return Effect.void;
+        return report(node);
+      },
+      construct: (node, held) => {
+        if (held !== promise) return Effect.void;
+        return report(node);
+      },
+      rest: (_node, _held, follow) => follow,
+      escape: () => Effect.void,
+    });
   },
 });
