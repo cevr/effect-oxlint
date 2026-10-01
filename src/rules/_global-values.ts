@@ -197,7 +197,8 @@ export const globalValueVisitor = (
     const value = unwrapTransparent(expression);
     if (value.type === "MemberExpression") {
       const owner = storedBy(value.object, evaluating);
-      if (owner._tag !== "Known") return owner;
+      // A member of a cyclic owner is a new value, not the alias again.
+      if (owner._tag !== "Known") return unknown;
       return Option.match(
         Option.flatMap(staticMemberName(value), (name) => memberValue(owner.held, name)),
         { onNone: () => unknown, onSome: known },

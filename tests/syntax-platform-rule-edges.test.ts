@@ -96,6 +96,7 @@ describe("platform capability rules", () => {
         "const options = { Promise: 1 };",
         "Promise.prototype.then.call(value, run);",
         "let P = Promise; P = Local; new P(run);",
+        "let P = Promise; P = P.resolve; new P(run);",
         "var g = globalThis; var g = g; g.structuredClone(value);",
       ],
       invalid: [
@@ -190,9 +191,12 @@ describe("platform capability rules", () => {
         "const { process: { platform } } = globalThis;",
         "const { process: { platform } = fallback } = globalThis;",
         "var p = process; var p = { env: {} }; p.env;",
+        "let p = process; p = p.release; p.env;",
+        "var g = globalThis; var g = g.process; g.process.env;",
       ],
       invalid: [
         "var g = globalThis; var g = g; g.process.env;",
+        "let p = process; p = p; p.env;",
         "var g = globalThis; var h = g; var g = h; h.process.env;",
         "const { process: { env } } = globalThis; use(env);",
         "const { process: { env } = fallback } = globalThis;",
