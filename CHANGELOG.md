@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.21.0
+
+### Minor Changes
+
+- [`b0335aa`](https://github.com/cevr/effect-oxlint/commit/b0335aaa42c08507ceedfd30662aace158aa5227) Thanks [@cevr](https://github.com/cevr)! - Requires Effect 4.0.0. The peer range is now `>=4.0.0 <5`. `noUnboundedRetry` recognizes HttpClient imported from `effect/http/HttpClient`, and `noNodeBuiltinImport` points at `effect/process`, `effect/http` and `effect/workers`, the Effect 4.0.0 homes of the former `effect/unstable/*` modules.
+
 ## 0.20.0
 
 ### Minor Changes
