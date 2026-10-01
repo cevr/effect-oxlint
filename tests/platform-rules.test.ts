@@ -176,3 +176,40 @@ describe("module file paths", () => {
     ]);
   });
 });
+
+describe("locale ordering", () => {
+  test("rejects localeCompare on any receiver and Intl.Collator in any spelling", () => {
+    const results = lintCases("noLocaleCompare", {
+      valid: [
+        "names.sort(Order.String);",
+        "const label = new Intl.NumberFormat().format(1);",
+        "const supported = Intl.Collator.supportedLocalesOf([]);",
+        "const Intl = { Collator: class {} }; new Intl.Collator();",
+        "const compare = (a, b) => (a < b ? -1 : 1);",
+      ],
+      invalid: [
+        "names.sort((a, b) => a.localeCompare(b));",
+        'const order = "a".localeCompare("b");',
+        'const order = a.name.localeCompare(b.name, "en");',
+        'const order = a["localeCompare"](b);',
+        "const compare = String.prototype.localeCompare;",
+        "const collator = new Intl.Collator();",
+        'const collator = Intl.Collator("en");',
+        "const collator = new globalThis.Intl.Collator();",
+        'const collator = new globalThis["Intl"].Collator();',
+        "const I = Intl; const collator = new I.Collator();",
+        "const { Collator } = Intl; const collator = new Collator();",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("names Order.String as the deterministic order", () => {
+    const findings = lintFixtures("noLocaleCompare", {
+      "sort.ts": "names.sort((a, b) => a.localeCompare(b));",
+    });
+    expect(findings.get("sort.ts")).toEqual([
+      { line: 1, message: expect.stringContaining("Use Order.String") },
+    ]);
+  });
+});

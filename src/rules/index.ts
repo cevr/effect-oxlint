@@ -26,6 +26,7 @@ export * from "./no-globals.js";
 export * from "./no-inline-provide.js";
 export * from "./no-known-value-widening.js";
 export * from "./no-lint-evasion.js";
+export * from "./no-locale-compare.js";
 export * from "./no-managed-runtime-in-effect.js";
 export * from "./no-module-level-mutable-state.js";
 export * from "./no-module-mocks.js";

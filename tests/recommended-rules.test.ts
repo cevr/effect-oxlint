@@ -57,6 +57,7 @@ describe("recommended preset", () => {
       "effect/noInlineProvide": "error",
       "effect/noKnownValueWidening": "error",
       "effect/noLintEvasion": "error",
+      "effect/noLocaleCompare": "error",
       "effect/noManagedRuntimeInEffect": "error",
       "effect/noModuleLevelMutableState": "error",
       "effect/noModuleMocks": "error",
