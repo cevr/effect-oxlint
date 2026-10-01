@@ -294,7 +294,7 @@ describe("noFixedWaitInTests", () => {
       extension: "test.ts",
       valid: [
         'import { Effect } from "effect"; const fake = { frame: () => Effect.sleep("5 millis") };',
-        'import * as Effect from "effect/Effect"; const slow = Effect.sleep("1 minute").pipe(Effect.forkChild);',
+        'import * as Effect from "effect/Effect"; Effect.sleep("1 minute").pipe(Effect.forkChild);',
         'import { TestClock } from "effect/testing"; function* t() { yield* TestClock.adjust("1 minute"); }',
         "const Effect = { sleep: () => 1 }; Effect.sleep(10);",
         "const later = () => setTimeout(done, 10);",
@@ -357,6 +357,31 @@ describe("noFixedWaitInTests", () => {
     expect(findings.get("poll.test.ts")?.[0]?.message).toContain(
       "Avoid a fixed wait in tests (Effect.sleep).",
     );
+  });
+
+  test("reports a sleep stored under a name, not one a function builds", () => {
+    const findings = lintFixtures("noFixedWaitInTests", {
+      "view.test.ts": [
+        'import { Effect, Layer } from "effect";',
+        "export const stored = Effect.gen(function* () {",
+        '  const pause = Effect.sleep("10 millis");', // 3
+        "  yield* pause;",
+        "});",
+        "export const mountView = Effect.gen(function* () {",
+        '  return { settle: Effect.sleep("100 millis") };', // 7
+        "});",
+        'export const fence = Effect.sleep("5 seconds").pipe(Effect.as(-1));', // 9
+        "export const hostFence = Bun.sleep(5);", // 10
+        'export const forked = Effect.sleep("1 minute").pipe(Effect.forkChild);', // 11
+        'export const reader = Layer.succeed(Reader, { read: () => Effect.sleep("1 second") });',
+        'export const frame = { next: () => Effect.sleep("5 millis"), sleep: 1 };',
+        "export const delayed = (ms: number) => { const wait = Effect.sleep(ms); return wait; };", // 14
+        'export const waitedOnce = Effect.gen(function* () { const r = yield* Effect.sleep("1 millis"); return r; });', // 15, as a wait
+        "export const later = (ms: number) => Effect.sleep(ms);",
+        "",
+      ].join("\n"),
+    });
+    expect(reportedLines(findings, "view.test.ts")).toEqual([3, 7, 9, 10, 11, 14, 15]);
   });
 });
 

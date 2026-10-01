@@ -4,10 +4,13 @@
  * Reported in test modules: a sleep (`Effect.sleep`, `Bun.sleep`,
  * `Bun.sleepSync`, `setTimeout` from `timers/promises`) a statement runs, and
  * each sleep anywhere inside the argument of a `yield*` or an `await` (piped,
- * raced, sequenced, or bound to a result); `waitForTimeout`; and a Promise
+ * raced, sequenced, or bound to a result); a sleep stored under a name, in a
+ * variable's initializer or an object field, since a later `yield* pause`
+ * waits on it where no wait shows the sleep; `waitForTimeout`; and a Promise
  * only a timer settles. A sleep inside a nested function is a value the callee
  * may never run, such as a mock's `read: () => Effect.sleep(...)`, and stays
- * allowed.
+ * allowed. A real-clock fence the subject needs takes a line-local
+ * suppression with its reason.
  */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
@@ -26,6 +29,10 @@ const isFunctionNode = (node: ESTree.Node): boolean =>
   node.type === "ArrowFunctionExpression" ||
   node.type === "FunctionExpression" ||
   node.type === "FunctionDeclaration";
+
+/** Where a stored value's walk stops: a function it builds, or a wait the waited walk reports. */
+const isStoredStop = (node: ESTree.Node): boolean =>
+  isFunctionNode(node) || node.type === "YieldExpression" || node.type === "AwaitExpression";
 
 /** `node` and every node under it, without the subtrees whose root `stop` cuts off. */
 const descendants = (
@@ -108,7 +115,7 @@ export const noFixedWaitInTests = Rule.define({
   meta: Rule.meta({
     type: "problem",
     description:
-      "Bans fixed waits in tests (a waited Effect.sleep or Bun.sleep, waitForTimeout, a timer-only Promise); use TestClock or wait on the event.",
+      "Bans fixed waits in tests (a waited or stored Effect.sleep or Bun.sleep, waitForTimeout, a timer-only Promise); use TestClock or wait on the event.",
   }),
   create: function* () {
     const ctx = yield* RuleContext;
@@ -154,7 +161,21 @@ export const noFixedWaitInTests = Rule.define({
     const reportWaited = (argument: ESTree.Node) =>
       Effect.forEach(descendants(argument, keys, isFunctionNode), reportSleep, { discard: true });
 
+    /** Each sleep a value holds, outside its functions and its waits (`reportWaited` owns those). */
+    const reportStored = (value: ESTree.Node) => {
+      if (isStoredStop(value)) return Effect.void;
+      return Effect.forEach(descendants(value, keys, isStoredStop), reportSleep, {
+        discard: true,
+      });
+    };
+
     return {
+      VariableDeclarator: (node: ESTree.VariableDeclarator) =>
+        Option.match(Option.fromNullishOr(node.init), {
+          onNone: () => Effect.void,
+          onSome: reportStored,
+        }),
+      Property: (node: ESTree.ObjectProperty) => reportStored(node.value),
       ImportDeclaration: (node: ESTree.ImportDeclaration) => {
         for (const name of importedNamespaces(node, "Effect", "effect/Effect")) {
           effectNamespaces.add(name);
