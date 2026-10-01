@@ -587,6 +587,32 @@ describe("noRepoTempDirectory", () => {
     ).toEqual([[]]);
   });
 
+  test("a Windows drive path and a UNC path are absolute", () => {
+    expect(
+      lines([
+        String.raw`const dir = mkdtempSync("C:\\Temp\\case-")`,
+        'const dir = mkdtempSync("C:/Temp/case-")',
+        String.raw`const dir = mkdtempSync("\\\\server\\share\\case-")`,
+        inGen('const dir = yield* fs.makeTempDirectoryScoped({ directory: "D:\\\\Temp" })'),
+        'const dir = join("C:/Temp", ".tmp")',
+      ]),
+    ).toEqual([[], [], [], [], []]);
+  });
+
+  test("a later absolute argument to resolve replaces the repo path before it", () => {
+    expect(
+      lines([
+        'const dir = path.resolve(import.meta.dir, "/tmp")',
+        'const dir = mkdtempSync(path.resolve(import.meta.dir, "/tmp/case-"))',
+        'const dir = resolve("fixtures", "/var/tmp/x", "tmp")',
+        'const dir = path.resolve(import.meta.dir, "C:\\\\Temp", ".tmp")',
+        'const dir = path.resolve("/tmp", import.meta.dir, ".tmp")',
+        'const dir = path.resolve("/x", "fixtures", ".tmp")',
+        'const dir = path.join(import.meta.dir, "/tmp")',
+      ]),
+    ).toEqual([[], [], [], [], [1], [], [1]]);
+  });
+
   test("product source is out of scope", () => {
     const source = 'const dir = join(import.meta.dir, ".tmp")';
     const findings = lintFixtures("noRepoTempDirectory", {

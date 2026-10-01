@@ -19,7 +19,9 @@
  * `process.cwd()`, a `join`/`resolve` call whose first argument is a relative
  * path literal (it starts with a word character or `.`) or whose arguments
  * hold a repo path, a template or `+` concatenation that holds one, or a
- * `const`/`let` bound to one.
+ * `const`/`let` bound to one. `resolve` reads only its last absolute argument
+ * and those after it (`resolve(import.meta.dir, "/tmp")` is `/tmp`). A path
+ * that starts with `/`, `\`, or a drive (`C:\`, `C:/`) is absolute.
  */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
@@ -92,13 +94,26 @@ const leadingText = (node: ESTree.Node): Option.Option<string> => {
   return Option.none();
 };
 
+/**
+ * An absolute path: POSIX `/x`, a Windows drive (`C:\x`, `C:/x`), or a
+ * rooted or UNC Windows path (`\x`, `\\server\share`).
+ */
+const absolutePath = /^(?:[/\\]|[A-Za-z]:[/\\])/u;
+
+/** A path literal that starts at an absolute root: `"/tmp"`, `"C:\\Temp"`, `` `/tmp/${x}` ``. */
+const isAbsoluteLiteral = (node: ESTree.Node): boolean =>
+  Option.exists(leadingText(node), (text) => absolutePath.test(text));
+
 /** A relative path literal that starts a path segment: `"fixtures"`, `"./x"`, `"../.."`. */
 const isRelativePathLiteral = (node: ESTree.Node): boolean =>
-  Option.exists(leadingText(node), (text) => /^[\w.]/u.test(text));
+  Option.exists(leadingText(node), (text) => /^[\w.]/u.test(text) && !absolutePath.test(text));
 
-/** A prefix or directory literal that is not absolute: none of `/`, `$`, `~` starts it. */
+/** A prefix or directory literal that is not absolute: no root, drive, `$` or `~` starts it. */
 const isRelativeLiteral = (node: ESTree.Node): boolean =>
-  Option.exists(leadingText(node), (text) => text.length > 0 && !/^[/$~]/u.test(text));
+  Option.exists(
+    leadingText(node),
+    (text) => text.length > 0 && !absolutePath.test(text) && !/^[$~]/u.test(text),
+  );
 
 /** Every string chunk an expression spells: string arguments, template chunks. */
 const literalTexts = (node: ESTree.Node): ReadonlyArray<string> => {
@@ -156,6 +171,24 @@ export const noRepoTempDirectory = Rule.define({
         onSome: (variable) => variable.defs.length === 0,
       });
 
+    /** An argument that is an absolute path: a literal root, a module directory, the cwd. */
+    const isAbsoluteArgument = (node: ESTree.Node): boolean => {
+      const value = unwrap(node);
+      if (isAbsoluteLiteral(value) || isImportMetaDirectory(value)) return true;
+      if (value.type === "Identifier") return value.name === "__dirname" && isUnboundName(value);
+      return value.type === "CallExpression" && isProcessCwd(value);
+    };
+
+    /**
+     * The arguments that make a `join`/`resolve` path. `resolve` starts over
+     * at each absolute argument, so only the last one and those after it count.
+     */
+    const pathArguments = (node: ESTree.CallExpression): ReadonlyArray<ESTree.Expression> => {
+      const args = node.arguments.filter(isExpressionArgument);
+      if (!Option.exists(calleeName(node), (name) => name === "resolve")) return args;
+      return args.slice(Math.max(0, args.findLastIndex(isAbsoluteArgument)));
+    };
+
     const isRepoPathWith = (node: ESTree.Node, seen: ReadonlySet<ESTree.Node>): boolean => {
       const value = unwrap(node);
       if (seen.has(value)) return false;
@@ -174,7 +207,7 @@ export const noRepoTempDirectory = Rule.define({
       if (value.type !== "CallExpression") return false;
       if (isProcessCwd(value)) return true;
       if (!Option.exists(calleeName(value), (name) => pathCalls.has(name))) return false;
-      const args = value.arguments.filter(isExpressionArgument);
+      const args = pathArguments(value);
       const first = args[0];
       if (Predicate.isNotUndefined(first) && isRelativePathLiteral(first)) return true;
       return args.some((argument) => isRepoPathWith(argument, next));
@@ -240,7 +273,7 @@ export const noRepoTempDirectory = Rule.define({
           onNone: () => Effect.void,
           onSome: (name) => {
             if (tempCalls.has(name)) return checkTempCall(node, name);
-            if (pathCalls.has(name) && isRepoPath(node) && joinsTmpSegment(node.arguments)) {
+            if (pathCalls.has(name) && isRepoPath(node) && joinsTmpSegment(pathArguments(node))) {
               return report(node);
             }
             return Effect.void;
