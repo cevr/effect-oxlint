@@ -93,6 +93,96 @@ describe("platform capability rules", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
+  test("noGlobals reads a global through the global object, a computed name, an alias and a destructure", () => {
+    const results = lintCases("noGlobals", {
+      valid: [
+        "value instanceof Date;",
+        "Date.UTC(2020, 1);",
+        "Math.max(1, 2);",
+        "const { max } = Math; max(1, 2);",
+        "typeof process;",
+        "process.stdout.isTTY;",
+        "globalThis.process.stdout.isTTY;",
+        "globalThis.structuredClone(value);",
+        "const self = { fetch: () => 1 }; self.fetch();",
+        "const globalThis = { process: { env: {} } }; globalThis.process.env;",
+        "const p = { env: {} }; p.env;",
+        "process[key];",
+        "let when: Date = value;",
+        "interface Client { fetch(): void; console: Console }",
+        "value.Date.now();",
+        "const options = { console: 1, process: 2 };",
+        'import { fetch } from "./http.js"; fetch();',
+        "function run(process: Runner) { process.exit(1); }",
+      ],
+      invalid: [
+        'globalThis.fetch("/x");',
+        "self.setTimeout(run, 1);",
+        "window.console.log(1);",
+        "global.process.exit(1);",
+        "new globalThis.Date();",
+        "globalThis.Date.now();",
+        "globalThis.Math.random();",
+        "globalThis.process.env;",
+        "(process as NodeJS.Process).env;",
+        'globalThis["process"].env;',
+        "globalThis?.process.env;",
+        'process["env"];',
+        "process[`env`];",
+        'console["log"](1);',
+        'crypto["randomUUID"]();',
+        "globalThis.crypto.randomUUID();",
+        'globalThis.crypto.subtle.digest("SHA-256", bytes);',
+        "const { env } = process;",
+        'const { "log": log } = console;',
+        "const p = process; p.env;",
+        "const p = globalThis.process; p.env;",
+        "const g = globalThis; g.process.env;",
+        "const { process: p } = globalThis; p.env;",
+        "const D = Date; new D();",
+        'const f = fetch; f("/x");',
+        'const f = globalThis.fetch; f("/x");',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("noGlobals reports a wholly banned global read as a value", () => {
+    const findings = lintFixtures(
+      "noGlobals",
+      {
+        "host.ts": [
+          "const { spawn } = Bun;",
+          'const B = Bun; B.file("x");',
+          "use(Bun);",
+          "const { cwd } = process;",
+          "const p = process; p.kill(1);",
+          'process["cwd"]();',
+          "const { Bun: Runtime } = globalThis; Runtime.version;",
+          "self.Bun.version;",
+          "use(globalThis.Bun);",
+          "const { ...rest } = Bun;",
+          "typeof Bun;",
+          "type Runtime = typeof Bun;",
+          "process.stdout.isTTY;",
+          "{ const Bun = { version: 1 }; use(Bun); }",
+          "use(process);",
+        ].join("\n"),
+      },
+      {
+        options: [
+          {
+            members: {
+              Bun: { use: "an Effect platform service" },
+              process: { properties: ["cwd", "kill"], use: "a platform service" },
+            },
+          },
+        ],
+      },
+    );
+    expect(reportedLines(findings, "host.ts")).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
   test("noModuleMocks ignores local test-API lookalikes and reports mock functions", () => {
     const results = lintCases("noModuleMocks", {
       valid: ['const vi = { mock: () => 1 }; vi.mock("./module.js");'],

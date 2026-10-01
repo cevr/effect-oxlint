@@ -1,79 +1,59 @@
 import { describe, expect, test } from "bun:test";
 
-import { noGlobals, noNodeBuiltinImport } from "../src/rules/index.js";
+import { noNodeBuiltinImport } from "../src/rules/index.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
+import { lintCases } from "./support/lint-fixtures.js";
 
 describe("ambient platform APIs", () => {
   test("rejects general JavaScript globals with Effect replacements", () => {
-    for (const [object, property] of [
-      ["console", "log"],
-      ["Date", "now"],
-      ["Math", "random"],
-      ["crypto", "randomUUID"],
-      ["JSON", "parse"],
-      ["process", "env"],
-      ["Bun", "file"],
-      ["Deno", "readFile"],
-      ["localStorage", "getItem"],
-    ] as const) {
-      expect(
-        Testing.runRule(noGlobals, "MemberExpression", Testing.memberExpr(object, property)),
-      ).toHaveLength(1);
-    }
+    const results = lintCases("noGlobals", {
+      valid: [],
+      invalid: [
+        "console.log(1);",
+        "Date.now();",
+        "Math.random();",
+        "crypto.randomUUID();",
+        'JSON.parse("1");',
+        "process.env;",
+        'Bun.file("x");',
+        'Deno.readFile("x");',
+        'localStorage.getItem("x");',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
   test("rejects direct calls and constructors with Effect replacements", () => {
-    for (const name of ["atob", "btoa", "fetch", "queueMicrotask", "setTimeout"]) {
-      expect(Testing.runRule(noGlobals, "CallExpression", Testing.callExpr(name))).toHaveLength(1);
-    }
-    for (const name of ["Date", "WebSocket", "Worker"]) {
-      expect(Testing.runRule(noGlobals, "NewExpression", Testing.newExpr(name))).toHaveLength(1);
-    }
+    const results = lintCases("noGlobals", {
+      valid: [],
+      invalid: [
+        'atob("x");',
+        'btoa("x");',
+        'fetch("/x");',
+        "queueMicrotask(run);",
+        "setTimeout(run, 1);",
+        "new Date();",
+        'new WebSocket("ws://x");',
+        'new Worker("x");',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
   test("allows isTTY capability reads on process streams but keeps every other use banned", () => {
-    for (const stream of ["stderr", "stdin", "stdout"] as const) {
-      const streamAccess = Testing.memberExpr("process", stream);
-      const ttyRead = {
-        type: "MemberExpression",
-        object: streamAccess,
-        property: Testing.id("isTTY"),
-        computed: false,
-        optional: false,
-      };
-      Object.assign(streamAccess, { parent: ttyRead });
-      expect(Testing.runRule(noGlobals, "MemberExpression", streamAccess)).toHaveLength(0);
-    }
-
-    const writeAccess = Testing.memberExpr("process", "stderr");
-    const writeCall = {
-      type: "MemberExpression",
-      object: writeAccess,
-      property: Testing.id("write"),
-      computed: false,
-      optional: false,
-    };
-    Object.assign(writeAccess, { parent: writeCall });
-    expect(Testing.runRule(noGlobals, "MemberExpression", writeAccess)).toHaveLength(1);
-    expect(
-      Testing.runRule(noGlobals, "MemberExpression", Testing.memberExpr("process", "stdout")),
-    ).toHaveLength(1);
+    const results = lintCases("noGlobals", {
+      valid: ["process.stderr.isTTY;", "process.stdin.isTTY;", "process.stdout.isTTY;"],
+      invalid: ['process.stderr.write("x");', "process.stdout;"],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
   test("rejects Web Crypto digest but leaves unmatched crypto operations alone", () => {
-    const digest = {
-      type: "MemberExpression",
-      object: Testing.memberExpr("crypto", "subtle"),
-      property: Testing.id("digest"),
-      computed: false,
-    };
-    expect(Testing.runRule(noGlobals, "MemberExpression", digest)).toHaveLength(1);
-    expect(
-      Testing.runRule(noGlobals, "MemberExpression", Testing.memberExpr("crypto", "sign")),
-    ).toHaveLength(0);
-    expect(
-      Testing.runRule(noGlobals, "MemberExpression", Testing.memberExpr("Bun", "password")),
-    ).toHaveLength(0);
+    const results = lintCases("noGlobals", {
+      valid: ["crypto.sign(key, bytes);", "Bun.password;"],
+      invalid: ['crypto.subtle.digest("SHA-256", bytes);'],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 });
 

@@ -1,6 +1,14 @@
 /**
  * Ban ambient runtime capabilities that have direct Effect replacements.
  *
+ * The rule starts at each read of a global that no binding shadows and
+ * follows the value: through the global object (`globalThis`, `self`,
+ * `window`, `global`), static and computed string members (`process["env"]`),
+ * `as`/`!`/`satisfies`/`?.` wrappers, and each alias or destructure
+ * (`const { env } = process`, `const D = Date; new D()`). A value that leaves
+ * its sight (an argument, a return) is a use only of a global the `members`
+ * option bans whole. `typeof` probes and type positions are not uses.
+ *
  * The `members` option bans more members of a global, on top of the built-in
  * list: `{ "Bun": { "use": "an Effect platform service" } }` bans every
  * member of `Bun`, and `{ "process": { "properties": ["cwd", "pid"], "use":
@@ -12,6 +20,7 @@ import type { ESTree } from "@oxlint/plugins";
 import { AST, Diagnostic, Rule, RuleContext, Scope } from "../vendor/effect-oxlint/index.js";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
 const MemberOption = Schema.Struct({
@@ -113,17 +122,96 @@ const constructorBans = new Map([
   ["Worker", "Effect Worker"],
 ]);
 
-const isUnshadowedGlobal = (
-  ctx: RuleContext["Service"],
-  node: ESTree.Node,
-  name: string,
-): boolean =>
-  Option.match(Scope.findVariableUp(ctx.sourceCode.getScope(node), name), {
-    onNone: () => true,
-    onSome: (variable) => variable.defs.length === 0,
-  });
+/** The names that read the global object: `globalThis.fetch` is `fetch`. */
+const globalObjects = new Set(["globalThis", "self", "window", "global"]);
+
+/**
+ * What a followed value holds: the global object, the Web Crypto `subtle`
+ * object, or else the global of that name (`process`, `Date`, `fetch`).
+ */
+type Held = string;
+const globalObject: Held = "globalThis";
+const cryptoSubtle: Held = "crypto.subtle";
 
 const processStreams = new Set(["stderr", "stdin", "stdout"]);
+
+/** The wrappers that keep their operand's value: `x as T`, `x!`, `x satisfies T`, `a?.b`. */
+const transparentWrappers = new Set([
+  "ChainExpression",
+  "TSAsExpression",
+  "TSNonNullExpression",
+  "TSSatisfiesExpression",
+  "TSTypeAssertion",
+]);
+
+/** What a read of a global's own name holds: `self` is the global object, `fetch` is `fetch`. */
+const heldByName = (name: string): Held => {
+  if (globalObjects.has(name)) return globalObject;
+  return name;
+};
+
+/** The outermost node reached from `node` through wrappers that keep its value. */
+const climbTransparent = (node: ESTree.Node): ESTree.Node => {
+  let current = node;
+  while (Predicate.isNotNullish(current.parent) && transparentWrappers.has(current.parent.type)) {
+    current = current.parent;
+  }
+  return current;
+};
+
+/** A member's name when it is static: `a.b`, `a["b"]`, or a template with no substitution. */
+const staticMemberName = (member: ESTree.MemberExpression): Option.Option<string> => {
+  const property = member.property;
+  if (!member.computed && property.type === "Identifier") return Option.some(property.name);
+  if (property.type === "Literal" && Predicate.isString(property.value)) {
+    return Option.some(property.value);
+  }
+  if (property.type === "TemplateLiteral" && property.expressions.length === 0) {
+    return Option.fromNullishOr(property.quasis[0]?.value.cooked);
+  }
+  return Option.none();
+};
+
+const propertyKeyName = (
+  property: ESTree.ObjectPattern["properties"][number],
+): Option.Option<string> => {
+  if (property.type === "RestElement") return Option.none();
+  if (!property.computed && property.key.type === "Identifier") {
+    return Option.some(property.key.name);
+  }
+  if (property.key.type === "Literal" && Predicate.isString(property.key.value)) {
+    return Option.some(property.key.value);
+  }
+  return Option.none();
+};
+
+const isTypePosition = (node: ESTree.Node): boolean =>
+  node.type === "TSTypeQuery" || node.type === "TSQualifiedName";
+
+/** `typeof x`: a capability probe, not a use. */
+const isTypeofOperand = (parent: ESTree.Node): boolean =>
+  parent.type === "UnaryExpression" && parent.operator === "typeof";
+
+/**
+ * Whether an Identifier is a name rather than a read: a static member's
+ * property, an object key, or a declaration's own name.
+ */
+const isNameNotRead = (node: ESTree.Node, parent: ESTree.Node): boolean => {
+  if (parent.type === "MemberExpression") return parent.property === node && !parent.computed;
+  if (parent.type === "Property")
+    return parent.key === node && !parent.computed && !parent.shorthand;
+  if (parent.type === "VariableDeclarator") return parent.id === node;
+  return (
+    parent.type === "TSPropertySignature" ||
+    parent.type === "MethodDefinition" ||
+    parent.type === "PropertyDefinition" ||
+    parent.type === "LabeledStatement" ||
+    parent.type === "BreakStatement" ||
+    parent.type === "ContinueStatement" ||
+    parent.type === "ImportSpecifier" ||
+    parent.type === "ExportSpecifier"
+  );
+};
 
 // No Effect service exposes TTY detection, so capability probes stay allowed
 // while every operational use of the streams remains banned.
@@ -134,20 +222,6 @@ const isTtyRead = (node: ESTree.MemberExpression): boolean => {
     parent.object === node &&
     parent.property.type === "Identifier" &&
     parent.property.name === "isTTY"
-  );
-};
-
-const isCryptoDigest = (node: ESTree.MemberExpression): boolean => {
-  if (node.computed || node.property.type !== "Identifier" || node.property.name !== "digest") {
-    return false;
-  }
-  const object = node.object;
-  if (object.type !== "MemberExpression" || object.computed) return false;
-  return (
-    object.object.type === "Identifier" &&
-    object.object.name === "crypto" &&
-    object.property.type === "Identifier" &&
-    object.property.name === "subtle"
   );
 };
 
@@ -192,6 +266,26 @@ export const noGlobals = Rule.define({
           }),
         ),
       );
+    /** A global every member of which the configuration bans: `{ "Bun": { "use": "..." } }`. */
+    const wholeBan = (name: string): Option.Option<string> =>
+      Option.flatMap(Option.fromUndefinedOr(configuredMembers.get(name)), (ban) =>
+        Option.liftPredicate(ban.use, () => Predicate.isUndefined(ban.properties)),
+      );
+    /** The replacement for `object.property`: the built-in list first, then the configuration. */
+    const memberBan = (object: string, property: string): Option.Option<string> => {
+      for (const [bannedObject, properties, alternative] of memberBans) {
+        if (object === bannedObject && properties.has(property)) return Option.some(alternative);
+      }
+      return configuredBan(object, property);
+    };
+    const candidates = new Set([
+      ...globalObjects,
+      ...memberBans.map(([object]) => object),
+      ...callBans.keys(),
+      ...constructorBans.keys(),
+      ...configuredMembers.keys(),
+    ]);
+
     const report = (node: ESTree.Node, used: string, alternative: string) =>
       ctx.report(
         Diagnostic.make({
@@ -200,72 +294,143 @@ export const noGlobals = Rule.define({
         }),
       );
 
-    const reportMember = (memberExpression: ESTree.MemberExpression) => {
-      if (isCryptoDigest(memberExpression) && isUnshadowedGlobal(ctx, memberExpression, "crypto")) {
-        return report(memberExpression, "crypto.subtle.digest", "Crypto.digest");
-      }
-      return Option.match(AST.memberNames(memberExpression), {
+    /** A value that leaves the rule's sight is a use only of a wholly banned global. */
+    const reportEscape = (node: ESTree.Node, held: Held): Effect.Effect<void> =>
+      Option.match(wholeBan(held), {
         onNone: () => Effect.void,
-        onSome: ([object, property]) => {
-          if (!isUnshadowedGlobal(ctx, memberExpression, object)) return Effect.void;
-          for (const [bannedObject, properties, alternative] of memberBans) {
-            if (object === bannedObject && properties.has(property)) {
-              if (
-                object === "process" &&
-                processStreams.has(property) &&
-                isTtyRead(memberExpression)
-              ) {
-                return Effect.void;
-              }
-              return report(memberExpression, `${object}.${property}`, alternative);
-            }
-          }
-          return Option.match(configuredBan(object, property), {
-            onNone: () => Effect.void,
-            onSome: (alternative) => report(memberExpression, `${object}.${property}`, alternative),
-          });
+        onSome: (alternative) => report(node, held, alternative),
+      });
+
+    /** Follows every read of the variables a declaration binds inside `within`. */
+    const followDeclared = (
+      declarator: ESTree.VariableDeclarator,
+      within: ESTree.Node,
+      held: Held,
+    ): Effect.Effect<void> =>
+      Effect.forEach(
+        ctx.sourceCode
+          .getDeclaredVariables(declarator)
+          .filter((variable) =>
+            variable.identifiers.some(
+              (identifier) => identifier.start >= within.start && identifier.end <= within.end,
+            ),
+          ),
+        (variable) =>
+          Effect.forEach(
+            variable.references.filter((reference) => !reference.init && reference.isRead()),
+            (reference) => inspect(reference.identifier, held),
+            { discard: true },
+          ),
+        { discard: true },
+      );
+
+    /**
+     * What `held.name` is: the global a global-object member names, the
+     * Web Crypto `subtle` object, or a banned member reported at `node`.
+     */
+    const readMember = (
+      node: ESTree.Node,
+      held: Held,
+      name: string,
+      next: (held: Held) => Effect.Effect<void>,
+      ttyRead: boolean,
+    ): Effect.Effect<void> => {
+      if (held === globalObject) return next(name);
+      if (held === cryptoSubtle) {
+        if (name === "digest") return report(node, "crypto.subtle.digest", "Crypto.digest");
+        return Effect.void;
+      }
+      if (held === "crypto" && name === "subtle") return next(cryptoSubtle);
+      return Option.match(memberBan(held, name), {
+        onNone: () => Effect.void,
+        onSome: (alternative) => {
+          if (held === "process" && processStreams.has(name) && ttyRead) return Effect.void;
+          return report(node, `${held}.${name}`, alternative);
         },
       });
     };
 
-    const reportCall = (call: ESTree.CallExpression) =>
-      Option.match(
-        Option.filter(AST.calleeName(call), (name) => isUnshadowedGlobal(ctx, call, name)),
-        {
-          onNone: () => Effect.void,
-          onSome: (name) =>
-            Option.match(Option.fromUndefinedOr(callBans.get(name)), {
-              onNone: () => Effect.void,
-              onSome: (alternative) => report(call, `${name}()`, alternative),
-            }),
+    /** `const { a, "b": c, ...rest } = held`. */
+    const inspectDestructure = (
+      declarator: ESTree.VariableDeclarator,
+      pattern: ESTree.ObjectPattern,
+      held: Held,
+    ): Effect.Effect<void> =>
+      Effect.forEach(
+        pattern.properties,
+        (property) => {
+          if (property.type === "RestElement") {
+            if (held === globalObject) return Effect.void;
+            return Option.match(wholeBan(held), {
+              onNone: () => followDeclared(declarator, property, held),
+              onSome: (alternative) => report(property, `...${held}`, alternative),
+            });
+          }
+          return Option.match(propertyKeyName(property), {
+            onNone: () => reportEscape(property, held),
+            onSome: (name) =>
+              readMember(
+                property,
+                held,
+                name,
+                (member) => followDeclared(declarator, property, member),
+                false,
+              ),
+          });
         },
+        { discard: true },
       );
 
-    const reportConstructor = (expression: ESTree.NewExpression) => {
-      if (expression.callee.type !== "Identifier") return Effect.void;
-      const name = expression.callee.name;
-      if (!isUnshadowedGlobal(ctx, expression, name)) return Effect.void;
-      return Option.match(Option.fromUndefinedOr(constructorBans.get(name)), {
-        onNone: () => Effect.void,
-        onSome: (alternative) => report(expression, `new ${name}()`, alternative),
+    /** Reports what the read of `held` at `node` does with it. */
+    const inspect = (node: ESTree.Node, held: Held): Effect.Effect<void> => {
+      const value = climbTransparent(node);
+      const parent = value.parent;
+      if (Predicate.isNullish(parent) || isTypePosition(parent) || isTypeofOperand(parent)) {
+        return Effect.void;
+      }
+      if (parent.type === "MemberExpression" && parent.object === value) {
+        return Option.match(staticMemberName(parent), {
+          onNone: () => reportEscape(parent, held),
+          onSome: (name) =>
+            readMember(parent, held, name, (member) => inspect(parent, member), isTtyRead(parent)),
+        });
+      }
+      if (parent.type === "CallExpression" && parent.callee === value) {
+        return Option.match(Option.fromUndefinedOr(callBans.get(held)), {
+          onNone: () => reportEscape(parent, held),
+          onSome: (alternative) => report(parent, `${held}()`, alternative),
+        });
+      }
+      if (parent.type === "NewExpression" && parent.callee === value) {
+        return Option.match(Option.fromUndefinedOr(constructorBans.get(held)), {
+          onNone: () => reportEscape(parent, held),
+          onSome: (alternative) => report(parent, `new ${held}()`, alternative),
+        });
+      }
+      if (parent.type === "VariableDeclarator" && parent.init === value) {
+        if (parent.id.type === "Identifier") return followDeclared(parent, parent.id, held);
+        if (parent.id.type === "ObjectPattern") return inspectDestructure(parent, parent.id, held);
+      }
+      return reportEscape(value, held);
+    };
+
+    /** A read of a global by its own name, not shadowed by any binding in scope. */
+    const isGlobalRead = (node: ESTree.Node & { readonly name: string }): boolean => {
+      if (!candidates.has(node.name)) return false;
+      const parent = node.parent;
+      if (Predicate.isNullish(parent) || isNameNotRead(node, parent)) return false;
+      if (parent.type.startsWith("TS") && !transparentWrappers.has(parent.type)) return false;
+      return Option.match(Scope.findVariableUp(ctx.sourceCode.getScope(node), node.name), {
+        onNone: () => true,
+        onSome: (variable) => variable.defs.length === 0,
       });
     };
 
     return {
-      MemberExpression: (node) =>
-        Option.match(AST.narrow(node, "MemberExpression"), {
+      Identifier: (node) =>
+        Option.match(Option.filter(AST.narrow(node, "Identifier"), isGlobalRead), {
           onNone: () => Effect.void,
-          onSome: reportMember,
-        }),
-      CallExpression: (node) =>
-        Option.match(AST.narrow(node, "CallExpression"), {
-          onNone: () => Effect.void,
-          onSome: reportCall,
-        }),
-      NewExpression: (node) =>
-        Option.match(AST.narrow(node, "NewExpression"), {
-          onNone: () => Effect.void,
-          onSome: reportConstructor,
+          onSome: (identifier) => inspect(identifier, heldByName(identifier.name)),
         }),
     };
   },
