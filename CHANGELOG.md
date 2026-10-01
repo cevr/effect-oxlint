@@ -1,5 +1,15 @@
 # oxlint-plugin-effect
 
+## 0.22.0
+
+### Minor Changes
+
+- [`6abf56f`](https://github.com/cevr/effect-oxlint/commit/6abf56f0811fbabaff3b22958fc6330034fc7ba8) Thanks [@cevr](https://github.com/cevr)! - `noGlobals` follows a global's value instead of matching one syntax shape. It reports a banned global read through the global object (`globalThis.fetch()`, `new globalThis.Date()`, `self.setTimeout()`, `globalThis.process.env`), through a computed string member (`process["env"]`, ``console[`log`]``), through `as`/`!`/`satisfies`/`?.`, and through an alias or destructure (`const { env } = process`, `const p = process; p.env`, `const D = Date; new D()`, `const { process: p } = globalThis`, `const { process: { env } } = globalThis`). An alias is followed only while every write to it stores the same global, so `let p = process; p = local; p.env` does not report, and an alias cycle ends. A global the `members` option bans whole (`{ "Bun": { "use": "..." } }`) is reported wherever its value leaves the rule's sight, such as `use(Bun)` or `const { ...rest } = Bun`. Code that passed only because of the spelling now reports.
+
+### Patch Changes
+
+- [`e4772e2`](https://github.com/cevr/effect-oxlint/commit/e4772e2435433ea36605a8b33567d65fd5a33708) Thanks [@cevr](https://github.com/cevr)! - `noPlatformLayerOutsideEntry` reports a platform package or module exported as the value of a declaration: `export const Fs = BunFileSystem`, `export let P = Platform`, `export const Fs = Platform.BunFileSystem`, `export const { BunPath } = Platform`, and an exported alias of an alias. The exported binding has no reads in its own file, so the rule could not follow it to a `layer` read.
+
 ## 0.21.1
 
 ### Patch Changes
