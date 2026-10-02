@@ -256,6 +256,10 @@ describe("platform capability rules", () => {
       valid: [
         'import process from "node:process"; process.cwd();',
         'import crypto from "node:crypto"; crypto.createHash("sha256");',
+        'import proc from "node:process"; proc["version"];',
+        'import * as proc from "node:process"; proc[`version`];',
+        'import proc from "node:process"; proc[key];',
+        'import proc from "node:process"; proc[`en${suffix}`];',
       ],
       invalid: [
         'import { "randomUUID" as uuid } from "node:crypto";',
@@ -263,6 +267,10 @@ describe("platform capability rules", () => {
         'import crypto from "node:crypto"; crypto.subtle.digest("SHA-256", bytes);',
         'import process from "node:process"; process.env;',
         'import { subtle } from "node:crypto"; subtle.digest("SHA-256", bytes);',
+        'import proc from "node:process"; proc["env"];',
+        'import * as proc from "node:process"; proc[`env`];',
+        'import * as crypto from "node:crypto"; crypto["webcrypto"]["getRandomValues"](bytes);',
+        'import { subtle as digest } from "node:crypto"; digest[`digest`]("SHA-256", bytes);',
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
@@ -341,6 +349,12 @@ describe("platform capability rules", () => {
           'import { join } from "node:path";',
           'import { lookup } from "dns";',
         ].join("\n"),
+        "computed.ts": [
+          'import * as os from "node:os";',
+          'os["homedir"]();',
+          "os[`EOL`];",
+          "os[key];",
+        ].join("\n"),
       },
       {
         options: [
@@ -357,6 +371,7 @@ describe("platform capability rules", () => {
       },
     );
     expect(reportedLines(findings, "host.ts")).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(reportedLines(findings, "computed.ts")).toEqual([2]);
   });
 });
 
