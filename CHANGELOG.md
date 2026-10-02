@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.27.1
+
+### Patch Changes
+
+- [#58](https://github.com/cevr/effect-oxlint/pull/58) [`ce08e15`](https://github.com/cevr/effect-oxlint/commit/ce08e1506eda79f145d9cc053d2d8b2e8081cf43) Thanks [@cevr](https://github.com/cevr)! - Recognize literal string and static template member keys in noNodeBuiltinImport. Imported process and crypto capabilities and configured module members now receive the same diagnostics as dot access, while dynamic keys and unmatched members remain allowed.
+
 ## 0.27.0
 
 ### Minor Changes
