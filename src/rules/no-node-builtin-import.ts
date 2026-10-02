@@ -9,9 +9,12 @@
  * through a default or namespace import. A project exempts its adapter files
  * with an override that turns the rule off, or configures it without the
  * option to keep only the built-in list there.
+ * Member paths accept dot access, literal string keys and templates without
+ * substitutions; dynamic keys do not identify a replaced member.
  */
 import type { ESTree } from "@oxlint/plugins";
 import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { staticMemberName } from "./_global-values.js";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -91,13 +94,12 @@ const importedName = (specifier: ESTree.ImportSpecifier): string => {
   return specifier.imported.value;
 };
 
-const memberPath = (node: ESTree.MemberExpression): Option.Option<ReadonlyArray<string>> => {
-  if (node.computed || node.property.type !== "Identifier") return Option.none();
-  const property = node.property.name;
-  if (node.object.type === "Identifier") return Option.some([node.object.name, property]);
-  if (node.object.type !== "MemberExpression") return Option.none();
-  return Option.map(memberPath(node.object), (parentPath) => [...parentPath, property]);
-};
+const memberPath = (node: ESTree.MemberExpression): Option.Option<ReadonlyArray<string>> =>
+  Option.flatMap(staticMemberName(node), (property) => {
+    if (node.object.type === "Identifier") return Option.some([node.object.name, property]);
+    if (node.object.type !== "MemberExpression") return Option.none();
+    return Option.map(memberPath(node.object), (parentPath) => [...parentPath, property]);
+  });
 
 /** Whether the segment before the operation in `path` is `name`. */
 const followsSegment = (path: ReadonlyArray<string>, name: string): boolean =>
