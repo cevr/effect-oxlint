@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.28.0
+
+### Minor Changes
+
+- [#60](https://github.com/cevr/effect-oxlint/pull/60) [`78594b7`](https://github.com/cevr/effect-oxlint/commit/78594b72fbde35dac4be8d13b193537cad688fc5) Thanks [@cevr](https://github.com/cevr)! - Add the recommended `preferTaggedConstructors` rule to report raw `_tag` object construction and prefer `Schema.TaggedUnion` case constructors or `Schema.TaggedStruct` constructors. `Data.taggedEnum` and existing domain constructors remain valid. Recognize static keys, type-only wrappers, and const tag aliases while allowing schema declarations.
+
 ## 0.27.1
 
 ### Patch Changes
