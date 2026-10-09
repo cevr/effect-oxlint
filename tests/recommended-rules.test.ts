@@ -99,6 +99,7 @@ describe("recommended preset", () => {
       "effect/preferPredicateIsTagged": "error",
       "effect/preferSchemaTaggedUnion": "error",
       "effect/preferServiceOf": "error",
+      "effect/preferTaggedConstructors": "error",
       "effect/requireForceKillAfter": "error",
       "effect/requireNamedEffectFn": "error",
       "effect/requireSuppressionReason": "error",

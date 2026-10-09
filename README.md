@@ -78,6 +78,7 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/preferPredicateIsTagged`       | Replaces combined `_tag` comparisons with a named `Predicate` refinement in Effect files                                                |
 | `effect/preferSchemaTaggedUnion`       | Declares `_tag` unions of any tag case with `Schema.TaggedUnion` or `toTaggedUnion`, not hand-written type literals                     |
 | `effect/preferServiceOf`               | Checks inline Layer implementations through `Service.of`                                                                                |
+| `effect/preferTaggedConstructors`      | Prefers schema case `.make` over raw `_tag` objects; `Data.taggedEnum` and domain constructors remain valid                              |
 | `effect/noAliasTestLayer`              | Bans a `Test`/`Fake`/`Stub`/`Mock` layer static that only returns the live layer                                                        |
 | `effect/requireNamedEffectFn`          | Requires stable names for `Effect.fn` operations                                                                                        |
 | `effect/requireSuppressionReason`      | Requires lint, Effect, and TS suppressions to name their target and give a `--` reason                                                  |
@@ -88,6 +89,56 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/noLocaleCompare`               | Bans `localeCompare` and `Intl.Collator`, which order by the process locale; use `Order.String`                                         |
 
 `effect/requireSuppressionReason` also rejects `@effect-diagnostics effect/name:off`: @effect/tsgo ignores the `effect/` prefix, so write the bare rule name. A blanket directive that covers its own line, such as a bare `// oxlint-disable-line` or a file-leading `/* eslint-disable */`, suppresses this rule's report too; oxlint applies the directive before the rule can report it.
+
+## Tagged constructors
+
+Prefer schema constructors when defining tagged variants and creating values at
+call sites. `Schema.TaggedUnion` provides a schema for each variant through
+`.cases`. Its `.make` constructor supplies `_tag`:
+
+```ts
+import { Schema } from "effect";
+
+const CollectionState = Schema.TaggedUnion({
+  ready: { readyRevision: Schema.Number },
+  bootstrap: {},
+});
+type CollectionState = typeof CollectionState.Type;
+
+const ready = CollectionState.cases.ready.make({ readyRevision: 42 });
+const bootstrap = CollectionState.cases.bootstrap.make({});
+```
+
+An existing `Schema.TaggedStruct` or domain constructor works too. Decode untrusted
+input with the owning schema at the boundary.
+
+`Data.TaggedEnum` with `Data.taggedEnum` constructors remains a supported choice for
+internal state:
+
+```ts
+import { Data } from "effect";
+
+type PullSample = Data.TaggedEnum<{
+  Success: { readonly latencyMs: number };
+  Failure: {};
+}>;
+const PullSample = Data.taggedEnum<PullSample>();
+
+const sample = PullSample.Success({ latencyMs: 12 });
+```
+
+`effect/preferTaggedConstructors` reports object expressions with a static `_tag`
+key and a string literal, a template without substitutions, or a const alias to
+one of those values. It also recognizes type-only wrappers such as `as const` and
+`satisfies`. The rule applies without an Effect import, including in tests and
+hand-written factory functions; wrapping a literal in a function does not give it
+the owning type's constructor. Schema field declarations and type literals are
+allowed. Dynamic tags, computed expression keys, getters, and tags carried only by
+spreads are outside this syntax rule's scope.
+
+There is no automatic fix because the rule cannot choose the owning type or its
+constructor. A raw malformed wire fixture or a custom constructor implementation
+can use a targeted suppression with a reason.
 
 ## Opt-in Rules
 
