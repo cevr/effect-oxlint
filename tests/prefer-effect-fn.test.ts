@@ -41,12 +41,25 @@ const pipedWithSpan = (namespace = "Effect", ...transforms: ReadonlyArray<string
   };
 };
 
+/** The parent link oxlint sets: the holder's type and the slot holding the node. */
+type Holder = { readonly type: string; readonly body?: unknown; readonly argument?: unknown; readonly delegate?: boolean };
+
+/** Places `node` in `parent`, as oxlint's parent links would. */
+const within = <N extends object>(node: N, parent: Holder): N => {
+  Object.assign(node, { parent });
+  return node;
+};
+const arrowBody = <N extends object>(node: N): N =>
+  within(node, { type: "ArrowFunctionExpression", body: node });
+const returned = <N extends object>(node: N): N =>
+  within(node, { type: "ReturnStatement", argument: node });
+
 describe("prefer Effect.fn", () => {
   test("rejects a span attached directly to Effect.gen", () => {
     expect(
       Testing.runRuleMulti(preferEffectFn, [
         ["ImportDeclaration", effectImport()],
-        ["CallExpression", directWithSpan()],
+        ["CallExpression", arrowBody(directWithSpan())],
       ]),
     ).toHaveLength(1);
   });
@@ -55,7 +68,7 @@ describe("prefer Effect.fn", () => {
     expect(
       Testing.runRuleMulti(preferEffectFn, [
         ["ImportDeclaration", effectImport()],
-        ["CallExpression", pipedWithSpan()],
+        ["CallExpression", returned(pipedWithSpan())],
       ]),
     ).toHaveLength(1);
   });
@@ -64,7 +77,7 @@ describe("prefer Effect.fn", () => {
     expect(
       Testing.runRuleMulti(preferEffectFn, [
         ["ImportDeclaration", effectImport("Fx")],
-        ["CallExpression", pipedWithSpan("Fx", "map")],
+        ["CallExpression", arrowBody(pipedWithSpan("Fx", "map"))],
       ]),
     ).toHaveLength(1);
   });
@@ -76,10 +89,12 @@ describe("prefer Effect.fn", () => {
           "ImportDeclaration",
           Testing.importDeclWithSpecifiers("effect", [Testing.importSpecifier("Effect", "Fx")]),
         ],
-        ["CallExpression", pipedWithSpan("Fx")],
+        ["CallExpression", returned(pipedWithSpan("Fx"))],
       ]),
     ).toHaveLength(1);
-    expect(Testing.runRule(preferEffectFn, "CallExpression", pipedWithSpan())).toHaveLength(0);
+    expect(
+      Testing.runRule(preferEffectFn, "CallExpression", returned(pipedWithSpan())),
+    ).toHaveLength(0);
   });
 
   test("allows an unspanned generator and an Effect.fn operation", () => {
@@ -96,6 +111,29 @@ describe("prefer Effect.fn", () => {
         "CallExpression",
         Testing.callOfMember("Effect", "fn", [Testing.strLiteral("Example.run")]),
       ),
+    ).toHaveLength(0);
+  });
+
+  test("allows a spanned generator held as a value, where Effect.fn would need invoking", () => {
+    const parents = [
+      { type: "VariableDeclarator" },
+      { type: "Property" },
+      { type: "YieldExpression", delegate: true },
+      { type: "ArrowFunctionExpression", body: { type: "BlockStatement" } },
+    ];
+    for (const parent of parents) {
+      expect(
+        Testing.runRuleMulti(preferEffectFn, [
+          ["ImportDeclaration", effectImport()],
+          ["CallExpression", within(pipedWithSpan(), parent)],
+        ]),
+      ).toHaveLength(0);
+    }
+    expect(
+      Testing.runRuleMulti(preferEffectFn, [
+        ["ImportDeclaration", effectImport()],
+        ["CallExpression", within(directWithSpan(), { type: "VariableDeclarator" })],
+      ]),
     ).toHaveLength(0);
   });
 });

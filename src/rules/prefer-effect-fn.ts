@@ -56,6 +56,23 @@ const pipesWithSpanFromEffectGen = (
   isEffectGenCall(node.callee.object, effectNamespaces) &&
   node.arguments.some((argument) => isEffectWithSpanCall(argument, effectNamespaces));
 
+/**
+ * The spanned generator is what a function hands back: an arrow's body or a
+ * `return` argument. Effect.fn names that function. Anywhere else the
+ * generator is a value (a variable, a property, a `yield*` operand), and
+ * Effect.fn could only name it by being invoked on the spot.
+ */
+const isFunctionResult = (node: ESTree.Node): boolean => {
+  let child: ESTree.Node = node;
+  let parent = node.parent;
+  while (parent?.type === "ParenthesizedExpression" || parent?.type === "TSSatisfiesExpression") {
+    child = parent;
+    parent = parent.parent;
+  }
+  if (parent?.type === "ReturnStatement") return true;
+  return parent?.type === "ArrowFunctionExpression" && parent.body === child;
+};
+
 const effectNamespaceFromImport = (node: ESTree.ImportDeclaration): ReadonlyArray<string> => {
   const source = node.source.value;
   if (source !== "effect" && source !== "effect/Effect") return [];
@@ -82,7 +99,7 @@ export const preferEffectFn = Rule.define({
   name: "prefer-effect-fn",
   meta: Rule.meta({
     type: "suggestion",
-    description: "Use Effect.fn for a named generator operation.",
+    description: "Use Effect.fn for a function that returns a spanned Effect.gen.",
   }),
   create: function* () {
     const ctx = yield* RuleContext;
@@ -107,10 +124,9 @@ export const preferEffectFn = Rule.define({
       CallExpression: (node) => {
         if (node.type !== "CallExpression") return Effect.void;
         const namespaces = visibleEffectNamespaces(node);
-        if (
-          !spansEffectGenDirectly(node, namespaces) &&
-          !pipesWithSpanFromEffectGen(node, namespaces)
-        ) {
+        const spanned =
+          spansEffectGenDirectly(node, namespaces) || pipesWithSpanFromEffectGen(node, namespaces);
+        if (!spanned || !isFunctionResult(node)) {
           return Effect.void;
         }
         return ctx.report(
