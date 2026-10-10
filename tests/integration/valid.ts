@@ -20,6 +20,12 @@ export const validProgram = Effect.gen(function* () {
   return yield* Effect.die(new Error("explicit fixture defect"));
 });
 
+// A traced value: Effect.fn could only name it by being invoked on the spot.
+export const tracedValue = Effect.gen(function* () {
+  yield* Effect.log("traced");
+  return yield* Effect.void;
+}).pipe(Effect.withSpan("Fixture.tracedValue"));
+
 export const validPolicy = { enabled: true } satisfies { enabled: boolean };
 export const prototypeFreeDictionary = Object.create(null);
 const testHarness = {

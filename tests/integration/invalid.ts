@@ -40,10 +40,10 @@ export async function invalidProgram(condition: boolean) {
 
 export const nativeFailure = Effect.fail(new Error("typed channel"));
 export const assertedFailure = nativeFailure as Effect.Effect<never, Error>;
-export const tracedGenerator = Effect.gen(function* () {
+export const tracedGenerator = () => Effect.gen(function* () {
   return yield* Effect.void;
 }).pipe(Effect.withSpan("Fixture.tracedGenerator"));
-export const transformedTracedGenerator = Effect.gen(function* () {
+export const transformedTracedGenerator = () => Effect.gen(function* () {
   return yield* Effect.void;
 }).pipe(Effect.asVoid, Effect.withSpan("Fixture.transformedTracedGenerator"));
 export const absent = null;
