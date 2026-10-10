@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.28.1
+
+### Patch Changes
+
+- [#62](https://github.com/cevr/effect-oxlint/pull/62) [`f905b3b`](https://github.com/cevr/effect-oxlint/commit/f905b3baf84f6198d72b59417a1155279e1687bd) Thanks [@cevr](https://github.com/cevr)! - `preferEffectFn` reports a spanned `Effect.gen` only where a function returns it (an arrow body or a `return`). A traced generator held as a value (a variable, a property, a `yield*` operand) is no longer reported. `Effect.fn` could only name it by being invoked on the spot, which `@effect/tsgo`'s `effectFnIife` rejects.
+
 ## 0.28.0
 
 ### Minor Changes
