@@ -2,16 +2,20 @@
  * What a read of a global holds, followed through the code that passes it on.
  *
  * A rule names the globals it watches and how it treats each use. The walk
- * starts at each read of a watched name, or of the global object
- * (`globalThis`, `self`, `window`, `global`), that no binding shadows, and
- * follows the value through static and computed string members
- * (`globalThis["Promise"]`), `as`/`!`/`satisfies`/`?.` wrappers, `const`
- * and `let` aliases, and object destructures, nested ones too. An alias is
+ * starts at each read of a watched name, of the global object (`globalThis`,
+ * `self`, `window`, `global`, and a page's `top`, `parent` and `frames`), or
+ * of `document`, that no binding shadows, and follows the value through
+ * static and computed string members (`globalThis["Promise"]`), the global
+ * object's own names (`globalThis.window`, `window.top`,
+ * `document.defaultView`), `as`/`!`/`satisfies`/`?.` wrappers, `const` and
+ * `let` aliases, and object destructures, nested ones too. An alias is
  * followed only while every write to it stores the same value, and a cycle
  * of aliases ends. `typeof` probes and type positions are not uses.
  *
  * At each use the rule's handler decides: a member read, a call, a `new`, a
- * rest element, or an escape (an argument, a return, any other spot the walk
+ * rest element, a hold (the value kept where the walk cannot follow it: an
+ * object or array literal, a default, an assignment, what a function
+ * answers), or an escape (an argument, a comparison, any other spot the walk
  * cannot see past).
  */
 import type { ESTree, Reference, Variable } from "@oxlint/plugins";
@@ -33,12 +37,34 @@ export type Held = string;
 /** The global object, whatever name reads it. */
 export const globalObject: Held = "globalThis";
 
-const globalObjects = new Set(["globalThis", "self", "window", "global"]);
+/**
+ * The names that read the global object: a page's `top`, `parent` and
+ * `frames` are its window too (its own, in a page no frame holds).
+ */
+const globalObjects = new Set([
+  "globalThis",
+  "self",
+  "window",
+  "global",
+  "top",
+  "parent",
+  "frames",
+]);
+
+/** `document`, whose `defaultView` is the global object again. */
+const documentName: Held = "document";
 
 /** What a read of a global's own name holds: `self` is the global object, `fetch` is `fetch`. */
 const heldByName = (name: string): Held => {
   if (globalObjects.has(name)) return globalObject;
   return name;
+};
+
+/** The value a member of `owner` holds when it is the global object, or a global, again. */
+const hopValue = (owner: Held, name: string): Option.Option<Held> => {
+  if (owner === globalObject) return Option.some(heldByName(name));
+  if (owner === documentName && name === "defaultView") return Option.some(globalObject);
+  return Option.none();
 };
 
 /** How a rule treats each use of a value it watches. */
@@ -61,9 +87,63 @@ export interface GlobalUses {
     held: Held,
     follow: Effect.Effect<void>,
   ) => Effect.Effect<void>;
-  /** A value that leaves the walk's sight at `node`. */
+  /**
+   * A value kept at `node` where the walk cannot follow it: an object or
+   * array literal, a default, an assignment, what a function answers, past
+   * any `??`/`||`/`&&` or conditional branch it passes through. A later use
+   * of it is out of the rule's sight.
+   */
+  readonly hold: (node: ESTree.Node, held: Held) => Effect.Effect<void>;
+  /** A value that leaves the walk's sight at `node`: an argument, a comparison, any other spot. */
   readonly escape: (node: ESTree.Node, held: Held) => Effect.Effect<void>;
 }
+
+/**
+ * The node that keeps `value` when it is a hold: a value passes up through
+ * `??`/`||`/`&&` and a conditional's branches, and is kept by a declarator
+ * the walk does not follow, an assignment, an object property, an array
+ * element or spread, a parameter default, an arrow's body, a `return`, or a
+ * default export.
+ */
+const holdingNode = (value: ESTree.Node): Option.Option<ESTree.Node> => {
+  let at = value;
+  for (;;) {
+    const up = at.parent;
+    if (Predicate.isNullish(up)) return Option.none();
+    if (
+      up.type === "LogicalExpression" ||
+      up.type === "ParenthesizedExpression" ||
+      transparentWrappers.has(up.type) ||
+      (up.type === "ConditionalExpression" && up.test !== at)
+    ) {
+      at = up;
+      continue;
+    }
+    switch (up.type) {
+      case "VariableDeclarator":
+        return Option.liftPredicate(up, () => up.init === at);
+      case "AssignmentExpression":
+        return Option.liftPredicate(up, () => up.right === at);
+      case "AssignmentPattern":
+        return Option.liftPredicate(up, () => up.right === at);
+      case "Property":
+        return Option.liftPredicate(
+          at,
+          () => up.value === at && up.parent?.type === "ObjectExpression",
+        );
+      case "SpreadElement":
+        return Option.liftPredicate(at, () => up.parent?.type === "ArrayExpression");
+      case "ArrayExpression":
+      case "ReturnStatement":
+      case "ExportDefaultDeclaration":
+        return Option.some(at);
+      case "ArrowFunctionExpression":
+        return Option.liftPredicate(at, () => up.body === at);
+      default:
+        return Option.none();
+    }
+  }
+};
 
 /** The wrappers that keep their operand's value: `x as T`, `x!`, `x satisfies T`, `a?.b`. */
 const transparentWrappers = new Set([
@@ -188,8 +268,7 @@ export const globalValueVisitor = (
   uses: GlobalUses,
 ): Visitor.EffectVisitor => {
   const memberValue = (owner: Held, name: string): Option.Option<Held> => {
-    if (owner === globalObject) return Option.some(name);
-    return uses.memberValue(owner, name);
+    return Option.orElse(hopValue(owner, name), () => uses.memberValue(owner, name));
   };
 
   /** What `expression` stores, evaluating each variable in `evaluating` as a cycle. */
@@ -348,12 +427,17 @@ export const globalValueVisitor = (
       if (parent.id.type === "Identifier") return followDeclared(parent, parent.id, held);
       if (parent.id.type === "ObjectPattern") return inspectDestructure(parent, parent.id, held);
     }
-    return uses.escape(value, held);
+    return Option.match(holdingNode(value), {
+      onNone: () => uses.escape(value, held),
+      onSome: (holder) => uses.hold(holder, held),
+    });
   };
 
   /** A read of a watched global by its own name, not shadowed by any binding in scope. */
   const isGlobalRead = (node: ESTree.Node & { readonly name: string }): boolean => {
-    if (!uses.names.has(node.name) && !globalObjects.has(node.name)) return false;
+    if (!uses.names.has(node.name) && !globalObjects.has(node.name) && node.name !== documentName) {
+      return false;
+    }
     const parent = node.parent;
     if (Predicate.isNullish(parent) || isNameNotRead(node, parent)) return false;
     if (parent.type.startsWith("TS") && !transparentWrappers.has(parent.type)) return false;

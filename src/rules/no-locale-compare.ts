@@ -49,6 +49,7 @@ export const noLocaleCompare = Rule.define({
       call: (node, held) => reportCollator(node, held, "Intl.Collator()"),
       construct: (node, held) => reportCollator(node, held, "new Intl.Collator()"),
       rest: (_node, _held, follow) => follow,
+      hold: () => Effect.void,
       escape: () => Effect.void,
     });
 
