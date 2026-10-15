@@ -256,13 +256,18 @@ export const noGlobals = Rule.define({
     /**
      * A watched value kept where the walk cannot follow it (`{ w: window }`,
      * `[document]`, `() => performance`): its banned members are out of sight
-     * from there on, so the hold is the use. Handing it to a call stays an
-     * escape, since that is how an adapter is built over it.
+     * from there on, so the hold is the use. Handing it to a call, alone or
+     * inside a literal or a thunk, stays an escape, since that is how an
+     * adapter is built over it. The global object is reported only while a
+     * ban is active, and `crypto.subtle` only while the built-in ban on its
+     * `digest` is.
      */
     const reportHold = (node: ESTree.Node, held: Held): Effect.Effect<void> => {
-      if (held !== globalObject && held !== cryptoSubtle && !watched.has(held)) {
-        return Effect.void;
-      }
+      const covered =
+        watched.has(held) ||
+        (held === globalObject && watched.size > 0) ||
+        (held === cryptoSubtle && builtins);
+      if (!covered) return Effect.void;
       return ctx.report(
         Diagnostic.make({
           node,

@@ -365,6 +365,46 @@ describe("platform capability rules", () => {
     expect(reportedLines(findings, "page.ts")).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
+  test("noGlobals lets a global be handed to a call inside a literal or a thunk, as an adapter is built", () => {
+    const findings = lintFixtures("noGlobals", {
+      "client.ts": [
+        "export const client = createClient({ fetch });",
+        "export const page = render({ fetch: globalThis.fetch });",
+        "export const built = new Client({ fetch });",
+        "export const listed = take([window]);",
+        "export const nested = make({ host: { fetch } });",
+        "export const spread = make({ ...{ fetch } });",
+        "export const either = make(options ?? { fetch });",
+        "export const branch = make(ready ? { fetch } : {});",
+        "export const asserted = make({ fetch } as Options);",
+        "export const spreadArgument = make(...[window]);",
+        "export const thunk = Reference({ defaultValue: () => globalThis.fetch });",
+        "export const lazy = make(() => console);",
+        "export const kept = { fetch };",
+        "export const keptList = [window];",
+        "export const keptThunk = () => globalThis.fetch;",
+        "export const calledThenKept = { result: make(), fetch };",
+      ].join("\n"),
+    });
+    expect(reportedLines(findings, "client.ts")).toEqual([13, 14, 15, 16]);
+  });
+
+  test("noGlobals reports a held global object only when a ban is active", () => {
+    const source = "export const kept = { w: window };\nexport const page = [globalThis];";
+    const banningNothing = lintFixtures(
+      "noGlobals",
+      { "script.ts": source },
+      { options: [{ builtins: false }] },
+    );
+    expect(reportedLines(banningNothing, "script.ts")).toEqual([]);
+    const banningOne = lintFixtures(
+      "noGlobals",
+      { "script.ts": source },
+      { options: [{ builtins: false, members: { Bun: { use: "a platform service" } } }] },
+    );
+    expect(reportedLines(banningOne, "script.ts")).toEqual([1, 2]);
+  });
+
   test("noGlobals takes a list of bans for one global, and a configured ban names its replacement", () => {
     const findings = lintFixtures(
       "noGlobals",

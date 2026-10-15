@@ -15,7 +15,8 @@
  * At each use the rule's handler decides: a member read, a call, a `new`, a
  * rest element, a hold (the value kept where the walk cannot follow it: an
  * object or array literal, a default, an assignment, what a function
- * answers), or an escape (an argument, a comparison, any other spot the walk
+ * answers, unless that literal or function is itself handed to a call), or an
+ * escape (an argument, a comparison, any other spot the walk
  * cannot see past).
  */
 import type { ESTree, Reference, Variable } from "@oxlint/plugins";
@@ -98,24 +99,56 @@ export interface GlobalUses {
   readonly escape: (node: ESTree.Node, held: Held) => Effect.Effect<void>;
 }
 
+/** Whether a value passes up from `at` to `up` unchanged: `??`/`||`/`&&`, parentheses, a wrapper, a conditional's branch. */
+const passesUp = (at: ESTree.Node, up: ESTree.Node): boolean =>
+  up.type === "LogicalExpression" ||
+  up.type === "ParenthesizedExpression" ||
+  transparentWrappers.has(up.type) ||
+  (up.type === "ConditionalExpression" && up.test !== at);
+
+/**
+ * Whether a literal or an arrow is handed to a call: an argument of a call or
+ * a `new`, reached through the values that pass it up, a spread, and the
+ * object and array literals it sits in (`createClient({ fetch })`,
+ * `make({ host: { fetch } })`, `Reference({ defaultValue: () => fetch })`).
+ * That is how an adapter is built over a global, so it is an escape.
+ */
+const handedToCall = (container: ESTree.Node): boolean => {
+  let at = container;
+  for (;;) {
+    const up = at.parent;
+    if (Predicate.isNullish(up)) return false;
+    if (
+      passesUp(at, up) ||
+      up.type === "SpreadElement" ||
+      up.type === "ArrayExpression" ||
+      up.type === "ObjectExpression"
+    ) {
+      at = up;
+      continue;
+    }
+    if (up.type === "Property" && up.value === at && up.parent?.type === "ObjectExpression") {
+      at = up.parent;
+      continue;
+    }
+    if (up.type === "CallExpression" || up.type === "NewExpression") return up.callee !== at;
+    return false;
+  }
+};
+
 /**
  * The node that keeps `value` when it is a hold: a value passes up through
  * `??`/`||`/`&&` and a conditional's branches, and is kept by a declarator
  * the walk does not follow, an assignment, an object property, an array
  * element or spread, a parameter default, an arrow's body, a `return`, or a
- * default export.
+ * default export. A literal or an arrow handed to a call is no hold.
  */
 const holdingNode = (value: ESTree.Node): Option.Option<ESTree.Node> => {
   let at = value;
   for (;;) {
     const up = at.parent;
     if (Predicate.isNullish(up)) return Option.none();
-    if (
-      up.type === "LogicalExpression" ||
-      up.type === "ParenthesizedExpression" ||
-      transparentWrappers.has(up.type) ||
-      (up.type === "ConditionalExpression" && up.test !== at)
-    ) {
+    if (passesUp(at, up)) {
       at = up;
       continue;
     }
@@ -129,16 +162,21 @@ const holdingNode = (value: ESTree.Node): Option.Option<ESTree.Node> => {
       case "Property":
         return Option.liftPredicate(
           at,
-          () => up.value === at && up.parent?.type === "ObjectExpression",
+          () =>
+            up.value === at && up.parent?.type === "ObjectExpression" && !handedToCall(up.parent),
         );
       case "SpreadElement":
-        return Option.liftPredicate(at, () => up.parent?.type === "ArrayExpression");
+        return Option.liftPredicate(
+          at,
+          () => up.parent?.type === "ArrayExpression" && !handedToCall(up.parent),
+        );
       case "ArrayExpression":
+        return Option.liftPredicate(at, () => !handedToCall(up));
       case "ReturnStatement":
       case "ExportDefaultDeclaration":
         return Option.some(at);
       case "ArrowFunctionExpression":
-        return Option.liftPredicate(at, () => up.body === at);
+        return Option.liftPredicate(at, () => up.body === at && !handedToCall(up));
       default:
         return Option.none();
     }
