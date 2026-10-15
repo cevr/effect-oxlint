@@ -12,14 +12,17 @@
  * `effect/process/ChildProcess` (a namespace import, or the named `make`
  * under any alias). It reports:
  *
- * - `make("cmd")` and `make("cmd", ["arg"])` with no options;
+ * - `make("cmd")` and `make("cmd", ["arg"])` with no options, the arguments
+ *   an array literal, a `const` holding one, or a parameter that holds an
+ *   array (a rest parameter, or one typed `T[]`, `readonly T[]`, `Array<T>`
+ *   or `ReadonlyArray<T>`);
  * - an options object literal, inline or held in a `const`, that does not
  *   name `forceKillAfter` (in itself or a spread object literal);
  * - the bare template form ``make`cmd` ``, which cannot carry options: write
  *   ``make({ forceKillAfter: "5 seconds" })`cmd` `` instead.
  *
- * Options the rule cannot see (a parameter, a call result, a spread of one)
- * are left alone.
+ * Options the rule cannot see (an untyped parameter, a call result, a spread
+ * of one) are left alone.
  */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
@@ -32,6 +35,21 @@ import { staticMemberName } from "./_global-values.js";
 
 const processModule = "effect/process";
 const childProcessModule = "effect/process/ChildProcess";
+
+/** Whether a type is an array: `T[]`, `readonly T[]`, `Array<T>` or `ReadonlyArray<T>`. */
+const isArrayType = (type: ESTree.TSType): boolean => {
+  if (type.type === "TSArrayType") return true;
+  if (type.type === "TSTypeOperator")
+    return (
+      type.operator === "readonly" &&
+      Option.exists(Option.fromNullishOr(type.typeAnnotation), isArrayType)
+    );
+  return (
+    type.type === "TSTypeReference" &&
+    type.typeName.type === "Identifier" &&
+    (type.typeName.name === "Array" || type.typeName.name === "ReadonlyArray")
+  );
+};
 
 /** The exported name an import specifier reads: `make` in `{ make as cmd }` or `{ "make" as cmd }`. */
 const importedName = (specifier: ESTree.ImportSpecifier): string => {
@@ -96,6 +114,27 @@ export const requireForceKillAfter = Rule.define({
       return isMember(node, "make") && isChildProcessModule(node.object);
     };
 
+    /**
+     * Whether `node` reads a parameter that holds an array: a rest parameter,
+     * or one typed `T[]`, `readonly T[]`, `Array<T>` or `ReadonlyArray<T>`.
+     */
+    const isArrayParameter = (node: ESTree.Node): boolean => {
+      if (node.type !== "Identifier") return false;
+      return Option.exists(
+        Scope.findVariableUp(ctx.sourceCode.getScope(node), node.name),
+        (variable) => {
+          const definition = variable.defs[0];
+          if (variable.defs.length !== 1 || definition?.type !== "Parameter") return false;
+          const name = definition.name;
+          if (name.parent?.type === "RestElement") return true;
+          if (name.type !== "Identifier") return false;
+          return Option.exists(Option.fromNullishOr(name.typeAnnotation), (annotation) =>
+            isArrayType(annotation.typeAnnotation),
+          );
+        },
+      );
+    };
+
     /** Whether an options expression names `forceKillAfter`, lacks it, or cannot be read. */
     const optionsOf = (expression: ESTree.Expression): Options => {
       const value = resolve(expression);
@@ -129,7 +168,7 @@ export const requireForceKillAfter = Rule.define({
       const third = expressionArgument(node, 2);
       if (Option.isSome(third)) return optionsOf(third.value);
       // `make(cmd, args)`: an array, or a value that may be the options.
-      if (secondValue.type === "ArrayExpression") return "missing";
+      if (secondValue.type === "ArrayExpression" || isArrayParameter(secondValue)) return "missing";
       return "unknown";
     };
 

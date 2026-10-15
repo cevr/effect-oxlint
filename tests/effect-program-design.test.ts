@@ -228,6 +228,8 @@ describe("child process termination", () => {
         `${barrel}const forceKillAfter = "5 seconds"; ChildProcess.make("git", { forceKillAfter });`,
         `${barrel}const run = (options) => ChildProcess.make("git", ["status"], options);`,
         `${barrel}const run = (args) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (args: Options) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (args: ReadonlyArray<string>) => ChildProcess.make("git", args, ${kill});`,
         `${barrel}ChildProcess.make("git", ...rest);`,
         `${barrel}ChildProcess.make("sleep", { ["forceKillAfter"]: "5 seconds" });`,
         `${barrel}ChildProcess.make("sleep", ["9"], { [\`forceKillAfter\`]: "5 seconds" });`,
@@ -253,6 +255,13 @@ describe("child process termination", () => {
         'import { make as command } from "effect/process/ChildProcess";\ncommand`ls -la`;',
         'import * as P from "effect/process";\nP.ChildProcess.make("git");',
         'import { ChildProcess as CP } from "effect/process";\nCP.make("git", []);',
+        // A parameter typed as an array, or a rest parameter, holds the arguments, not the options.
+        `${barrel}const run = (args: ReadonlyArray<string>) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (args: string[]) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (args: readonly string[]) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (args: Array<string> = []) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (...args) => ChildProcess.make("git", args);`,
+        `${barrel}function run(...args: string[]) { return ChildProcess.make("git", args); }`,
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
