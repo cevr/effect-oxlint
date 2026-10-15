@@ -71,7 +71,7 @@
     "@types/bun": "latest",
     "@typescript/native-preview": "latest",
     "concurrently": "latest",
-    "effect": "4.0.0",
+    "effect": "4.0.5",
     "lefthook": "latest",
     "oxfmt": "latest",
     "oxlint": "latest",

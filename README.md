@@ -63,7 +63,6 @@ Every recommended rule has `error` severity. The complexity rules carry their li
 | `effect/noNestedEffectGen`             | Flattens directly yielded nested generators                                                                                                                |
 | `effect/noPerCallCacheConstruction`    | Constructs shared caches once in their owning layer                                                                                                        |
 | `effect/noPointFreeLog`                | Calls a variadic logger (`Console.*`, `console.*`, `Effect.log*`) in a callback instead of handing it to one that is passed an index, which it would print |
-| `effect/noInterruptibleMemo`           | Bans `Effect.cached*`, named imports included; uninterruptible inputs and function TTLs do not prove safe settlement                                       |
 | `effect/noRunCollectOnUnboundedStream` | Requires termination before collecting a clearly unbounded Stream                                                                                          |
 | `effect/noSequentialEffectAll`         | Uses explicit sequencing when serial aggregation discards its result                                                                                       |
 | `effect/noSilentCatchAll`              | Keeps swallowed failures visible or recovers them truthfully                                                                                               |
@@ -145,14 +144,15 @@ can use a targeted suppression with a reason.
 
 These rules encode a project policy the preset cannot assume. The plugin registers them, and the preset leaves them off; enable each by name.
 
-| Rule                                 | Contract                                                                                                                                                  |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `effect/noPlatformLayerOutsideEntry` | Provides `@effect/platform-*` layers (and the `layers` option names) only in entry files an override exempts                                              |
-| `effect/noPositionalLogArguments`    | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                                                                          |
-| `effect/noRunPromise`                | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts                                                           |
-| `effect/noTimeoutDieInTests`         | Fails a test's timeout with a typed error instead of `Effect.die`                                                                                         |
-| `effect/noWithWrapperCall`           | Pipes values through `withX` adapters instead of wrapping calls or callbacks; `allow` exempts names, `testFiles` narrows the test exemption               |
-| `effect/requireSpawnBudget`          | Gives a test that spawns a process (`ChildProcess.make`, Bun, `node:child_process`, a helper that does) its timeout; `minimum` sets the least it may name |
+| Rule                                 | Contract                                                                                                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `effect/noPlatformLayerOutsideEntry` | Provides `@effect/platform-*` layers (and the `layers` option names) only in entry files an override exempts                                                                   |
+| `effect/noPositionalLogArguments`    | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                                                                                               |
+| `effect/noRunPromise`                | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts                                                                                |
+| `effect/noTimeoutDieInTests`         | Fails a test's timeout with a typed error instead of `Effect.die`                                                                                                              |
+| `effect/noWithWrapperCall`           | Pipes values through `withX` adapters instead of wrapping calls or callbacks; `allow` exempts names, `testFiles` narrows the test exemption                                    |
+| `effect/noInterruptibleMemo`         | Memoizes a run that must start once as a started fiber; `Effect.cached*` gives up a run its callers leave (effect 4.0.0 keeps the interruption, 4.0.1 on starts the run again) |
+| `effect/requireSpawnBudget`          | Gives a test that spawns a process (`ChildProcess.make`, Bun, `node:child_process`, a helper that does) its timeout; `minimum` sets the least it may name                      |
 
 ## Test Files
 

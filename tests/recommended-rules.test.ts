@@ -8,6 +8,7 @@ import {
   noDynamicImports,
   noEffectBind,
   noEffectDo,
+  noInterruptibleMemo,
   noModuleMocks,
   noNewError,
   noNullish,
@@ -28,6 +29,7 @@ import { runCommand } from "./support/run-command.js";
 
 /** Rules that encode a project policy the preset cannot assume; a project enables each by name. */
 const optInRules = {
+  noInterruptibleMemo,
   noPlatformLayerOutsideEntry,
   noPositionalLogArguments,
   noRunPromise,
@@ -57,7 +59,6 @@ describe("recommended preset", () => {
       "effect/noFixedWaitInTests": "error",
       "effect/noGlobals": "error",
       "effect/noInlineProvide": "error",
-      "effect/noInterruptibleMemo": "error",
       "effect/noKnownValueWidening": "error",
       "effect/noLintEvasion": "error",
       "effect/noLocaleCompare": "error",

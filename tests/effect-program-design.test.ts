@@ -4,8 +4,12 @@ import { noManagedRuntimeInEffect } from "../src/rules/no-managed-runtime-in-eff
 import { noUnboundedConcurrency } from "../src/rules/no-unbounded-concurrency.js";
 import { noUnboundedRetry } from "../src/rules/no-unbounded-retry.js";
 import { preferServiceOf } from "../src/rules/prefer-service-of.js";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
 import { lintCases, lintFixtures, reportedLines } from "./support/lint-fixtures.js";
+import { runEffect } from "./support/run-effect.js";
 
 describe("service implementation checks", () => {
   test("requires Service.of for an inline Layer implementation", () => {
@@ -313,12 +317,42 @@ describe("interruptible memos", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
-  test("names the started fiber and Cache as the fix", () => {
+  test("says what each effect 4.x does with a run its caller left, and names the started fiber as the fix", () => {
     const findings = lintFixtures("noInterruptibleMemo", {
-      "memo.ts": `${effect}const memo = Effect.cached(load);`,
+      "memo.ts": `${effect}const memo = Effect.cachedWithTTL(load, "1 hour");`,
     });
     expect(findings.get("memo.ts")).toEqual([
-      { line: 2, message: expect.stringContaining("Memoize a started fiber") },
+      {
+        line: 2,
+        message:
+          "Effect.cachedWithTTL gives up a run its callers leave: on effect 4.0.0 the run is its first caller's, and that caller's interruption is kept for every later caller; from 4.0.1 a run that every caller has left is interrupted, and the next caller starts a new one, while a run an interruption cannot stop (a promise with no signal, an engine's start) goes on beside it. When the run must start once, fork it once into a scope that owns it and Fiber.join it in each caller.",
+      },
     ]);
   });
+
+  test("the message's account of a left run holds for the effect these tests install", () =>
+    // A run whose work no interruption can stop: a callback with no cleanup, which never resumes.
+    runEffect(
+      Effect.gen(function* () {
+        let started = 0;
+        const memo = yield* Effect.cached(
+          Effect.callback<void>(() => {
+            started += 1;
+          }),
+        );
+        /** Yields until `count` runs have started, for at most `turns` turns. */
+        const settle = (count: number, turns = 100): Effect.Effect<void> =>
+          Effect.suspend(() => {
+            if (started >= count || turns === 0) return Effect.void;
+            return Effect.flatMap(Effect.yieldNow, () => settle(count, turns - 1));
+          });
+        const first = yield* Effect.forkChild(memo);
+        yield* settle(1);
+        yield* Fiber.interrupt(first);
+        const second = yield* Effect.forkChild(memo);
+        yield* settle(2);
+        yield* Fiber.interrupt(second);
+        expect(started).toBe(2);
+      }),
+    ));
 });

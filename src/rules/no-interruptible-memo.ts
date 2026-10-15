@@ -1,9 +1,23 @@
 /**
- * Effect.cached* keeps the first caller's exit, including interruption.
- * Protecting only the input with uninterruptible does not protect settlement:
- * its caller's pending interruption can arrive before the memo stores the exit.
- * A function-shaped TTL does not prove that interruption gets zero lifetime.
- * Use a started fiber owned by a scope, or Cache's independent lookup fiber.
+ * A run that must start once is a started fiber, not an `Effect.cached*`.
+ *
+ * What `Effect.cached`, `cachedWithTTL` and `cachedInvalidateWithTTL` do
+ * with a run whose caller leaves depends on the effect release:
+ *
+ * - effect 4.0.0 runs it in its first caller's fiber and keeps the exit that
+ *   fiber reaches, so once that caller is interrupted every later caller gets
+ *   the interruption back. An `uninterruptible` input does not protect the
+ *   settlement, and a function TTL does not prove the interruption no
+ *   lifetime.
+ * - From effect 4.0.1 the run is a fiber of its own. A run that every caller
+ *   has left is interrupted and never cached, and the next caller starts a
+ *   new one. A run an interruption cannot stop (a promise with no signal, an
+ *   engine's start) goes on beside the new run.
+ *
+ * So no release starts the run once. Fork it once into a scope that owns it,
+ * and `Fiber.join` it in each caller. The rule is opt-in: on 4.0.1 and later
+ * a run that is safe to start again (an interruptible read) may keep its
+ * `Effect.cached`.
  */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
@@ -20,7 +34,8 @@ export const noInterruptibleMemo = Rule.define({
   meta: Rule.meta({
     type: "problem",
     description:
-      "Memoize a started fiber or use Cache: Effect.cached keeps its first caller's interruption for every later caller.",
+      "Memoize a started fiber when a run must start once: Effect.cached keeps its first caller's interruption (effect 4.0.0) or starts a run its callers left again (4.0.1 on).",
+    docs: { recommended: false },
   }),
   create: function* () {
     const ctx = yield* RuleContext;
@@ -29,7 +44,7 @@ export const noInterruptibleMemo = Rule.define({
       ctx.report(
         Diagnostic.make({
           node,
-          message: `Effect.${name} keeps the exit of its first caller, an interruption included: once that caller is interrupted, every later caller gets the interruption back. Memoize a started fiber (fork it once into an owning scope, then Fiber.join in each caller), or use Cache, which runs each lookup in a fiber of its own.`,
+          message: `Effect.${name} gives up a run its callers leave: on effect 4.0.0 the run is its first caller's, and that caller's interruption is kept for every later caller; from 4.0.1 a run that every caller has left is interrupted, and the next caller starts a new one, while a run an interruption cannot stop (a promise with no signal, an engine's start) goes on beside it. When the run must start once, fork it once into a scope that owns it and Fiber.join it in each caller.`,
         }),
       );
 
