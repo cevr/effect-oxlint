@@ -935,16 +935,47 @@ describe("requireSpawnBudget", () => {
     expect(lines(sources)).toEqual([[2], [1], [], []]);
   });
 
-  test("names the budget it wants", () => {
-    const findings = lintFixtures("requireSpawnBudget", {
-      "spawn.test.ts":
-        'import { test } from "bun:test";\ntest("x", () => { Bun.spawnSync(["true"]); });',
-    });
+  test("vitest's options before the body name the timeout too", () => {
+    const source = [
+      'import { it } from "vitest";',
+      "it('options first', { timeout: 30_000 }, () => { Bun.spawnSync(['true']); });",
+      "it('options first, no timeout', { retry: 2 }, () => { Bun.spawnSync(['true']); });",
+      "it('options last', () => { Bun.spawnSync(['true']); }, { timeout: 30_000 });",
+      "it('short, first', { timeout: 1_000 }, () => { Bun.spawnSync(['true']); });",
+    ].join("\n");
+    expect(lines([source])).toEqual([[3]]);
+    expect(lines([source], { options: [{ minimum: 20_000 }] })).toEqual([[3, 5]]);
+  });
+
+  test("names the budget it wants, and says a command it only makes starts a process when it runs", () => {
+    const findings = lintFixtures(
+      "requireSpawnBudget",
+      {
+        "spawn.test.ts": [
+          'import { it, test } from "vitest";',
+          'import { ChildProcess } from "effect/process";',
+          'test("x", () => { Bun.spawnSync(["true"]); });',
+          'it("builds a command", () => ChildProcess.make("git", ["status"]));',
+          'it("short", () => ChildProcess.make("git", ["status"]), 1_000);',
+        ].join("\n"),
+      },
+      { options: [{ minimum: 20_000 }] },
+    );
     expect(findings.get("spawn.test.ts")).toEqual([
       {
-        line: 2,
+        line: 3,
         message:
-          "This test spawns a process and names no timeout: a cold start's time is the machine's, and a loaded machine runs past the runner's default. Give the test its budget in milliseconds as its last argument, or as { timeout } in its options.",
+          "This test starts a process and names no timeout: a cold start's time is the machine's, and a loaded machine runs past the runner's default. Give the test its budget in milliseconds after its body, or as { timeout } in its options.",
+      },
+      {
+        line: 4,
+        message:
+          "This test makes an effect ChildProcess command, which starts a process when it runs, and names no timeout: a cold start's time is the machine's, and a loaded machine runs past the runner's default. Give the test its budget in milliseconds after its body, or as { timeout } in its options.",
+      },
+      {
+        line: 5,
+        message:
+          "This test makes an effect ChildProcess command, which starts a process when it runs, and gives it 1000 ms, under the 20000 ms a test that starts a process takes: a cold start's time is the machine's. Give it at least 20000 ms.",
       },
     ]);
   });

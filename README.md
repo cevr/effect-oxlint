@@ -144,15 +144,15 @@ can use a targeted suppression with a reason.
 
 These rules encode a project policy the preset cannot assume. The plugin registers them, and the preset leaves them off; enable each by name.
 
-| Rule                                 | Contract                                                                                                                                                                       |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `effect/noPlatformLayerOutsideEntry` | Provides `@effect/platform-*` layers (and the `layers` option names) only in entry files an override exempts                                                                   |
-| `effect/noPositionalLogArguments`    | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                                                                                               |
-| `effect/noRunPromise`                | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts                                                                                |
-| `effect/noTimeoutDieInTests`         | Fails a test's timeout with a typed error instead of `Effect.die`                                                                                                              |
-| `effect/noWithWrapperCall`           | Pipes values through `withX` adapters instead of wrapping calls or callbacks; `allow` exempts names, `testFiles` narrows the test exemption                                    |
-| `effect/noInterruptibleMemo`         | Memoizes a run that must start once as a started fiber; `Effect.cached*` gives up a run its callers leave (effect 4.0.0 keeps the interruption, 4.0.1 on starts the run again) |
-| `effect/requireSpawnBudget`          | Gives a test that spawns a process (`ChildProcess.make`, Bun, `node:child_process`, a helper that does) its timeout; `minimum` sets the least it may name                      |
+| Rule                                 | Contract                                                                                                                                                                                                                                       |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `effect/noPlatformLayerOutsideEntry` | Provides `@effect/platform-*` layers (and the `layers` option names) only in entry files an override exempts                                                                                                                                   |
+| `effect/noPositionalLogArguments`    | Passes one message to `Effect.log*` and attaches data with `Effect.annotateLogs`                                                                                                                                                               |
+| `effect/noRunPromise`                | Keeps `Effect.runPromise*` and runtime `runPromise` calls in boundary files an override exempts                                                                                                                                                |
+| `effect/noTimeoutDieInTests`         | Fails a test's timeout with a typed error instead of `Effect.die`                                                                                                                                                                              |
+| `effect/noWithWrapperCall`           | Pipes values through `withX` adapters instead of wrapping calls or callbacks; `allow` exempts names, `testFiles` narrows the test exemption                                                                                                    |
+| `effect/noInterruptibleMemo`         | Memoizes a run that must start once as a started fiber; `Effect.cached*` gives up a run its callers leave (effect 4.0.0 keeps the interruption, 4.0.1 on starts the run again)                                                                 |
+| `effect/requireSpawnBudget`          | Gives a test that starts a process (Bun, `node:child_process`) or makes an effect `ChildProcess` command, itself or through a helper, its timeout, after its body or as `{ timeout }` before or after it; `minimum` sets the least it may name |
 
 ## Test Files
 

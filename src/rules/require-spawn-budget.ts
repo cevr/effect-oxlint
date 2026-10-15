@@ -4,18 +4,22 @@
  * A spawn is a cold start whose time is the machine's, not the test's: a CLI
  * spawn takes under a second idle and has taken past a runner's 5 s default
  * while sibling suites loaded every core. Give the test its budget in
- * milliseconds as its last argument (`it.effect(name, body, 20_000)`), or as
- * `{ timeout }` in its options.
+ * milliseconds after its body (`it.effect(name, body, 20_000)`), or as
+ * `{ timeout }` in its options, before the body (Vitest's
+ * `it(name, { timeout }, body)`) or after it.
  *
  * A test is a call of a runner's `it` or `test` (`bun:test`'s,
  * `effect-bun-test`'s, `vitest`'s, `@effect/vitest`'s or the global one;
  * `it.effect`, `it.live`, `it.effect.layer(…)`) with a name and a body. It
- * spawns when its body calls effect's `ChildProcess.make`, the global
- * `Bun`'s `spawn` or `spawnSync` (read off it, or taken apart from it),
- * `spawn` or `spawnSync` imported from `bun`, a `node:child_process`
- * function, or a function of the same file that does, however deep. Each
- * name is read by its binding: a parameter or a local of the same spelling is
- * none of these, and a helper is the binding its call resolves to.
+ * starts a process when its body calls the global `Bun`'s `spawn` or
+ * `spawnSync` (read off it, or taken apart from it), `spawn` or `spawnSync`
+ * imported from `bun`, or a `node:child_process` function. It makes a
+ * command when its body calls effect's `ChildProcess.make`, whose command
+ * starts a process when it runs; the rule cannot see whether it runs, so the
+ * report says so. A function of the same file that does either counts,
+ * however deep. Each name is read by its binding: a parameter or a local of
+ * the same spelling is none of these, and a helper is the binding its call
+ * resolves to.
  *
  * `minimum` (milliseconds, 0 by default) also reports a timeout the rule
  * reads as a number (a literal, or a `const` holding one) below it. A
@@ -64,11 +68,30 @@ const isRunnerModule: Module = (from) =>
   from === "vitest" ||
   from === "@effect/vitest";
 
-const message =
-  "This test spawns a process and names no timeout: a cold start's time is the machine's, and a loaded machine runs past the runner's default. Give the test its budget in milliseconds as its last argument, or as { timeout } in its options.";
+/**
+ * What a test's body reaches: a call that starts a process (`Bun.spawn`, a
+ * `node:child_process` function), or only an effect `ChildProcess` command,
+ * which starts one when it runs. A start outranks a command.
+ */
+type Reach = "start" | "command";
 
-const shortMessage = (minimum: number, timeout: number) =>
-  `This test spawns a process and gives it ${timeout} ms, under the ${minimum} ms a spawning test takes: a cold start's time is the machine's. Give it at least ${minimum} ms.`;
+/** The stronger of two reaches: a start outranks a command. */
+const stronger = (a: Option.Option<Reach>, b: Option.Option<Reach>): Option.Option<Reach> => {
+  if (Option.contains(a, "start") || Option.contains(b, "start")) return Option.some("start");
+  return Option.orElse(a, () => b);
+};
+
+/** What a report says the test does. */
+const what: Record<Reach, string> = {
+  start: "This test starts a process",
+  command: "This test makes an effect ChildProcess command, which starts a process when it runs,",
+};
+
+const message = (reach: Reach) =>
+  `${what[reach]} and names no timeout: a cold start's time is the machine's, and a loaded machine runs past the runner's default. Give the test its budget in milliseconds after its body, or as { timeout } in its options.`;
+
+const shortMessage = (reach: Reach, minimum: number, timeout: number) =>
+  `${what[reach]} and gives it ${timeout} ms, under the ${minimum} ms a test that starts a process takes: a cold start's time is the machine's. Give it at least ${minimum} ms.`;
 
 /** The node a callee chain starts at: `it` for `it.effect.layer(x)(…)`. */
 const rootOf = (node: ESTree.Node): Option.Option<ESTree.Node> => {
@@ -110,24 +133,39 @@ const isChildProcessModule = (bindings: NameBindings, node: ESTree.Node): boolea
   );
 };
 
-/** Whether a call spawns a process itself. */
-const spawns = (bindings: NameBindings, call: ESTree.CallExpression): boolean => {
+/** Whether a call starts a process itself: Bun's spawns and `node:child_process`'s. */
+const starts = (bindings: NameBindings, call: ESTree.CallExpression): boolean => {
   const callee = call.callee;
   if (callee.type === "MemberExpression")
     return Option.exists(memberName(callee), (name) => {
-      if (name === "make") return isChildProcessModule(bindings, callee.object);
       if (nodeSpawns.includes(name) && bindings.importsAs(callee.object, isNodeChildProcess, "*"))
         return true;
       return bunSpawns.includes(name) && bindings.isGlobal(callee.object, "Bun");
     });
   if (callee.type !== "Identifier") return false;
-  if (bindings.importsAs(callee, isChildProcess, "make")) return true;
   if (bunSpawns.some((name) => bindings.importsAs(callee, isBun, name))) return true;
   if (nodeSpawns.some((name) => bindings.importsAs(callee, isNodeChildProcess, name))) return true;
   return Option.exists(
     bindings.takenFrom(callee),
     ({ key, value }) => bunSpawns.includes(key) && bindings.isGlobal(value, "Bun"),
   );
+};
+
+/** Whether a call makes an effect `ChildProcess` command: `ChildProcess.make`, or `make` imported. */
+const makesCommand = (bindings: NameBindings, call: ESTree.CallExpression): boolean => {
+  const callee = call.callee;
+  if (callee.type === "MemberExpression")
+    return (
+      Option.contains(memberName(callee), "make") && isChildProcessModule(bindings, callee.object)
+    );
+  return bindings.importsAs(callee, isChildProcess, "make");
+};
+
+/** What a call reaches itself: a process it starts, a command it makes, or neither. */
+const reachOfCall = (bindings: NameBindings, call: ESTree.CallExpression): Option.Option<Reach> => {
+  if (starts(bindings, call)) return Option.some("start");
+  if (makesCommand(bindings, call)) return Option.some("command");
+  return Option.none();
 };
 
 /**
@@ -161,34 +199,39 @@ const hostOf = (bindings: NameBindings, node: ESTree.Node): Option.Option<ESTree
 };
 
 /**
- * A call the rule follows: where it is made (`host`), whether it spawns
+ * A call the rule follows: where it is made (`host`), what it reaches
  * itself, and the function of the file it calls (`helper`, the name that
  * function is bound to) when it calls one.
  */
 interface Call {
   readonly host: ESTree.Node;
-  readonly spawns: boolean;
+  readonly reach: Option.Option<Reach>;
   readonly helper: Option.Option<ESTree.Node>;
 }
 
-/** Whether a call spawns, given the helpers that do. */
-const reachesSpawn = (call: Call, spawning: ReadonlySet<ESTree.Node>) =>
-  call.spawns || Option.exists(call.helper, (helper) => spawning.has(helper));
+/** What a call reaches, given what each helper reaches. */
+const reachOf = (call: Call, helpers: ReadonlyMap<ESTree.Node, Reach>): Option.Option<Reach> =>
+  stronger(
+    call.reach,
+    Option.flatMap(call.helper, (helper) => Option.fromUndefinedOr(helpers.get(helper))),
+  );
 
-/** The helpers that spawn, directly or through one another, by the name each is bound to. */
-const spawningHelpers = (calls: ReadonlyArray<Call>, tests: ReadonlySet<ESTree.Node>) => {
-  const spawning = new Set<ESTree.Node>();
+/** What each helper reaches, directly or through one another, by the name each is bound to. */
+const helperReaches = (calls: ReadonlyArray<Call>, tests: ReadonlySet<ESTree.Node>) => {
+  const helpers = new Map<ESTree.Node, Reach>();
   let grew = true;
   while (grew) {
     grew = false;
     for (const call of calls) {
-      if (tests.has(call.host) || spawning.has(call.host)) continue;
-      if (!reachesSpawn(call, spawning)) continue;
-      spawning.add(call.host);
+      if (tests.has(call.host)) continue;
+      const known = Option.fromUndefinedOr(helpers.get(call.host));
+      const reach = stronger(known, reachOf(call, helpers));
+      if (Option.isNone(reach) || Option.contains(known, reach.value)) continue;
+      helpers.set(call.host, reach.value);
       grew = true;
     }
   }
-  return spawning;
+  return helpers;
 };
 
 /** What a test names as its timeout: none, a number the rule reads, or a value it cannot read. */
@@ -208,7 +251,7 @@ export const requireSpawnBudget = Rule.define({
   meta: Rule.meta({
     type: "problem",
     description:
-      "Give a test that spawns a process its timeout: a cold start's time is the machine's, and a runner's default fails a loaded one.",
+      "Give a test that starts a process, or makes an effect ChildProcess command, its timeout: a cold start's time is the machine's, and a runner's default fails a loaded one.",
     docs: { recommended: false },
     schema: [
       {
@@ -235,7 +278,7 @@ export const requireSpawnBudget = Rule.define({
       return unread;
     };
 
-    /** What one argument after a test's body says of its timeout. */
+    /** What one argument of a test, past its name and body, says of its timeout. */
     const timeoutIn = (argument: ESTree.Argument): Timeout => {
       if (argument.type === "SpreadElement") return unread;
       const value = resolve(argument);
@@ -249,23 +292,32 @@ export const requireSpawnBudget = Rule.define({
       });
     };
 
-    /** The timeout a test names after its body: a number, or `{ timeout }` in its options. */
+    /**
+     * The timeout a test names: a number after its body, or `{ timeout }` in
+     * its options, before the body (Vitest's `it(name, options, body)`) or
+     * after it.
+     */
     const timeoutOf = (test: ESTree.CallExpression): Timeout => {
       const body = test.arguments.findIndex(isFunction);
-      const named = test.arguments.slice(body + 1).map(timeoutIn);
+      const named = test.arguments
+        .filter((_, at) => at !== body && (at !== 0 || body === 0))
+        .map(timeoutIn);
       return Option.getOrElse(
         Arr.findFirst(named, (timeout) => timeout._tag !== "None"),
         () => none,
       );
     };
 
-    /** The report a spawning test earns, if any. */
-    const findingOf = (test: ESTree.CallExpression): ReadonlyArray<Diagnostic.Diagnostic> =>
+    /** The report a test that reaches `reach` earns, if any. */
+    const findingOf = (
+      test: ESTree.CallExpression,
+      reach: Reach,
+    ): ReadonlyArray<Diagnostic.Diagnostic> =>
       Timeout.match(timeoutOf(test), {
-        None: () => [Diagnostic.make({ node: test, message })],
+        None: () => [Diagnostic.make({ node: test, message: message(reach) })],
         Read: ({ ms }) => {
           if (ms >= minimum) return [];
-          return [Diagnostic.make({ node: test, message: shortMessage(minimum, ms) })];
+          return [Diagnostic.make({ node: test, message: shortMessage(reach, minimum, ms) })];
         },
         Unread: () => [],
       });
@@ -276,18 +328,29 @@ export const requireSpawnBudget = Rule.define({
         const helper = Option.flatMap(Option.liftPredicate(node.callee, isIdentifier), (callee) =>
           Option.map(bindings.definitionOf(callee), (definition) => definition.name),
         );
-        const spawnsHere = spawns(bindings, node);
+        const reach = reachOfCall(bindings, node);
         const host = hostOf(bindings, node);
-        if (Option.isSome(host) && (spawnsHere || Option.isSome(helper)))
-          calls.push({ host: host.value, spawns: spawnsHere, helper });
+        if (Option.isSome(host) && (Option.isSome(reach) || Option.isSome(helper)))
+          calls.push({ host: host.value, reach, helper });
         return Effect.void;
       },
       "Program:exit": () => {
-        const spawning = spawningHelpers(calls, new Set(tests));
-        const spawnsIn = (test: ESTree.CallExpression) =>
-          calls.some((call) => call.host === test && reachesSpawn(call, spawning));
+        const helpers = helperReaches(calls, new Set(tests));
+        /** What a test's body reaches: the strongest reach of the calls it makes. */
+        const reachIn = (test: ESTree.CallExpression) =>
+          calls
+            .filter((call) => call.host === test)
+            .reduce<Option.Option<Reach>>(
+              (reach, call) => stronger(reach, reachOf(call, helpers)),
+              Option.none(),
+            );
         return Effect.forEach(
-          tests.filter(spawnsIn).flatMap(findingOf),
+          tests.flatMap((test) =>
+            Option.match(reachIn(test), {
+              onNone: () => [],
+              onSome: (reach) => findingOf(test, reach),
+            }),
+          ),
           (finding) => ctx.report(finding),
           { discard: true },
         );
