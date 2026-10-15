@@ -43,6 +43,8 @@ export interface NameBindings {
   readonly definitionOf: (id: Named) => Option.Option<Definition>;
   /** Whether `node` is a name bound to the import of `name` (`*` the module whole) from a module `from` accepts. */
   readonly importsAs: (node: ESTree.Node, from: Module, name: string) => boolean;
+  /** Whether `node` is a name bound to any import from a module `from` accepts. */
+  readonly importsFrom: (node: ESTree.Node, from: Module) => boolean;
   /** Whether `node` is the global `name`: written so, and bound nowhere where it is read. */
   readonly isGlobal: (node: ESTree.Node, name: string) => boolean;
   /** The key a name is taken apart under and the value it is taken from: `const { key: id } = value`. */
@@ -75,6 +77,9 @@ export const nameBindings = (ctx: RuleContext["Service"]): NameBindings => {
     node.type === "Identifier" &&
     Option.exists(importOf(node), (imported) => from(imported.from) && imported.name === name);
 
+  const importsFrom = (node: ESTree.Node, from: Module): boolean =>
+    node.type === "Identifier" && Option.exists(importOf(node), (imported) => from(imported.from));
+
   const isGlobal = (node: ESTree.Node, name: string): boolean =>
     node.type === "Identifier" && node.name === name && Option.isNone(definitionOf(node));
 
@@ -96,5 +101,5 @@ export const nameBindings = (ctx: RuleContext["Service"]): NameBindings => {
       return Option.map(staticKey(property.key, property.computed), (key) => ({ key, value }));
     });
 
-  return { definitionOf, importsAs, isGlobal, takenFrom };
+  return { definitionOf, importsAs, importsFrom, isGlobal, takenFrom };
 };
