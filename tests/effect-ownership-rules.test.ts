@@ -9,7 +9,7 @@ import { noSilentCatchAll } from "../src/rules/no-silent-catch-all.js";
 import { noUnboundedRetry } from "../src/rules/no-unbounded-retry.js";
 import { requireNamedEffectFn } from "../src/rules/require-named-effect-fn.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
-import { lintCases } from "./support/lint-fixtures.js";
+import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
 
 const insideEffectFn = (expression: ReturnType<typeof Testing.callOfMember>) => {
   const statement = Testing.exprStmt(expression);
@@ -125,6 +125,54 @@ describe("log messages", () => {
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+});
+
+describe("point-free loggers", () => {
+  test("reports a variadic logger handed to a callback that is passed an index", () => {
+    const results = lintCases("noPointFreeLog", {
+      valid: [
+        'import { Console, Effect } from "effect"; Effect.forEach(lines, (line) => Console.log(line));',
+        "lines.forEach((line) => console.log(line));",
+        'import { Console, Effect } from "effect"; Effect.flatMap(Effect.succeed("one"), Console.log);',
+        'import { Console, Option } from "effect"; Option.map(Option.some("one"), Console.log);',
+        'import { Console, Stream } from "effect"; Stream.map(lines, Console.log);',
+        'import { Console } from "effect"; Console.log(lines);',
+        "const logger = { log: (line) => line }; lines.forEach(logger.log);",
+        "const own = (console) => lines.forEach(console.log);",
+        'import { Effect } from "effect"; const own = (Console) => Effect.forEach(lines, Console.log);',
+        'import { Effect } from "effect"; Effect.forEach(lines, Effect.succeed);',
+      ],
+      invalid: [
+        'import { Console, Effect } from "effect"; Effect.forEach(lines, Console.log);',
+        'import { Effect } from "effect"; Effect.forEach(lines, Effect.logInfo);',
+        "lines.forEach(console.log);",
+        'import { Console } from "effect"; lines.map(Console.error);',
+        'import { Array as Arr, Console } from "effect"; Arr.map(lines, Console.log);',
+        'import { Console as C, Effect } from "effect"; Effect.forEach(lines, C.log);',
+        'import * as E from "effect/Effect"; E.forEach(lines, E.logInfo);',
+        'import * as Console from "effect/Console"; lines.flatMap(Console.warn);',
+        'import { Console, Effect } from "effect"; Effect.filter(lines, Console.log);',
+        'import { Console, Effect } from "effect"; Effect.partition(lines, Console.log);',
+        "lines.reduce(console.log);",
+        'lines.some(console["error"]);',
+        "Effect.forEach(lines, Console.log);",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("names the logger and the call that replaces it", () => {
+    const findings = lintFixtures("noPointFreeLog", {
+      "print.ts": 'import { Console, Effect } from "effect";\nEffect.forEach(lines, Console.log);',
+    });
+    expect(findings.get("print.ts")).toEqual([
+      {
+        line: 2,
+        message:
+          "Console.log passed point-free: it is variadic, and this call passes the index too, which it prints after each line. Write (line) => Console.log(line).",
+      },
+    ]);
   });
 });
 

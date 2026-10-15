@@ -37,6 +37,7 @@ export const recommended = {
   "effect/noNullish": "error",
   "effect/noObjectParameters": "error",
   "effect/noPerCallCacheConstruction": "error",
+  "effect/noPointFreeLog": "error",
   "effect/noPromiseChainsInTests": "error",
   "effect/noReduceAccumulatorCopy": "error",
   "effect/noReflectApply": "error",

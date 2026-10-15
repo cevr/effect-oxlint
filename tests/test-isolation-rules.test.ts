@@ -856,3 +856,96 @@ describe("noSharedTestHome", () => {
     ).toEqual([1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]);
   });
 });
+
+describe("requireSpawnBudget", () => {
+  const lines = (sources: ReadonlyArray<string>, config: LintConfig = {}) =>
+    linesOf("requireSpawnBudget", sources, "test.ts", config);
+
+  const header = [
+    'import { describe, it } from "effect-bun-test";',
+    'import { Effect } from "effect";',
+    'import { ChildProcess, ChildProcess as Proc } from "effect/process";',
+    'import { spawn as run } from "bun";',
+    'import { execFileSync } from "node:child_process";',
+    "declare const collect: (command: unknown) => Effect.Effect<string>;",
+    "const git = (...args) => collect(ChildProcess.make('git', args));",
+    "const commit = () => git('commit', '-m', 'x');",
+    "const { spawnSync } = Bun;",
+  ].join("\n");
+  /** The line of the first case: the header's lines, then `describe(…)`. */
+  const first = 11;
+
+  test("a test that spawns, directly or through a helper of its file, and names no timeout is reported", () => {
+    const source = [
+      header,
+      "describe('spawning tests', () => {",
+      "  it.effect('through a helper', () => commit());",
+      "  it.effect.layer(Effect.void)('layered', () => collect(ChildProcess.make('sh')));",
+      "  it.live('Bun directly', () => Effect.sync(() => Bun.spawnSync(['true'])));",
+      "  it.live('bun imported', () => Effect.sync(() => run(['true'])));",
+      "  it.live('taken apart', () => Effect.sync(() => spawnSync(['true'])));",
+      "  it.effect('aliased', () => collect(Proc.make('sh')));",
+      "  it.live('node', () => Effect.sync(() => execFileSync('true')));",
+      "  it.effect('options without a timeout', () => commit(), { retry: 2 });",
+      "});",
+    ].join("\n");
+    expect(lines([source])).toEqual([[0, 1, 2, 3, 4, 5, 6, 7].map((n) => first + n)]);
+  });
+
+  test("a test with its timeout, or one that spawns nothing it can see, is not reported", () => {
+    const source = [
+      header,
+      "describe('fine', () => {",
+      "  it.effect('budgeted', () => commit(), 20_000);",
+      "  it.effect('budgeted by options', () => commit(), { timeout: 20_000 });",
+      "  it.effect('spawns nothing', () => Effect.void);",
+      "  it.live('a local Bun', () => { const Bun = { spawnSync: (a) => a }; return Effect.sync(() => Bun.spawnSync(['true'])); });",
+      "  it.effect('a parameter ChildProcess', () => ((ChildProcess) => Effect.succeed(ChildProcess.make('sh')))({ make: (c) => c }));",
+      "  it.effect('a local commit', () => { const commit = () => Effect.void; return commit(); });",
+      "  it.effect('a timeout it cannot read', () => commit(), budget);",
+      "});",
+    ].join("\n");
+    expect(lines([source])).toEqual([[]]);
+  });
+
+  test("the minimum option reports a timeout the rule reads below it", () => {
+    const source = [
+      header,
+      "const SPAWNS_MS = 5_000;",
+      "describe('budgets', () => {",
+      "  it.effect('short', () => commit(), 1_000);",
+      "  it.effect('short by name', () => commit(), SPAWNS_MS);",
+      "  it.effect('short by options', () => commit(), { timeout: 2_000 });",
+      "  it.effect('enough', () => commit(), 30_000);",
+      "  it.effect('unread', () => commit(), budget);",
+      "  it.effect('short, but spawns nothing', () => Effect.void, 1_000);",
+      "});",
+    ].join("\n");
+    expect(lines([source])).toEqual([[]]);
+    expect(lines([source], { options: [{ minimum: 20_000 }] })).toEqual([[12, 13, 14]]);
+  });
+
+  test("bun:test's test and the global test are tests too", () => {
+    const sources = [
+      'import { test } from "bun:test";\ntest("x", () => { Bun.spawnSync(["true"]); });',
+      'test("x", () => { Bun.spawn(["true"]); });',
+      'import { test as check } from "bun:test";\ncheck("x", () => { Bun.spawn(["true"]); }, 9000);',
+      'const test = (name, body) => body();\ntest("x", () => { Bun.spawn(["true"]); });',
+    ];
+    expect(lines(sources)).toEqual([[2], [1], [], []]);
+  });
+
+  test("names the budget it wants", () => {
+    const findings = lintFixtures("requireSpawnBudget", {
+      "spawn.test.ts":
+        'import { test } from "bun:test";\ntest("x", () => { Bun.spawnSync(["true"]); });',
+    });
+    expect(findings.get("spawn.test.ts")).toEqual([
+      {
+        line: 2,
+        message:
+          "This test spawns a process and names no timeout: a cold start's time is the machine's, and a loaded machine runs past the runner's default. Give the test its budget in milliseconds as its last argument, or as { timeout } in its options.",
+      },
+    ]);
+  });
+});
