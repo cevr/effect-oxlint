@@ -8,7 +8,6 @@ import {
   noDynamicImports,
   noEffectBind,
   noEffectDo,
-  noHistoryComment,
   noModuleMocks,
   noNewError,
   noNullish,
@@ -29,7 +28,6 @@ import { runCommand } from "./support/run-command.js";
 
 /** Rules that encode a project policy the preset cannot assume; a project enables each by name. */
 const optInRules = {
-  noHistoryComment,
   noPlatformLayerOutsideEntry,
   noPositionalLogArguments,
   noRunPromise,
