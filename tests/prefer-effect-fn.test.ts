@@ -42,7 +42,12 @@ const pipedWithSpan = (namespace = "Effect", ...transforms: ReadonlyArray<string
 };
 
 /** The parent link oxlint sets: the holder's type and the slot holding the node. */
-type Holder = { readonly type: string; readonly body?: unknown; readonly argument?: unknown; readonly delegate?: boolean };
+type Holder = {
+  readonly type: string;
+  readonly body?: unknown;
+  readonly argument?: unknown;
+  readonly delegate?: boolean;
+};
 
 /** Places `node` in `parent`, as oxlint's parent links would. */
 const within = <N extends object>(node: N, parent: Holder): N => {
