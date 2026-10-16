@@ -299,6 +299,8 @@ describe("interruptible memos", () => {
     const results = lintCases("noInterruptibleMemo", {
       valid: [
         "const Effect = { cached: (x) => x }; const memo = Effect.cached(load);",
+        'import * as Effect from "./memo.js"; const memo = Effect.cached(load);',
+        'import { Effect } from "./effect-like.js"; const memo = Effect.cached(load);',
         `${effect}const fiber = Effect.forkDetach(load);`,
         'import { cached as memoize } from "effect/Effect"; function local(memoize) { return memoize(load); }',
         'import { cached as memoize } from "another-package"; const memo = memoize(load);',
@@ -336,15 +338,29 @@ describe("interruptible memos", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
-  test("says what each effect 4.x does with a run its caller left, and names the started fiber as the fix", () => {
+  test("says what each effect 4.x does with a run its caller left, for each memoizer, and names the started fiber as the fix", () => {
     const findings = lintFixtures("noInterruptibleMemo", {
-      "memo.ts": `${effect}const memo = Effect.cachedWithTTL(load, "1 hour");`,
+      "memo.ts": [
+        'import { Effect } from "effect";',
+        "const a = Effect.cached(load);",
+        'const b = Effect.cachedWithTTL(load, "1 hour");',
+        'const c = Effect.cachedInvalidateWithTTL(load, "1 hour");',
+      ].join("\n"),
     });
+    const tail =
+      "; from 4.0.1 a run that every caller has left is interrupted, and the next caller starts a new one, while a run an interruption cannot stop (a promise with no signal, an engine's start) goes on beside it. When the run must start once, fork it once into a scope that owns it and Fiber.join it in each caller.";
     expect(findings.get("memo.ts")).toEqual([
       {
         line: 2,
-        message:
-          "Effect.cachedWithTTL gives up a run its callers leave: on effect 4.0.0 the run is its first caller's, and that caller's interruption is kept for every later caller; from 4.0.1 a run that every caller has left is interrupted, and the next caller starts a new one, while a run an interruption cannot stop (a promise with no signal, an engine's start) goes on beside it. When the run must start once, fork it once into a scope that owns it and Fiber.join it in each caller.",
+        message: `Effect.cached gives up a run its callers leave: on effect 4.0.0 the run is its first caller's, and later callers get that caller's interruption back${tail}`,
+      },
+      {
+        line: 3,
+        message: `Effect.cachedWithTTL gives up a run its callers leave: on effect 4.0.0 the run is its first caller's, and later callers get that caller's interruption back while the entry lives, until the time to live given for that exit ends${tail}`,
+      },
+      {
+        line: 4,
+        message: `Effect.cachedInvalidateWithTTL gives up a run its callers leave: on effect 4.0.0 the run is its first caller's, and later callers get that caller's interruption back while the entry lives, until the time to live given for that exit ends or it is invalidated${tail}`,
       },
     ]);
   });

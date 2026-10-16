@@ -25,5 +25,15 @@ export default {
         "effect/noModulePathFacts": "off",
       },
     },
+    {
+      // Two effect releases' modules are not one type, so the test harness
+      // that compares them reads 4.0.0's under the installed release's types,
+      // in this one file.
+      files: ["tests/support/effect-releases.ts"],
+      rules: {
+        "effect/noAs": "off",
+        "effect/noChainedTypeAssertions": "off",
+      },
+    },
   ],
 };
