@@ -237,6 +237,9 @@ describe("child process termination", () => {
         'const ChildProcess = { make: (cmd) => cmd }; ChildProcess.make("git");',
         'import { make } from "./local";\nmake("git");',
         'import { ChildProcess } from "effect/process";\nconst run = (ChildProcess) => ChildProcess.make("git");',
+        // SIGKILL cannot be ignored: the spawner's wait ends without forceKillAfter.
+        `${barrel}ChildProcess.make("git", ["status"], { killSignal: "SIGKILL" });`,
+        `${barrel}ChildProcess.make("git", { killSignal: "SIGKILL", cwd: "." });`,
       ],
       invalid: [
         `${barrel}ChildProcess.make("git");`,
@@ -249,7 +252,6 @@ describe("child process termination", () => {
         `${barrel}ChildProcess.make\`ls -la\`;`,
         `${barrel}const options = { cwd: "/app" }; ChildProcess.make("git", ["status"], options);`,
         `${barrel}const base = { cwd: "/app" }; ChildProcess.make("git", ["status"], { ...base });`,
-        `${barrel}ChildProcess.make("git", ["status"], { killSignal: "SIGKILL" });`,
         'import * as CP from "effect/process/ChildProcess";\nCP.make("git", ["status"]);',
         'import { make } from "effect/process/ChildProcess";\nmake("git");',
         'import { make as command } from "effect/process/ChildProcess";\ncommand`ls -la`;',
@@ -273,11 +275,19 @@ describe("child process termination", () => {
         'import { ChildProcess } from "effect/process";',
         'const status = ChildProcess.make("git", ["status"]);',
         "const list = ChildProcess.make`ls -la`;",
+        "declare const signal: string;",
+        'const read = ChildProcess.make("git", ["status"], { killSignal: signal });',
       ].join("\n"),
     });
     expect(findings.get("spawn.ts")).toEqual([
       { line: 2, message: expect.stringContaining("waits for exit with no bound") },
       { line: 3, message: expect.stringContaining("template form") },
+      {
+        line: 5,
+        message: expect.stringContaining(
+          "the spawner sends the command's killSignal, waits 1 s, then waits for exit with no bound, so a child that ignores that signal holds",
+        ),
+      },
     ]);
   });
 });
