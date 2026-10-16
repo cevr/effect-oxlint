@@ -4,8 +4,12 @@ import { noManagedRuntimeInEffect } from "../src/rules/no-managed-runtime-in-eff
 import { noUnboundedConcurrency } from "../src/rules/no-unbounded-concurrency.js";
 import { noUnboundedRetry } from "../src/rules/no-unbounded-retry.js";
 import { preferServiceOf } from "../src/rules/prefer-service-of.js";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
 import { lintCases, lintFixtures, reportedLines } from "./support/lint-fixtures.js";
+import { runEffect } from "./support/run-effect.js";
 
 describe("service implementation checks", () => {
   test("requires Service.of for an inline Layer implementation", () => {
@@ -224,6 +228,8 @@ describe("child process termination", () => {
         `${barrel}const forceKillAfter = "5 seconds"; ChildProcess.make("git", { forceKillAfter });`,
         `${barrel}const run = (options) => ChildProcess.make("git", ["status"], options);`,
         `${barrel}const run = (args) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (args: Options) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (args: ReadonlyArray<string>) => ChildProcess.make("git", args, ${kill});`,
         `${barrel}ChildProcess.make("git", ...rest);`,
         `${barrel}ChildProcess.make("sleep", { ["forceKillAfter"]: "5 seconds" });`,
         `${barrel}ChildProcess.make("sleep", ["9"], { [\`forceKillAfter\`]: "5 seconds" });`,
@@ -231,6 +237,9 @@ describe("child process termination", () => {
         'const ChildProcess = { make: (cmd) => cmd }; ChildProcess.make("git");',
         'import { make } from "./local";\nmake("git");',
         'import { ChildProcess } from "effect/process";\nconst run = (ChildProcess) => ChildProcess.make("git");',
+        // SIGKILL cannot be ignored: the spawner's wait ends without forceKillAfter.
+        `${barrel}ChildProcess.make("git", ["status"], { killSignal: "SIGKILL" });`,
+        `${barrel}ChildProcess.make("git", { killSignal: "SIGKILL", cwd: "." });`,
       ],
       invalid: [
         `${barrel}ChildProcess.make("git");`,
@@ -243,12 +252,18 @@ describe("child process termination", () => {
         `${barrel}ChildProcess.make\`ls -la\`;`,
         `${barrel}const options = { cwd: "/app" }; ChildProcess.make("git", ["status"], options);`,
         `${barrel}const base = { cwd: "/app" }; ChildProcess.make("git", ["status"], { ...base });`,
-        `${barrel}ChildProcess.make("git", ["status"], { killSignal: "SIGKILL" });`,
         'import * as CP from "effect/process/ChildProcess";\nCP.make("git", ["status"]);',
         'import { make } from "effect/process/ChildProcess";\nmake("git");',
         'import { make as command } from "effect/process/ChildProcess";\ncommand`ls -la`;',
         'import * as P from "effect/process";\nP.ChildProcess.make("git");',
         'import { ChildProcess as CP } from "effect/process";\nCP.make("git", []);',
+        // A parameter typed as an array, or a rest parameter, holds the arguments, not the options.
+        `${barrel}const run = (args: ReadonlyArray<string>) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (args: string[]) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (args: readonly string[]) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (args: Array<string> = []) => ChildProcess.make("git", args);`,
+        `${barrel}const run = (...args) => ChildProcess.make("git", args);`,
+        `${barrel}function run(...args: string[]) { return ChildProcess.make("git", args); }`,
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
@@ -260,11 +275,19 @@ describe("child process termination", () => {
         'import { ChildProcess } from "effect/process";',
         'const status = ChildProcess.make("git", ["status"]);',
         "const list = ChildProcess.make`ls -la`;",
+        "declare const signal: string;",
+        'const read = ChildProcess.make("git", ["status"], { killSignal: signal });',
       ].join("\n"),
     });
     expect(findings.get("spawn.ts")).toEqual([
       { line: 2, message: expect.stringContaining("waits for exit with no bound") },
       { line: 3, message: expect.stringContaining("template form") },
+      {
+        line: 5,
+        message: expect.stringContaining(
+          "the spawner sends the command's killSignal, waits 1 s, then waits for exit with no bound, so a child that ignores that signal holds",
+        ),
+      },
     ]);
   });
 });
@@ -276,6 +299,8 @@ describe("interruptible memos", () => {
     const results = lintCases("noInterruptibleMemo", {
       valid: [
         "const Effect = { cached: (x) => x }; const memo = Effect.cached(load);",
+        'import * as Effect from "./memo.js"; const memo = Effect.cached(load);',
+        'import { Effect } from "./effect-like.js"; const memo = Effect.cached(load);',
         `${effect}const fiber = Effect.forkDetach(load);`,
         'import { cached as memoize } from "effect/Effect"; function local(memoize) { return memoize(load); }',
         'import { cached as memoize } from "another-package"; const memo = memoize(load);',
@@ -313,12 +338,56 @@ describe("interruptible memos", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
-  test("names the started fiber and Cache as the fix", () => {
+  test("says what each effect 4.x does with a run its caller left, for each memoizer, and names the started fiber as the fix", () => {
     const findings = lintFixtures("noInterruptibleMemo", {
-      "memo.ts": `${effect}const memo = Effect.cached(load);`,
+      "memo.ts": [
+        'import { Effect } from "effect";',
+        "const a = Effect.cached(load);",
+        'const b = Effect.cachedWithTTL(load, "1 hour");',
+        'const c = Effect.cachedInvalidateWithTTL(load, "1 hour");',
+      ].join("\n"),
     });
+    const tail =
+      "; from 4.0.1 a run that every caller has left is interrupted, and the next caller starts a new one, while a run an interruption cannot stop (a promise with no signal, an engine's start) goes on beside it. When the run must start once, fork it once into a scope that owns it and Fiber.join it in each caller.";
     expect(findings.get("memo.ts")).toEqual([
-      { line: 2, message: expect.stringContaining("Memoize a started fiber") },
+      {
+        line: 2,
+        message: `Effect.cached gives up a run its callers leave: on effect 4.0.0 the run is its first caller's, and later callers get that caller's interruption back${tail}`,
+      },
+      {
+        line: 3,
+        message: `Effect.cachedWithTTL gives up a run its callers leave: on effect 4.0.0 the run is its first caller's, and later callers get that caller's interruption back while the entry lives, until the time to live given for that exit ends${tail}`,
+      },
+      {
+        line: 4,
+        message: `Effect.cachedInvalidateWithTTL gives up a run its callers leave: on effect 4.0.0 the run is its first caller's, and later callers get that caller's interruption back while the entry lives, until the time to live given for that exit ends or it is invalidated${tail}`,
+      },
     ]);
   });
+
+  test("the message's account of a left run holds for the effect these tests install", () =>
+    // A run whose work no interruption can stop: a callback with no cleanup, which never resumes.
+    runEffect(
+      Effect.gen(function* () {
+        let started = 0;
+        const memo = yield* Effect.cached(
+          Effect.callback<void>(() => {
+            started += 1;
+          }),
+        );
+        /** Yields until `count` runs have started, for at most `turns` turns. */
+        const settle = (count: number, turns = 100): Effect.Effect<void> =>
+          Effect.suspend(() => {
+            if (started >= count || turns === 0) return Effect.void;
+            return Effect.flatMap(Effect.yieldNow, () => settle(count, turns - 1));
+          });
+        const first = yield* Effect.forkChild(memo);
+        yield* settle(1);
+        yield* Fiber.interrupt(first);
+        const second = yield* Effect.forkChild(memo);
+        yield* settle(2);
+        yield* Fiber.interrupt(second);
+        expect(started).toBe(2);
+      }),
+    ));
 });

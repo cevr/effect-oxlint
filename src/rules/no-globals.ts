@@ -23,7 +23,7 @@
  */
 import type { ESTree } from "@oxlint/plugins";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
-import { globalValueVisitor, type Held } from "./_global-values.js";
+import { globalObject, globalValueVisitor, type Held } from "./_global-values.js";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
@@ -37,9 +37,23 @@ const MemberOption = Schema.Struct({
 const Options = Schema.UndefinedOr(
   Schema.Struct({
     builtins: Schema.optionalKey(Schema.Boolean),
-    members: Schema.optionalKey(Schema.Record(Schema.String, MemberOption)),
+    members: Schema.optionalKey(
+      Schema.Record(Schema.String, Schema.Union([MemberOption, Schema.Array(MemberOption)])),
+    ),
   }),
 );
+
+type MemberOption = typeof MemberOption.Type;
+
+const memberOptionJsonSchema = {
+  type: "object",
+  properties: {
+    properties: { type: "array", items: { type: "string" } },
+    use: { type: "string" },
+  },
+  required: ["use"],
+  additionalProperties: false,
+};
 
 type MemberBan = readonly [object: string, properties: ReadonlySet<string>, alternative: string];
 
@@ -160,13 +174,7 @@ export const noGlobals = Rule.define({
           members: {
             type: "object",
             additionalProperties: {
-              type: "object",
-              properties: {
-                properties: { type: "array", items: { type: "string" } },
-                use: { type: "string" },
-              },
-              required: ["use"],
-              additionalProperties: false,
+              anyOf: [memberOptionJsonSchema, { type: "array", items: memberOptionJsonSchema }],
             },
           },
         },
@@ -178,34 +186,65 @@ export const noGlobals = Rule.define({
   options: Options,
   create: function* (options) {
     const ctx = yield* RuleContext;
-    const configuredMembers = new Map(Object.entries(options?.members ?? {}));
+    /** Each global's configured bans: one, or a list when its members name different replacements. */
+    const configuredMembers = new Map<string, ReadonlyArray<MemberOption>>(
+      Object.entries(options?.members ?? {}).map(([name, bans]) => [name, [bans].flat()]),
+    );
     /** `builtins: false` keeps only the configured bans. */
     const builtins = options?.builtins !== false;
     const activeMemberBans = memberBans.filter(() => builtins);
     const activeCallBans = new Map([...callBans].filter(() => builtins));
     const activeConstructorBans = new Map([...constructorBans].filter(() => builtins));
-    /** The replacement a configured ban names for `object.property`, if one applies. */
+    /** The replacement the first configured ban covering `object.property` names, if one does. */
     const configuredBan = (object: string, property: string): Option.Option<string> =>
-      Option.flatMap(Option.fromUndefinedOr(configuredMembers.get(object)), (ban) =>
-        Option.liftPredicate(ban.use, () =>
-          Option.match(Option.fromUndefinedOr(ban.properties), {
-            onNone: () => true,
-            onSome: (listed) => listed.includes(property),
-          }),
+      Option.map(
+        Option.fromUndefinedOr(
+          (configuredMembers.get(object) ?? []).find((ban) =>
+            Option.match(Option.fromUndefinedOr(ban.properties), {
+              onNone: () => true,
+              onSome: (listed) => listed.includes(property),
+            }),
+          ),
         ),
+        (ban) => ban.use,
       );
     /** A global every member of which the configuration bans: `{ "Bun": { "use": "..." } }`. */
     const wholeBan = (name: string): Option.Option<string> =>
-      Option.flatMap(Option.fromUndefinedOr(configuredMembers.get(name)), (ban) =>
-        Option.liftPredicate(ban.use, () => Predicate.isUndefined(ban.properties)),
+      Option.map(
+        Option.fromUndefinedOr(
+          (configuredMembers.get(name) ?? []).find((ban) => Predicate.isUndefined(ban.properties)),
+        ),
+        (ban) => ban.use,
       );
-    /** The replacement for `object.property`: the built-in list first, then the configuration. */
-    const memberBan = (object: string, property: string): Option.Option<string> => {
-      for (const [bannedObject, properties, alternative] of activeMemberBans) {
-        if (object === bannedObject && properties.has(property)) return Option.some(alternative);
-      }
-      return configuredBan(object, property);
-    };
+    /**
+     * The replacement for `object.property`: the configuration first, since it
+     * names the project's own replacement, then the built-in list.
+     */
+    const memberBan = (object: string, property: string): Option.Option<string> =>
+      Option.orElse(configuredBan(object, property), () => {
+        for (const [bannedObject, properties, alternative] of activeMemberBans) {
+          if (object === bannedObject && properties.has(property)) return Option.some(alternative);
+        }
+        return Option.none();
+      });
+    /** The replacement for calling or constructing `held`: a whole ban first, then the built-in list. */
+    const usedWhole = (held: Held, builtIn: ReadonlyMap<string, string>): Option.Option<string> =>
+      Option.orElse(wholeBan(held), () => Option.fromUndefinedOr(builtIn.get(held)));
+    /**
+     * The names the rule watches: every one it bans a use, a member, a call or
+     * a `new` of. A configured global whose bans name no member (`Bun: []`,
+     * `{ properties: [] }`) bans nothing, so it is not watched.
+     */
+    const watched = new Set([
+      ...activeMemberBans.map(([object]) => object),
+      ...activeCallBans.keys(),
+      ...activeConstructorBans.keys(),
+      ...[...configuredMembers].flatMap(([name, bans]) => {
+        if (bans.some((ban) => Predicate.isUndefined(ban.properties) || ban.properties.length > 0))
+          return [name];
+        return [];
+      }),
+    ]);
 
     const report = (node: ESTree.Node, used: string, alternative: string) =>
       ctx.report(
@@ -222,13 +261,31 @@ export const noGlobals = Rule.define({
         onSome: (alternative) => report(node, held, alternative),
       });
 
+    /**
+     * A watched value kept where the walk cannot follow it (`{ w: window }`,
+     * `[document]`, `() => performance`): its banned members are out of sight
+     * from there on, so the hold is the use. Handing it to a call, alone or
+     * inside a literal or a function (an arrow's body or a `return` from it),
+     * stays an escape, since that is how an adapter is built over it. The
+     * global object is reported only while a ban on some member is active, and `crypto.subtle` only while the built-in ban on its
+     * `digest` is.
+     */
+    const reportHold = (node: ESTree.Node, held: Held): Effect.Effect<void> => {
+      const covered =
+        watched.has(held) ||
+        (held === globalObject && watched.size > 0) ||
+        (held === cryptoSubtle && builtins);
+      if (!covered) return Effect.void;
+      return ctx.report(
+        Diagnostic.make({
+          node,
+          message: `Avoid holding ${held} where this rule cannot follow it. Reach it by its own name, or hand it to an adapter; platform adapters may disable this rule explicitly.`,
+        }),
+      );
+    };
+
     return globalValueVisitor(ctx, {
-      names: new Set([
-        ...activeMemberBans.map(([object]) => object),
-        ...activeCallBans.keys(),
-        ...activeConstructorBans.keys(),
-        ...configuredMembers.keys(),
-      ]),
+      names: watched,
       memberValue: (owner, name) =>
         Option.liftPredicate(
           cryptoSubtle,
@@ -250,19 +307,24 @@ export const noGlobals = Rule.define({
         });
       },
       call: (node, held) =>
-        Option.match(Option.fromUndefinedOr(activeCallBans.get(held)), {
-          onNone: () => reportEscape(node, held),
+        Option.match(usedWhole(held, activeCallBans), {
+          onNone: () => Effect.void,
           onSome: (alternative) => report(node, `${held}()`, alternative),
         }),
       construct: (node, held) =>
-        Option.match(Option.fromUndefinedOr(activeConstructorBans.get(held)), {
-          onNone: () => reportEscape(node, held),
+        Option.match(usedWhole(held, activeConstructorBans), {
+          onNone: () => Effect.void,
           onSome: (alternative) => report(node, `new ${held}()`, alternative),
         }),
       rest: (node, held, follow) =>
         Option.match(wholeBan(held), {
           onNone: () => follow,
           onSome: (alternative) => report(node, `...${held}`, alternative),
+        }),
+      hold: (node, held) =>
+        Option.match(wholeBan(held), {
+          onNone: () => reportHold(node, held),
+          onSome: (alternative) => report(node, held, alternative),
         }),
       escape: reportEscape,
     });

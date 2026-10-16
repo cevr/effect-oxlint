@@ -1,0 +1,3 @@
+[test]
+# The review probes are lint input, not tests: tests/review-probes.test.ts lints them.
+pathIgnorePatterns = ["tests/probes/**"]

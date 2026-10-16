@@ -303,6 +303,160 @@ describe("platform capability rules", () => {
     expect(reportedLines(findings, "host.ts")).toEqual([1, 2, 3, 6]);
   });
 
+  test("noGlobals follows every hop of the global object to itself", () => {
+    const results = lintCases("noGlobals", {
+      valid: [
+        "top.name;",
+        "parent.postMessage(data, origin);",
+        "document.defaultView?.name;",
+        "const parent = { fetch: () => 1 }; parent.fetch();",
+        "node.parent.fetch();",
+        "document.title;",
+      ],
+      invalid: [
+        'globalThis.window.fetch("/x");',
+        "window.self.setTimeout(run, 1);",
+        'window.top?.fetch("/x");',
+        'top.fetch("/x");',
+        "parent.process.env;",
+        "frames.console.log(1);",
+        'document.defaultView?.fetch("/x");',
+        "window.document.defaultView.Date.now();",
+        "const view = document.defaultView; view.Math.random();",
+        "const { defaultView } = document; defaultView.Math.random();",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("noGlobals reports a watched value held where it cannot be followed", () => {
+    const findings = lintFixtures(
+      "noGlobals",
+      {
+        "page.ts": [
+          "export const held = { w: window };",
+          "export const answered = () => performance;",
+          "export const defaulted = (w = window) => w.name;",
+          "export const listed = [document];",
+          "export const either = mine ?? window;",
+          "export function returned() { return navigator; }",
+          "let later; later = globalThis;",
+          "export const spread = [...[process]];",
+          "export const shorthand = { console };",
+          "export const adapted = take(window);",
+          "export const keyed = { window: 1, document: mine };",
+          "export const compared = target === document;",
+          "export const title = document.title;",
+          "export const unwatched = { d: Date.UTC };",
+          "export const other = { n: navigator.language };",
+        ].join("\n"),
+      },
+      {
+        options: [
+          {
+            members: {
+              document: { properties: ["cookie"], use: "a store" },
+              navigator: { properties: ["sendBeacon"], use: "HttpClient" },
+            },
+          },
+        ],
+      },
+    );
+    expect(reportedLines(findings, "page.ts")).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  test("noGlobals lets a global be handed to a call inside a literal or a function, as an adapter is built", () => {
+    const findings = lintFixtures("noGlobals", {
+      "client.ts": [
+        "export const client = createClient({ fetch });",
+        "export const page = render({ fetch: globalThis.fetch });",
+        "export const built = new Client({ fetch });",
+        "export const listed = take([window]);",
+        "export const nested = make({ host: { fetch } });",
+        "export const spread = make({ ...{ fetch } });",
+        "export const either = make(options ?? { fetch });",
+        "export const branch = make(ready ? { fetch } : {});",
+        "export const asserted = make({ fetch } as Options);",
+        "export const spreadArgument = make(...[window]);",
+        "export const thunk = Reference({ defaultValue: () => globalThis.fetch });",
+        "export const lazy = make(() => console);",
+        "export const kept = { fetch };",
+        "export const keptList = [window];",
+        "export const keptThunk = () => globalThis.fetch;",
+        "export const calledThenKept = { result: make(), fetch };",
+        "export const block = createClient({ getFetch: () => { return fetch; } });",
+        "export const expression = createClient({ getFetch: function () { return globalThis.fetch; } });",
+        "export const method = createClient({ getFetch() { return fetch; } });",
+        "export const keptBlock = () => { return fetch; };",
+        "export const keptInner = make(() => { const f = () => { return fetch; }; return f; });",
+      ].join("\n"),
+    });
+    expect(reportedLines(findings, "client.ts")).toEqual([13, 14, 15, 16, 20, 21]);
+  });
+
+  test("noGlobals reports a held global object only when a ban is active", () => {
+    const source = "export const kept = { w: window };\nexport const page = [globalThis];";
+    const banningNothing = lintFixtures(
+      "noGlobals",
+      { "script.ts": source },
+      { options: [{ builtins: false }] },
+    );
+    expect(reportedLines(banningNothing, "script.ts")).toEqual([]);
+    const banningOne = lintFixtures(
+      "noGlobals",
+      { "script.ts": source },
+      { options: [{ builtins: false, members: { Bun: { use: "a platform service" } } }] },
+    );
+    expect(reportedLines(banningOne, "script.ts")).toEqual([1, 2]);
+    for (const empty of [[], { properties: [], use: "a platform service" }]) {
+      const banningNoMember = lintFixtures(
+        "noGlobals",
+        { "script.ts": source },
+        { options: [{ builtins: false, members: { Bun: empty } }] },
+      );
+      expect(reportedLines(banningNoMember, "script.ts")).toEqual([]);
+    }
+  });
+
+  test("noGlobals takes a list of bans for one global, and a configured ban names its replacement", () => {
+    const findings = lintFixtures(
+      "noGlobals",
+      {
+        "page.ts": [
+          "document.location;",
+          "document.cookie;",
+          "window.document.cookie;",
+          "performance.now();",
+          "setTimeout(run, 1);",
+          "document.title;",
+          "Date.now();",
+        ].join("\n"),
+      },
+      {
+        options: [
+          {
+            members: {
+              document: [
+                { properties: ["location"], use: "Location" },
+                { properties: ["cookie"], use: "KeyValueStore" },
+              ],
+              performance: { properties: ["now"], use: "the host's Clock" },
+              setTimeout: { use: "the host's timers" },
+            },
+          },
+        ],
+      },
+    );
+    expect(findings.get("page.ts")?.map((f) => [f.line, f.message.split(";")[0]])).toEqual([
+      [1, "Avoid document.location. Use Location"],
+      [2, "Avoid document.cookie. Use KeyValueStore"],
+      [3, "Avoid document.cookie. Use KeyValueStore"],
+      [4, "Avoid performance.now. Use the host's Clock"],
+      [5, "Avoid setTimeout(). Use the host's timers"],
+      [7, "Avoid Date.now. Use Clock or DateTime"],
+    ]);
+  });
+
   test("noGlobals with builtins off bans only the members a project configures", () => {
     const findings = lintFixtures(
       "noGlobals",

@@ -1,6 +1,7 @@
 {
   "diagnostics": true,
   "diagnosticsName": true,
+  "allowedDuplicatedPackages": ["effect"],
   "diagnosticSeverity": {
     "anyUnknownInErrorContext": "error",
     "deterministicKeys": "error",

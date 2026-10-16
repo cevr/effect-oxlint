@@ -10,6 +10,7 @@ export default {
     "**/*.d.ts",
     "src/vendor/**",
     "tests/integration/**",
+    "tests/probes/**",
   ],
   rules: recommended,
   overrides: [
@@ -22,6 +23,16 @@ export default {
         "effect/noNodeBuiltinImport": "off",
         "effect/noGlobals": "off",
         "effect/noModulePathFacts": "off",
+      },
+    },
+    {
+      // Two effect releases' modules are not one type, so the test harness
+      // that compares them reads 4.0.0's under the installed release's types,
+      // in this one file.
+      files: ["tests/support/effect-releases.ts"],
+      rules: {
+        "effect/noAs": "off",
+        "effect/noChainedTypeAssertions": "off",
       },
     },
   ],

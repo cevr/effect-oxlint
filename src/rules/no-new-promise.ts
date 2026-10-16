@@ -57,6 +57,7 @@ export const noNewPromise = Rule.define({
         return report(node);
       },
       rest: (_node, _held, follow) => follow,
+      hold: () => Effect.void,
       escape: () => Effect.void,
     });
   },

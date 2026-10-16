@@ -9,7 +9,7 @@ import { noSilentCatchAll } from "../src/rules/no-silent-catch-all.js";
 import { noUnboundedRetry } from "../src/rules/no-unbounded-retry.js";
 import { requireNamedEffectFn } from "../src/rules/require-named-effect-fn.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
-import { lintCases } from "./support/lint-fixtures.js";
+import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
 
 const insideEffectFn = (expression: ReturnType<typeof Testing.callOfMember>) => {
   const statement = Testing.exprStmt(expression);
@@ -125,6 +125,114 @@ describe("log messages", () => {
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+});
+
+describe("point-free loggers", () => {
+  test("reports a variadic logger handed to a callback that is passed an index", () => {
+    const results = lintCases("noPointFreeLog", {
+      valid: [
+        'import { Console, Effect } from "effect"; Effect.forEach(lines, (line) => Console.log(line));',
+        "lines.forEach((line) => console.log(line));",
+        'import { Console, Effect } from "effect"; Effect.flatMap(Effect.succeed("one"), Console.log);',
+        'import { Console, Option } from "effect"; Option.map(Option.some("one"), Console.log);',
+        'import { Console, Stream } from "effect"; Stream.map(lines, Console.log);',
+        'import { Console } from "effect"; Console.log(lines);',
+        "const logger = { log: (line) => line }; lines.forEach(logger.log);",
+        "const own = (console) => lines.forEach(console.log);",
+        'import { Effect } from "effect"; const own = (Console) => Effect.forEach(lines, Console.log);',
+        'import { Effect } from "effect"; Effect.forEach(lines, Effect.succeed);',
+        // A console member that does not print every argument: a label, a column filter, options.
+        "lines.forEach(console.count);",
+        "lines.forEach(console.table);",
+        "lines.forEach(console.time);",
+        "lines.forEach(console.dir);",
+        'import { Console, Effect } from "effect"; Effect.forEach(lines, Console.count);',
+        'import { Effect } from "effect"; Effect.forEach(levels, Effect.logWithLevel);',
+        // An effect module whose callbacks take one value.
+        'import { Console, Exit } from "effect"; Exit.map(exit, Console.log);',
+        'import { Console, Fiber } from "effect"; Fiber.map(fiber, Console.log);',
+        'import { Config, Console } from "effect"; Config.map(config, Console.log);',
+        'import { Console, Schedule } from "effect"; Schedule.map(schedule, Console.log);',
+        'import * as Exit from "effect/Exit"; Exit.map(exit, console.log);',
+        // A logger in a place no callback is: a thisArg, a seed, data, options.
+        "[1].forEach(() => {}, console.log);",
+        "[1, 2].reduce((logger, _value) => logger, console.log);",
+        'import { Array as Arr, Console } from "effect"; Arr.reduce(lines, Console.log, (b, a) => b);',
+        'import { Array as Arr, Console } from "effect"; Arr.reduce(Console.log, (b, a) => b);',
+      ],
+      invalid: [
+        'import { Console, Effect } from "effect"; Effect.forEach(Console.log, { concurrency: 2 });',
+        'import { Console, Effect } from "effect"; Effect.forEach(lines, Console.log, { concurrency: 2 });',
+        'import { Array as Arr, Console } from "effect"; Arr.map(Console.log);',
+        'import { Array as Arr, Console } from "effect"; Arr.reduce(lines, 0, Console.log);',
+        'import { Array as Arr, Console } from "effect"; Arr.reduce(0, Console.log);',
+        "[1, 2].reduce(console.log, undefined);",
+        'import { Console, Effect } from "effect"; Effect.forEach(lines, Console.log);',
+        'import { Effect } from "effect"; Effect.forEach(lines, Effect.logInfo);',
+        "lines.forEach(console.log);",
+        'import { Console } from "effect"; lines.map(Console.error);',
+        'import { Array as Arr, Console } from "effect"; Arr.map(lines, Console.log);',
+        'import { Console as C, Effect } from "effect"; Effect.forEach(lines, C.log);',
+        'import * as E from "effect/Effect"; E.forEach(lines, E.logInfo);',
+        'import * as Console from "effect/Console"; lines.flatMap(Console.warn);',
+        'import { Console, Effect } from "effect"; Effect.filter(lines, Console.log);',
+        'import { Console, Effect } from "effect"; Effect.partition(lines, Console.log);',
+        "lines.reduce(console.log);",
+        'lines.some(console["error"]);',
+        "Effect.forEach(lines, Console.log);",
+        "[1, 2, 3].forEach(console.log);",
+        "lines.map(console.debug);",
+        'import { Console } from "effect"; lines.forEach(Console.trace);',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("says the index prints where the call passes one, and names the call that replaces the logger", () => {
+    const findings = lintFixtures("noPointFreeLog", {
+      "print.ts": [
+        'import { Array as Arr, Console, Effect } from "effect";',
+        "Effect.forEach(lines, Console.log);",
+        "[1, 2, 3].forEach(console.log);",
+        "Arr.map(lines, Effect.logInfo);",
+      ].join("\n"),
+    });
+    expect(findings.get("print.ts")).toEqual([
+      {
+        line: 2,
+        message:
+          "Console.log passed point-free prints every argument it is given, and Effect.forEach passes the index after each element, so the index prints too. Write (line) => Console.log(line).",
+      },
+      {
+        line: 3,
+        message:
+          "console.log passed point-free prints every argument it is given, and an array's forEach passes the index and the array after each element, so they print too. Write (line) => console.log(line).",
+      },
+      {
+        line: 4,
+        message:
+          "Effect.logInfo passed point-free prints every argument it is given, and Array.map passes the index after each element, so the index prints too. Write (line) => Effect.logInfo(line).",
+      },
+    ]);
+  });
+
+  test("where the receiver may not be an array, says what prints if it is one", () => {
+    const findings = lintFixtures("noPointFreeLog", {
+      "print.ts": "lines.forEach(console.log);\nobservable.forEach(console.error);",
+    });
+    expect(findings.get("print.ts")).toEqual([
+      {
+        line: 1,
+        message:
+          "console.log passed point-free prints every argument it is given: if this is an array, its forEach passes the index and the array after each element, and they print too. Write (line) => console.log(line).",
+      },
+      {
+        line: 2,
+        message:
+          "console.error passed point-free prints every argument it is given: if this is an array, its forEach passes the index and the array after each element, and they print too. Write (line) => console.error(line).",
+      },
+    ]);
   });
 });
 

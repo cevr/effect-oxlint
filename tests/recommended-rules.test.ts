@@ -8,6 +8,7 @@ import {
   noDynamicImports,
   noEffectBind,
   noEffectDo,
+  noInterruptibleMemo,
   noModuleMocks,
   noNewError,
   noNullish,
@@ -20,6 +21,7 @@ import {
   noTimeoutDieInTests,
   noTryCatch,
   noWithWrapperCall,
+  requireSpawnBudget,
 } from "../src/rules/index.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
 import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
@@ -27,11 +29,13 @@ import { runCommand } from "./support/run-command.js";
 
 /** Rules that encode a project policy the preset cannot assume; a project enables each by name. */
 const optInRules = {
+  noInterruptibleMemo,
   noPlatformLayerOutsideEntry,
   noPositionalLogArguments,
   noRunPromise,
   noTimeoutDieInTests,
   noWithWrapperCall,
+  requireSpawnBudget,
 };
 
 describe("recommended preset", () => {
@@ -55,7 +59,6 @@ describe("recommended preset", () => {
       "effect/noFixedWaitInTests": "error",
       "effect/noGlobals": "error",
       "effect/noInlineProvide": "error",
-      "effect/noInterruptibleMemo": "error",
       "effect/noKnownValueWidening": "error",
       "effect/noLintEvasion": "error",
       "effect/noLocaleCompare": "error",
@@ -70,6 +73,7 @@ describe("recommended preset", () => {
       "effect/noNullish": "error",
       "effect/noObjectParameters": "error",
       "effect/noPerCallCacheConstruction": "error",
+      "effect/noPointFreeLog": "error",
       "effect/noPromiseChainsInTests": "error",
       "effect/noReduceAccumulatorCopy": "error",
       "effect/noReflectApply": "error",
