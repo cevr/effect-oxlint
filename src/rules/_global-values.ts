@@ -27,6 +27,7 @@ import * as Schema from "effect/Schema";
 
 import { AST, Scope } from "../vendor/effect-oxlint/index.js";
 import type { RuleContext, Visitor } from "../vendor/effect-oxlint/index.js";
+import { ancestors } from "./_ast-ancestors.js";
 
 /**
  * What a followed value holds: the global object, a watched global by name
@@ -136,12 +137,23 @@ const handedToCall = (container: ESTree.Node): boolean => {
   }
 };
 
+/** The function a `return` gives its value back from: an arrow or a function expression, none for a declaration. */
+const returnerOf = (statement: ESTree.ReturnStatement): Option.Option<ESTree.Node> => {
+  for (const up of ancestors(statement)) {
+    if (up.type === "FunctionDeclaration") return Option.none();
+    if (up.type === "ArrowFunctionExpression" || up.type === "FunctionExpression")
+      return Option.some(up);
+  }
+  return Option.none();
+};
+
 /**
  * The node that keeps `value` when it is a hold: a value passes up through
  * `??`/`||`/`&&` and a conditional's branches, and is kept by a declarator
  * the walk does not follow, an assignment, an object property, an array
  * element or spread, a parameter default, an arrow's body, a `return`, or a
- * default export. A literal or an arrow handed to a call is no hold.
+ * default export. A literal, an arrow or a function handed to a call is no
+ * hold, and neither is a `return` from one.
  */
 const holdingNode = (value: ESTree.Node): Option.Option<ESTree.Node> => {
   let at = value;
@@ -173,6 +185,12 @@ const holdingNode = (value: ESTree.Node): Option.Option<ESTree.Node> => {
       case "ArrayExpression":
         return Option.liftPredicate(at, () => !handedToCall(up));
       case "ReturnStatement":
+        return Option.liftPredicate(at, () =>
+          Option.match(returnerOf(up), {
+            onNone: () => true,
+            onSome: (returner) => !handedToCall(returner),
+          }),
+        );
       case "ExportDefaultDeclaration":
         return Option.some(at);
       case "ArrowFunctionExpression":

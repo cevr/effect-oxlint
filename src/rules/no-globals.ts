@@ -230,12 +230,20 @@ export const noGlobals = Rule.define({
     /** The replacement for calling or constructing `held`: a whole ban first, then the built-in list. */
     const usedWhole = (held: Held, builtIn: ReadonlyMap<string, string>): Option.Option<string> =>
       Option.orElse(wholeBan(held), () => Option.fromUndefinedOr(builtIn.get(held)));
-    /** The names the rule watches: every one it bans a use, a member, a call or a `new` of. */
+    /**
+     * The names the rule watches: every one it bans a use, a member, a call or
+     * a `new` of. A configured global whose bans name no member (`Bun: []`,
+     * `{ properties: [] }`) bans nothing, so it is not watched.
+     */
     const watched = new Set([
       ...activeMemberBans.map(([object]) => object),
       ...activeCallBans.keys(),
       ...activeConstructorBans.keys(),
-      ...configuredMembers.keys(),
+      ...[...configuredMembers].flatMap(([name, bans]) => {
+        if (bans.some((ban) => Predicate.isUndefined(ban.properties) || ban.properties.length > 0))
+          return [name];
+        return [];
+      }),
     ]);
 
     const report = (node: ESTree.Node, used: string, alternative: string) =>
@@ -257,9 +265,9 @@ export const noGlobals = Rule.define({
      * A watched value kept where the walk cannot follow it (`{ w: window }`,
      * `[document]`, `() => performance`): its banned members are out of sight
      * from there on, so the hold is the use. Handing it to a call, alone or
-     * inside a literal or a thunk, stays an escape, since that is how an
-     * adapter is built over it. The global object is reported only while a
-     * ban is active, and `crypto.subtle` only while the built-in ban on its
+     * inside a literal or a function (an arrow's body or a `return` from it),
+     * stays an escape, since that is how an adapter is built over it. The
+     * global object is reported only while a ban on some member is active, and `crypto.subtle` only while the built-in ban on its
      * `digest` is.
      */
     const reportHold = (node: ESTree.Node, held: Held): Effect.Effect<void> => {

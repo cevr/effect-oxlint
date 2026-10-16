@@ -365,7 +365,7 @@ describe("platform capability rules", () => {
     expect(reportedLines(findings, "page.ts")).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
-  test("noGlobals lets a global be handed to a call inside a literal or a thunk, as an adapter is built", () => {
+  test("noGlobals lets a global be handed to a call inside a literal or a function, as an adapter is built", () => {
     const findings = lintFixtures("noGlobals", {
       "client.ts": [
         "export const client = createClient({ fetch });",
@@ -384,9 +384,14 @@ describe("platform capability rules", () => {
         "export const keptList = [window];",
         "export const keptThunk = () => globalThis.fetch;",
         "export const calledThenKept = { result: make(), fetch };",
+        "export const block = createClient({ getFetch: () => { return fetch; } });",
+        "export const expression = createClient({ getFetch: function () { return globalThis.fetch; } });",
+        "export const method = createClient({ getFetch() { return fetch; } });",
+        "export const keptBlock = () => { return fetch; };",
+        "export const keptInner = make(() => { const f = () => { return fetch; }; return f; });",
       ].join("\n"),
     });
-    expect(reportedLines(findings, "client.ts")).toEqual([13, 14, 15, 16]);
+    expect(reportedLines(findings, "client.ts")).toEqual([13, 14, 15, 16, 20, 21]);
   });
 
   test("noGlobals reports a held global object only when a ban is active", () => {
@@ -403,6 +408,14 @@ describe("platform capability rules", () => {
       { options: [{ builtins: false, members: { Bun: { use: "a platform service" } } }] },
     );
     expect(reportedLines(banningOne, "script.ts")).toEqual([1, 2]);
+    for (const empty of [[], { properties: [], use: "a platform service" }]) {
+      const banningNoMember = lintFixtures(
+        "noGlobals",
+        { "script.ts": source },
+        { options: [{ builtins: false, members: { Bun: empty } }] },
+      );
+      expect(reportedLines(banningNoMember, "script.ts")).toEqual([]);
+    }
   });
 
   test("noGlobals takes a list of bans for one global, and a configured ban names its replacement", () => {
