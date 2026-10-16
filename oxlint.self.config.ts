@@ -10,6 +10,7 @@ export default {
     "**/*.d.ts",
     "src/vendor/**",
     "tests/integration/**",
+    "tests/probes/**",
   ],
   rules: recommended,
   overrides: [
