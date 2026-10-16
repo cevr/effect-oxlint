@@ -947,16 +947,17 @@ describe("requireSpawnBudget", () => {
     expect(lines([source], { options: [{ minimum: 20_000 }] })).toEqual([[3, 5]]);
   });
 
-  test("names the budget it wants, and says a command it only makes starts a process when it runs", () => {
+  test("says what the test calls, and names the minimum as the project's", () => {
     const findings = lintFixtures(
       "requireSpawnBudget",
       {
         "spawn.test.ts": [
-          'import { it, test } from "vitest";',
+          'import { describe, it, test } from "vitest";',
           'import { ChildProcess } from "effect/process";',
           'test("x", () => { Bun.spawnSync(["true"]); });',
           'it("builds a command", () => ChildProcess.make("git", ["status"]));',
           'it("short", () => ChildProcess.make("git", ["status"]), 1_000);',
+          'describe("short suite", { timeout: 2_000 }, () => { it("in it", () => { Bun.spawnSync(["true"]); }); });',
         ].join("\n"),
       },
       { options: [{ minimum: 20_000 }] },
@@ -965,18 +966,65 @@ describe("requireSpawnBudget", () => {
       {
         line: 3,
         message:
-          "This test starts a process and names no timeout: a cold start's time is the machine's, and a loaded machine runs past the runner's default. Give the test its budget in milliseconds after its body, or as { timeout } in its options.",
+          "This test calls `Bun.spawnSync` and names no timeout: starting a process takes the machine's time, and a loaded machine can run past the runner's default. Give the test its budget in milliseconds after its body, or as { timeout } in its options.",
       },
       {
         line: 4,
         message:
-          "This test makes an effect ChildProcess command, which starts a process when it runs, and names no timeout: a cold start's time is the machine's, and a loaded machine runs past the runner's default. Give the test its budget in milliseconds after its body, or as { timeout } in its options.",
+          "This test calls `ChildProcess.make` and names no timeout: the command starts a process when a platform spawner runs it, and starting a process takes the machine's time, so a loaded machine can run past the runner's default. Give the test its budget in milliseconds after its body, or as { timeout } in its options.",
       },
       {
         line: 5,
         message:
-          "This test makes an effect ChildProcess command, which starts a process when it runs, and gives it 1000 ms, under the 20000 ms a test that starts a process takes: a cold start's time is the machine's. Give it at least 20000 ms.",
+          "This test calls `ChildProcess.make` and gives it 1000 ms, under the 20000 ms minimum this project sets. Give it at least 20000 ms.",
+      },
+      {
+        line: 6,
+        message:
+          "This test calls `Bun.spawnSync` and its suite gives it 2000 ms, under the 20000 ms minimum this project sets. Give it at least 20000 ms.",
       },
     ]);
+  });
+
+  test("a command run under a mock spawner is told only what the code shows", () => {
+    // effect's own test/process/ChildProcess.test.ts runs its commands under a spawner that starts nothing.
+    const findings = lintFixtures("requireSpawnBudget", {
+      "mock.test.ts": [
+        'import { it } from "@effect/vitest";',
+        'import { Effect, Layer } from "effect";',
+        'import { ChildProcess } from "effect/process";',
+        "declare const MockExecutorLayer: Layer.Layer<never>;",
+        'it.effect("runs under the mock", () =>',
+        "  Effect.gen(function* () {",
+        '    yield* ChildProcess.make("echo", ["hi"], { forceKillAfter: "1 second" });',
+        "  }).pipe(Effect.provide(MockExecutorLayer)),",
+        ");",
+      ].join("\n"),
+    });
+    expect(findings.get("mock.test.ts")).toEqual([
+      {
+        line: 5,
+        message:
+          "This test calls `ChildProcess.make` and names no timeout: the command starts a process when a platform spawner runs it, and starting a process takes the machine's time, so a loaded machine can run past the runner's default. Give the test its budget in milliseconds after its body, or as { timeout } in its options.",
+      },
+    ]);
+  });
+
+  test("a suite, a layer group, a fixture builder and a hook are not tests; each test inside a group is judged on its own", () => {
+    const sources = [
+      // @effect/vitest's layer groups: the inner tests name their timeouts.
+      'import { it, layer } from "@effect/vitest";\nit.layer(L)("g", (it) => { it("t", () => { Bun.spawnSync(["true"]); }, 30_000); });\nlayer(L)("g", (it) => { it.effect("t", () => Bun.spawnSync(["true"]), { timeout: 30_000 }); });',
+      // The same groups, an inner test naming none: reported at the inner test.
+      'import { it } from "@effect/vitest";\nit.layer(L, { timeout: 30_000 })("g", (it) => {\n  it("t", () => { Bun.spawnSync(["true"]); });\n});',
+      // Vitest's suites, on the test API and on a factory's parameter.
+      'import { describe, test } from "vitest";\ntest.describe("g", () => { test("t", () => { Bun.spawnSync(["true"]); }, 30_000); });\ntest.suite("g", (t) => { t("t", { timeout: 30_000 }, () => { Bun.spawnSync(["true"]); }); });\ndescribe("g", (t) => {\n  t("t", () => { Bun.spawnSync(["true"]); });\n});',
+      // A suite's timeout is its tests' budget.
+      'import { describe, it } from "vitest";\ndescribe("g", { timeout: 30_000 }, () => { it("t", () => { Bun.spawnSync(["true"]); }); });',
+      // Fixture builders and hooks spawn outside any test.
+      'import { test } from "vitest";\nimport { spawn } from "node:child_process";\ntest.extend("server", async () => spawn("node", ["s.js"]));\ntest.override("server", async () => spawn("node", ["o.js"]));\ntest.beforeEach(() => { Bun.spawnSync(["true"]); });\ntest.afterAll(() => { Bun.spawnSync(["true"]); });',
+      // effect-bun-test's layer gives back a test, timed or not.
+      'import { it } from "effect-bun-test";\nit.effect.layer(L)("t", () => Bun.spawnSync(["true"]), 30_000);\nit.effect.layer(L)("t", () => Bun.spawnSync(["true"]));',
+    ];
+    expect(lines(sources)).toEqual([[], [3], [5], [], [], [3]]);
   });
 });
