@@ -1,5 +1,15 @@
 # oxlint-plugin-effect
 
+## 0.30.0
+
+### Minor Changes
+
+- [`379e7af`](https://github.com/cevr/effect-oxlint/commit/379e7af051bd0984bf815cd87ca546d0b2c373a4) Thanks [@cevr](https://github.com/cevr)! - Require Effect >=4.1.0 <5 so diagnostics recommend APIs available in the supported peer range. The plugin does not detect Effect minor versions.
+
+  Replace removed Crypto advice with SecureRandom and Digest from effect/crypto. Node crypto diagnostics now also recommend Mac, Signature, Aead/Cipher, Kdf, KeyAgreement and the matching key-generation services for supported operations. Provide the required crypto layers at your application entry point; runtime services bundles no longer include them. Unsupported algorithms still belong in platform adapters.
+
+  Point existing Bun glob, terminal stream and environment bans to FileSystem.glob, Terminal.size and UserDirectories where applicable. Update development dependencies to Effect and @effect/vitest 4.1.2 with Vitest 5 to satisfy the test integration peer dependency, while retaining the Effect 4.0.0 regression-test alias.
+
 ## 0.29.0
 
 ### Minor Changes
