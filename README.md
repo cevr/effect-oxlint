@@ -6,6 +6,8 @@ The package has one recommended preset. It protects application code from impera
 
 ## Install
 
+Requires Effect **>=4.1.0 <5**. Replacement advice targets the `effect/crypto` services introduced in 4.1; the plugin does not detect an application's Effect minor version.
+
 ```bash
 bun add -D oxlint oxlint-plugin-effect
 ```
@@ -232,9 +234,13 @@ Tighten or relax a limit per project or per file by passing a different `max`:
 
 ## Platform Boundaries
 
-Application code should use Effect services for time, randomness, crypto randomness and supported digests, configuration, files, paths, child processes, stdio, HTTP, sockets, workers, streams, logging, JSON boundaries, encoding, and key-value storage.
+Application code should use Effect services for time, randomness, secure randomness, digests, MACs, signatures, supported encryption and key derivation, configuration, files, paths, child processes, stdio, HTTP, sockets, workers, streams, logging, JSON boundaries, encoding, and key-value storage.
 
-The rules are capability-based rather than runtime-wide. They do not pretend Effect replaces HMAC, signing, encryption, password hashing, DNS, UDP, compression, module resolution, FFI, VM inspection, or every Buffer/EventEmitter/native-stream operation.
+The rules are capability-based. `noGlobals` recommends `SecureRandom` from `effect/crypto` for Web Crypto randomness and UUIDs and `Bun.randomUUIDv7`, and `Digest` from `effect/crypto` for `crypto.subtle.digest`. `noNodeBuiltinImport` also maps Node hashing to `Digest`, HMAC to `Mac`, constant-time byte comparison to `Mac.timingSafeEqual`, signing to `Signature`, cipher creation to `Aead` or `Cipher`, HKDF/PBKDF2/Argon2 to `Kdf`, key agreement to `KeyAgreement`, and key generation to the corresponding crypto families. These are service and algorithm migrations, not drop-in API replacements: only the algorithms each Effect service supports are covered. Scrypt, legacy finite-field DH constructors, DNS, UDP, compression, module resolution, FFI, VM inspection, and unmatched Buffer/EventEmitter/native-stream operations remain adapter capabilities.
+
+Crypto services require explicit layers at the entry point; runtime services bundles no longer include crypto. Use the family's `layerWebCrypto` (for example, `Digest.layerWebCrypto`) or the individual/combined `BunCrypto` or `NodeCrypto` layers from the matching platform package. Some Web Crypto family layers also require `SecureRandom`.
+
+Existing global bans point `Bun.Glob` to `FileSystem.glob`, stream access (including `process.stdout.columns`) to `Terminal.size` alongside stdio, and environment access to `Config` or `UserDirectories` from `effect/persistence` for XDG paths. For `noGlobals`, configured `use` messages still take precedence. Package imports for globbing, semver, JSONC, TOML, YAML, and CSV and `os.homedir` have no built-in detection yet; they can be configured through `modules` below. Their replacements are `FileSystem.glob` (or `Glob` for matching), `SemVer`/`SemVerRange`, `Jsonc`/`Toml`/`Yaml`/`Csv` from `effect/encoding`, and `UserDirectories`, respectively. The encoding configuration examples target Effect 4.1.2; `Jsonc` was added in that patch.
 
 Put unmatched host calls in named adapter files and disable only the relevant rule there:
 
@@ -275,7 +281,13 @@ A project that keeps a runtime behind adapters bans more with options: `noGlobal
         "modules": {
           "bun": { "use": "an Effect platform service" },
           "bun:*": { "use": "an Effect platform service" },
-          "os": { "members": ["homedir", "hostname"], "use": "a platform service" },
+          "os": { "members": ["homedir"], "use": "UserDirectories from 'effect/persistence'" },
+          "glob": { "use": "FileSystem.glob" },
+          "semver": { "use": "SemVer or SemVerRange" },
+          "jsonc-parser": { "use": "Jsonc from 'effect/encoding'" },
+          "toml": { "use": "Toml from 'effect/encoding'" },
+          "yaml": { "use": "Yaml from 'effect/encoding'" },
+          "csv-parse": { "use": "Csv from 'effect/encoding'" },
         },
       },
     ],
@@ -294,7 +306,7 @@ A project that keeps a runtime behind adapters bans more with options: `noGlobal
           "error",
           {
             "builtins": false,
-            "members": { "Bun": { "properties": ["Glob"], "use": "Effect FileSystem" } },
+            "members": { "Bun": { "properties": ["Glob"], "use": "FileSystem.glob" } },
           },
         ],
       },

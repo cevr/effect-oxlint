@@ -67,11 +67,11 @@
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@effect/language-service": "latest",
-    "@effect/vitest": "latest",
+    "@effect/vitest": "4.1.2",
     "@types/bun": "latest",
     "@typescript/native-preview": "latest",
     "concurrently": "latest",
-    "effect": "4.0.5",
+    "effect": "4.1.2",
     "effect-4.0.0": "npm:effect@4.0.0",
     "lefthook": "latest",
     "oxfmt": "latest",
@@ -82,7 +82,7 @@
     "vitest": "latest"
   },
   "peerDependencies": {
-    "effect": ">=4.0.0 <5"
+    "effect": ">=4.1.0 <5"
   },
   "packageManager": "bun@1.3.13"
 }

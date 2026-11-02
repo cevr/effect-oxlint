@@ -1,6 +1,5 @@
-import { createHmac } from "node:crypto";
-
 import * as Context from "effect/Context";
+import { Mac } from "effect/crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
@@ -16,7 +15,9 @@ export const validProgram = Effect.gen(function* () {
   if (Option.isSome(Option.some(moduleNamespace.value))) {
     yield* Effect.log(crypto.randomUUID());
   }
-  yield* Effect.as(Effect.void, createHmac("sha256", "fixture"));
+  const mac = yield* Mac.Mac;
+  const key = yield* mac.generateKey(Mac.hmacSha256);
+  yield* mac.sign(key, new TextEncoder().encode("fixture"));
   return yield* Effect.die(new Error("explicit fixture defect"));
 });
 

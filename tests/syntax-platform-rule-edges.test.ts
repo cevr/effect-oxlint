@@ -255,7 +255,7 @@ describe("platform capability rules", () => {
     const results = lintCases("noNodeBuiltinImport", {
       valid: [
         'import process from "node:process"; process.cwd();',
-        'import crypto from "node:crypto"; crypto.createHash("sha256");',
+        'import crypto from "node:crypto"; crypto.scrypt(password, salt, 32, done);',
         'import proc from "node:process"; proc["version"];',
         'import * as proc from "node:process"; proc[`version`];',
         'import proc from "node:process"; proc[key];',
@@ -496,7 +496,7 @@ describe("platform capability rules", () => {
         "host.ts": [
           'import { $ } from "bun";',
           'import { Database } from "bun:sqlite";',
-          'import { createHash } from "node:crypto";',
+          'import { scrypt } from "node:crypto";',
           'import { hostname, EOL } from "node:os";',
           'import * as os from "os"; os.homedir(); os.EOL;',
           'import { fileURLToPath } from "url";',
@@ -516,7 +516,7 @@ describe("platform capability rules", () => {
             modules: {
               bun: { use: "an Effect platform service" },
               "bun:*": { use: "an Effect platform service" },
-              crypto: { use: "Crypto" },
+              crypto: { use: "project crypto adapter" },
               os: { members: ["hostname", "homedir"], use: "a platform service" },
               "node:url": { use: "Path.fromFileUrl" },
             },

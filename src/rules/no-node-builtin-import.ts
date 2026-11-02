@@ -1,5 +1,9 @@
 /**
- * Ban Node builtin capabilities only when Effect supplies a direct replacement.
+ * Ban Node builtin capabilities only when Effect supplies a replacement.
+ *
+ * Crypto advice names the Effect 4.1 services from `effect/crypto`: callers
+ * migrate to supported algorithms and provide the matching family layers at
+ * their entry point. Unmatched operations such as scrypt stay adapter-owned.
  *
  * The `modules` option bans more runtime or platform modules, on top of the
  * built-in list. A key names a module (`"os"` matches `os`, `node:os` and
@@ -60,14 +64,44 @@ const replacedModules = new Map([
   ["worker_threads", "Worker from 'effect/workers'"],
 ]);
 
-const cryptoOperations = new Set([
-  "getRandomValues",
-  "randomBytes",
-  "randomFill",
-  "randomFillSync",
-  "randomInt",
-  "randomUUID",
+/** Only operations with a corresponding Effect crypto family are listed. */
+const cryptoOperations = new Map([
+  ["getRandomValues", "SecureRandom"],
+  ["randomBytes", "SecureRandom"],
+  ["randomFill", "SecureRandom"],
+  ["randomFillSync", "SecureRandom"],
+  ["randomInt", "SecureRandom"],
+  ["randomUUID", "SecureRandom"],
+  ["hash", "Digest"],
+  ["createHash", "Digest"],
+  ["createHmac", "Mac"],
+  ["timingSafeEqual", "Mac.timingSafeEqual"],
+  ["sign", "Signature"],
+  ["verify", "Signature"],
+  ["createSign", "Signature"],
+  ["createVerify", "Signature"],
+  ["createCipheriv", "Aead or Cipher"],
+  ["createDecipheriv", "Aead or Cipher"],
+  ["hkdf", "Kdf"],
+  ["hkdfSync", "Kdf"],
+  ["pbkdf2", "Kdf"],
+  ["pbkdf2Sync", "Kdf"],
+  ["argon2", "Kdf"],
+  ["argon2Sync", "Kdf"],
+  ["diffieHellman", "KeyAgreement"],
+  ["generateKey", "Mac, Aead, or Cipher"],
+  ["generateKeySync", "Mac, Aead, or Cipher"],
+  ["generateKeyPair", "Signature, KeyAgreement, or KeyWrap"],
+  ["generateKeyPairSync", "Signature, KeyAgreement, or KeyWrap"],
 ]);
+
+const secureRandomOperations = new Set(["getRandomValues", "randomUUID"]);
+
+const cryptoAdvice = (operation: string): Option.Option<string> =>
+  Option.map(
+    Option.fromUndefinedOr(cryptoOperations.get(operation)),
+    (family) => `${family} from 'effect/crypto'`,
+  );
 
 const processOperations = new Set([
   "argv",
@@ -80,6 +114,13 @@ const processOperations = new Set([
   "stdin",
   "stdout",
 ]);
+
+const processAdvice = (operation: string): string => {
+  if (operation === "env") return "Config or UserDirectories from 'effect/persistence'";
+  if (operation === "stdin" || operation === "stdout" || operation === "stderr")
+    return "Stdio or Terminal.size";
+  return "Config, Stdio, Clock, or Effect scheduling";
+};
 
 type PartialModule = "crypto" | "process" | "subtle" | "webcrypto";
 
@@ -112,11 +153,11 @@ const cryptoReplacement = (
   operation: string,
   path: ReadonlyArray<string>,
 ): Option.Option<string> => {
-  if (cryptoOperations.has(operation) && path.length === 2) return Option.some("Crypto");
-  if (followsSegment(path, "webcrypto") && cryptoOperations.has(operation)) {
-    return Option.some("Crypto");
+  if (path.length === 2) return cryptoAdvice(operation);
+  if (followsSegment(path, "webcrypto") && secureRandomOperations.has(operation)) {
+    return Option.some("SecureRandom from 'effect/crypto'");
   }
-  if (isDigestUnder(operation, path, "subtle")) return Option.some("Crypto.digest");
+  if (isDigestUnder(operation, path, "subtle")) return Option.some("Digest from 'effect/crypto'");
   return Option.none();
 };
 
@@ -127,17 +168,19 @@ const replacementFor = (
 ): Option.Option<string> => {
   if (module === "process") {
     if (processOperations.has(operation) && path.length === 2) {
-      return Option.some("Config, Stdio, Clock, or Effect scheduling");
+      return Option.some(processAdvice(operation));
     }
     return Option.none();
   }
   if (module === "subtle") {
-    if (operation === "digest" && path.length === 2) return Option.some("Crypto.digest");
+    if (operation === "digest" && path.length === 2)
+      return Option.some("Digest from 'effect/crypto'");
     return Option.none();
   }
   if (module === "webcrypto") {
-    if (cryptoOperations.has(operation) && path.length === 2) return Option.some("Crypto");
-    if (isDigestUnder(operation, path, "subtle")) return Option.some("Crypto.digest");
+    if (secureRandomOperations.has(operation) && path.length === 2)
+      return Option.some("SecureRandom from 'effect/crypto'");
+    if (isDigestUnder(operation, path, "subtle")) return Option.some("Digest from 'effect/crypto'");
     return Option.none();
   }
   return cryptoReplacement(operation, path);
@@ -245,16 +288,15 @@ export const noNodeBuiltinImport = Rule.define({
           if (imported === "webcrypto" || imported === "subtle") {
             partialModuleByAlias.set(specifier.local.name, imported);
           } else if (cryptoOperations.has(imported)) {
-            diagnostics.push(report(specifier, `node:crypto ${imported}`, "Crypto"));
+            diagnostics.push(
+              Option.match(cryptoAdvice(imported), {
+                onNone: () => Effect.void,
+                onSome: (alternative) => report(specifier, `node:crypto ${imported}`, alternative),
+              }),
+            );
           }
         } else if (processOperations.has(imported)) {
-          diagnostics.push(
-            report(
-              specifier,
-              `node:process ${imported}`,
-              "Config, Stdio, Clock, or Effect scheduling",
-            ),
-          );
+          diagnostics.push(report(specifier, `node:process ${imported}`, processAdvice(imported)));
         }
       }
       return Effect.all(diagnostics, { discard: true });

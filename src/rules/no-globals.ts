@@ -1,6 +1,10 @@
 /**
  * Ban ambient runtime capabilities that have direct Effect replacements.
  *
+ * Effect 4.1 crypto advice names SecureRandom and Digest from `effect/crypto`;
+ * provide their layers at the entry point. Bun.Glob uses FileSystem.glob;
+ * terminal dimensions use Terminal.size, and XDG paths use UserDirectories.
+ *
  * The rule starts at each read of a global that no binding shadows and
  * follows the value: through the global object (`globalThis`, `self`,
  * `window`, `global`), static and computed string members (`process["env"]`),
@@ -66,24 +70,27 @@ const memberBans: ReadonlyArray<MemberBan> = [
   ["Date", new Set(["now"]), "Clock or DateTime"],
   ["Math", new Set(["random"]), "Random"],
   ["performance", new Set(["now"]), "Clock.currentTimeNanos"],
-  ["crypto", new Set(["getRandomValues", "randomUUID"]), "Crypto"],
+  ["crypto", new Set(["getRandomValues", "randomUUID"]), "SecureRandom from 'effect/crypto'"],
   ["JSON", new Set(["parse", "stringify"]), "Schema JSON codecs"],
+  ["process", new Set(["env"]), "Config or UserDirectories from 'effect/persistence'"],
+  ["process", new Set(["stderr", "stdin", "stdout"]), "Stdio or Terminal.size"],
   [
     "process",
-    new Set(["argv", "chdir", "env", "exit", "hrtime", "nextTick", "stderr", "stdin", "stdout"]),
+    new Set(["argv", "chdir", "exit", "hrtime", "nextTick"]),
     "Config, Stdio, Clock, or Effect scheduling",
   ],
+  ["Bun", new Set(["Glob"]), "FileSystem.glob"],
+  ["Bun", new Set(["randomUUIDv7"]), "SecureRandom from 'effect/crypto'"],
+  ["Bun", new Set(["env"]), "Config or UserDirectories from 'effect/persistence'"],
+  ["Deno", new Set(["env"]), "Config or UserDirectories from 'effect/persistence'"],
   [
     "Bun",
     new Set([
       "$",
-      "Glob",
       "connect",
-      "env",
       "file",
       "listen",
       "nanoseconds",
-      "randomUUIDv7",
       "redis",
       "serve",
       "sleep",
@@ -100,7 +107,6 @@ const memberBans: ReadonlyArray<MemberBan> = [
     "Deno",
     new Set([
       "args",
-      "env",
       "exit",
       "mkdir",
       "open",
@@ -293,7 +299,8 @@ export const noGlobals = Rule.define({
         ),
       member: (node, owner, name) => {
         if (owner === cryptoSubtle) {
-          if (name === "digest") return report(node, "crypto.subtle.digest", "Crypto.digest");
+          if (name === "digest")
+            return report(node, "crypto.subtle.digest", "Digest from 'effect/crypto'");
           return Effect.void;
         }
         return Option.match(memberBan(owner, name), {

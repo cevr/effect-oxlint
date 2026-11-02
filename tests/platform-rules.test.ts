@@ -57,6 +57,85 @@ describe("ambient platform APIs", () => {
   });
 });
 
+// Seam: parsed source through the compiled plugin; checks diagnostic advice and
+// import/member recognition, not runtime equivalence of cryptographic algorithms.
+describe("Effect 4.1 replacement advice", () => {
+  test("names the secure randomness and digest services, including aliases", () => {
+    const findings = lintFixtures("noGlobals", {
+      "crypto.ts": [
+        "crypto.randomUUID();",
+        "crypto.getRandomValues(bytes);",
+        'const { crypto: { subtle } } = globalThis; subtle.digest("SHA-256", bytes);',
+        "Bun.randomUUIDv7();",
+        'new Bun.Glob("*.ts");',
+        "process.stdout.columns;",
+        "process.env.XDG_CONFIG_HOME;",
+      ].join("\n"),
+    });
+    expect(findings.get("crypto.ts")).toEqual([
+      { line: 1, message: expect.stringContaining("Use SecureRandom from 'effect/crypto'") },
+      { line: 2, message: expect.stringContaining("Use SecureRandom from 'effect/crypto'") },
+      { line: 3, message: expect.stringContaining("Use Digest from 'effect/crypto'") },
+      { line: 4, message: expect.stringContaining("Use SecureRandom from 'effect/crypto'") },
+      { line: 5, message: expect.stringContaining("Use FileSystem.glob") },
+      { line: 6, message: expect.stringContaining("Terminal.size") },
+      { line: 7, message: expect.stringContaining("UserDirectories") },
+    ]);
+  });
+
+  test("maps supported Node crypto families without banning unrelated capabilities", () => {
+    const findings = lintFixtures("noNodeBuiltinImport", {
+      "crypto.ts": [
+        'import { randomUUID, createHash, createHmac, sign, createCipheriv, pbkdf2, diffieHellman, scrypt, createDiffieHellman } from "node:crypto";',
+        'import * as c from "node:crypto";',
+        'c["createHmac"]("sha256", key);',
+        'c.webcrypto.subtle.digest("SHA-256", bytes);',
+        'import { webcrypto as web, subtle as sub } from "crypto";',
+        "web.randomUUID();",
+        'sub.digest("SHA-256", bytes);',
+        "c.scrypt(password, salt, 32, done);",
+        'c.webcrypto.createHmac("sha256", key);',
+        "c.timingSafeEqual(left, right);",
+        'c.generateKeyPair("rsa", options, done);',
+      ].join("\n"),
+      "process.ts": [
+        'import { stdout, env } from "node:process";',
+        'import p from "process"; p.stdout.columns;',
+        "p.env.XDG_CACHE_HOME;",
+      ].join("\n"),
+    });
+    expect(findings.get("crypto.ts")).toEqual([
+      { line: 1, message: expect.stringContaining("Use SecureRandom from 'effect/crypto'") },
+      { line: 1, message: expect.stringContaining("Use Digest from 'effect/crypto'") },
+      { line: 1, message: expect.stringContaining("Use Mac from 'effect/crypto'") },
+      { line: 1, message: expect.stringContaining("Use Signature from 'effect/crypto'") },
+      { line: 1, message: expect.stringContaining("Use Aead or Cipher from 'effect/crypto'") },
+      { line: 1, message: expect.stringContaining("Use Kdf from 'effect/crypto'") },
+      { line: 1, message: expect.stringContaining("Use KeyAgreement from 'effect/crypto'") },
+      { line: 3, message: expect.stringContaining("Use Mac from 'effect/crypto'") },
+      { line: 4, message: expect.stringContaining("Use Digest from 'effect/crypto'") },
+      { line: 6, message: expect.stringContaining("Use SecureRandom from 'effect/crypto'") },
+      { line: 7, message: expect.stringContaining("Use Digest from 'effect/crypto'") },
+      {
+        line: 10,
+        message: expect.stringContaining("Use Mac.timingSafeEqual from 'effect/crypto'"),
+      },
+      {
+        line: 11,
+        message: expect.stringContaining(
+          "Use Signature, KeyAgreement, or KeyWrap from 'effect/crypto'",
+        ),
+      },
+    ]);
+    expect(findings.get("process.ts")).toEqual([
+      { line: 1, message: expect.stringContaining("Terminal.size") },
+      { line: 1, message: expect.stringContaining("UserDirectories") },
+      { line: 2, message: expect.stringContaining("Terminal.size") },
+      { line: 3, message: expect.stringContaining("UserDirectories") },
+    ]);
+  });
+});
+
 describe("Node builtins", () => {
   test("rejects modules wholly replaced by Effect", () => {
     for (const source of [
@@ -86,8 +165,8 @@ describe("Node builtins", () => {
     const cryptoRandom = Testing.importDeclWithSpecifiers("node:crypto", [
       Testing.importSpecifier("randomUUID"),
     ]);
-    const cryptoHmac = Testing.importDeclWithSpecifiers("node:crypto", [
-      Testing.importSpecifier("createHmac"),
+    const cryptoScrypt = Testing.importDeclWithSpecifiers("node:crypto", [
+      Testing.importSpecifier("scrypt"),
     ]);
     const processEnv = Testing.importDeclWithSpecifiers("node:process", [
       Testing.importSpecifier("env"),
@@ -97,7 +176,7 @@ describe("Node builtins", () => {
     ]);
 
     expect(Testing.runRule(noNodeBuiltinImport, "ImportDeclaration", cryptoRandom)).toHaveLength(1);
-    expect(Testing.runRule(noNodeBuiltinImport, "ImportDeclaration", cryptoHmac)).toHaveLength(0);
+    expect(Testing.runRule(noNodeBuiltinImport, "ImportDeclaration", cryptoScrypt)).toHaveLength(0);
     expect(Testing.runRule(noNodeBuiltinImport, "ImportDeclaration", processEnv)).toHaveLength(1);
     expect(Testing.runRule(noNodeBuiltinImport, "ImportDeclaration", processPlatform)).toHaveLength(
       0,
@@ -109,7 +188,7 @@ describe("Node builtins", () => {
       Testing.importNamespaceSpecifier("nodeCrypto"),
     ]);
     const randomBytes = Testing.memberExpr("nodeCrypto", "randomBytes");
-    const createHmac = Testing.memberExpr("nodeCrypto", "createHmac");
+    const scrypt = Testing.memberExpr("nodeCrypto", "scrypt");
 
     expect(
       Testing.runRuleMulti(noNodeBuiltinImport, [
@@ -120,7 +199,7 @@ describe("Node builtins", () => {
     expect(
       Testing.runRuleMulti(noNodeBuiltinImport, [
         ["ImportDeclaration", cryptoImport],
-        ["MemberExpression", createHmac],
+        ["MemberExpression", scrypt],
       ]),
     ).toHaveLength(0);
   });

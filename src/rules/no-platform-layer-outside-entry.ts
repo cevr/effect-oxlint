@@ -4,7 +4,7 @@
  * A module that provides `BunFileSystem.layer` (or any `layer*` export of a
  * platform package) builds its own copy of a service the process entry
  * already provides, so a test host's services never reach it. Code outside
- * the entry yields the service (`FileSystem`, `Path`, `Crypto`, ...) instead.
+ * the entry yields the service (`FileSystem`, `Path`, `SecureRandom`, `Digest`, ...) instead.
  *
  * The rule follows every binding a file takes from a platform package, static
  * or `import()`, and each `const` alias or destructure of it. It reports:
