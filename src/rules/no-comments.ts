@@ -1,9 +1,11 @@
 /**
  * Ban comments. Code says what it does through its names and types; a
  * suppression carries its reason after ` -- `; history belongs in the commit
- * message and a rule in a lint rule or a type. Comments that instruct a tool
- * (suppressions, `@ts-*`, `@effect-diagnostics`, triple-slash references,
- * bundler annotations, JSX pragmas, formatter and coverage ignores) stay.
+ * message and a rule in a lint rule or a type. Doc comments (`/**` blocks on the
+ * lines above a declaration or member) stay, since editors show them to
+ * callers, and so do comments that instruct a tool (suppressions, `@ts-*`,
+ * `@effect-diagnostics`, triple-slash references, bundler annotations, JSX
+ * pragmas, formatter and coverage ignores).
  */
 import type { Comment } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
@@ -15,6 +17,20 @@ import { isToolDirective } from "./_comment-directives.js";
 const isBlank = (text: string) => /^[\t ]*$/u.test(text);
 
 type Range = readonly [number, number];
+
+/**
+ * A `/** *\/` block that stands alone on its lines with code right below it,
+ * which editors attach to that code as its documentation.
+ */
+const isDocComment = (text: string, comment: Comment): boolean => {
+  if (comment.type !== "Block" || !comment.value.startsWith("*")) return false;
+  const [start, end] = comment.range;
+  const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+  const lineBreak = text.indexOf("\n", end);
+  if (!isBlank(text.slice(lineStart, start)) || lineBreak === -1) return false;
+  if (!isBlank(text.slice(end, lineBreak))) return false;
+  return /^\s*[^\s)\]},;/]/u.test(text.slice(lineBreak));
+};
 
 const encloses = (outer: Range, inner: Range) => outer[0] < inner[0] && inner[1] < outer[1];
 
@@ -59,7 +75,7 @@ export const noComments = Rule.define({
     type: "suggestion",
     fixable: "code",
     description:
-      "Ban comments other than tool directives: name the code instead, and put reasons in suppressions, history in commits, and rules in lint rules or types.",
+      "Ban comments other than doc comments and tool directives: name the code instead, and put reasons in suppressions, history in commits, and rules in lint rules or types.",
     messages: {
       comment:
         "Comments are not allowed. Say it in a name or a type, give a suppression its reason after ` -- `, put history in the commit message, and turn a rule into a lint rule.",
@@ -77,7 +93,12 @@ export const noComments = Rule.define({
         Effect.forEach(
           ctx.sourceCode
             .getAllComments()
-            .filter((comment) => comment.type !== "Shebang" && !isToolDirective(comment.value)),
+            .filter(
+              (comment) =>
+                comment.type !== "Shebang" &&
+                !isToolDirective(comment.value) &&
+                !isDocComment(ctx.sourceCode.text, comment),
+            ),
           (comment) =>
             ctx.report(
               Diagnostic.withFix(

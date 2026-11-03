@@ -8,7 +8,7 @@ const findings = lintFixtures("noComments", {
     "export const named = 1;",
     "// Explains the next line.", // 3
     "export const explained = 1;",
-    "/** Documents the export. */", // 5
+    "/** Documents the export. */", // 5 doc comment
     "export const documented = 1;",
     "// @ts-expect-error -- fixture checks a rejected assignment", // 7
     "export const wrong: string = 1;",
@@ -38,7 +38,43 @@ const lines = () =>
 
 describe("noComments", () => {
   test("reports every comment that is not a tool directive", () => {
-    expect(lines()).toEqual([3, 5, 12, 16, 17]);
+    expect(lines()).toEqual([3, 16, 17]);
+  });
+
+  test("accepts a doc comment on the lines above a declaration or member", () => {
+    expect(lines()).not.toContain(5);
+    expect(lines()).not.toContain(12);
+    const docs = lintFixtures("noComments", {
+      "docs.ts": [
+        "/**",
+        " * Adds two numbers.",
+        " */",
+        "export const add = (a: number, b: number) => a + b;",
+        "export interface Point {",
+        "  /** Horizontal position. */",
+        "  readonly x: number;",
+        "}",
+        "",
+      ].join("\n"),
+    });
+    expect(docs.get("docs.ts") ?? []).toEqual([]);
+  });
+
+  test("reports a doc-style block that documents no code", () => {
+    const loose = lintFixtures("noComments", {
+      "loose.ts": [
+        "export const a = f(/** inline */ 1);", // 1
+        "export const b = 1; /** trailing */", // 2
+        "export const c = {", // 3
+        "  d: 1,",
+        "  /** dangling */", // 5
+        "};",
+        "/** end of file */", // 7
+      ].join("\n"),
+    });
+    expect([...new Set((loose.get("loose.ts") ?? []).map((finding) => finding.line))]).toEqual([
+      1, 2, 5, 7,
+    ]);
   });
 
   test("tells the reader where the comment's content belongs instead", () => {
@@ -60,7 +96,7 @@ describe("noComments autofix", () => {
     expect(fix(["// a note", "export const a = 1;", ""].join("\n"))).toBe("export const a = 1;\n");
     expect(
       fix(
-        ["export const a = 1;", "  /**", "   * Docs.", "   */", "export const b = 2;", ""].join(
+        ["export const a = 1;", "  /*", "   * Notes.", "   */", "export const b = 2;", ""].join(
           "\n",
         ),
       ),
