@@ -1,5 +1,17 @@
 # oxlint-plugin-effect
 
+## 0.32.0
+
+### Minor Changes
+
+- [`cfc1c98`](https://github.com/cevr/effect-oxlint/commit/cfc1c987e27f7854e706770cc029b8e2430d9373) Thanks [@cevr](https://github.com/cevr)! - `effect/noComments` allows doc comments: a `/** */` block standing alone on the lines above a declaration or member, which editors show to callers. Doc-style blocks inline, trailing, or with no code below them are still reported.
+
+### Patch Changes
+
+- [`fe64595`](https://github.com/cevr/effect-oxlint/commit/fe645951143528e0caa1fab91d058d2cf6613e15) Thanks [@cevr](https://github.com/cevr)! - `effect/noComments` now autofixes: `oxlint --fix` removes each reported comment, with its line when the comment stands alone, the space before it when it trails code, and one space beside it when it sits between tokens. Tool directives stay.
+
+- [`1595855`](https://github.com/cevr/effect-oxlint/commit/159585593343c206a6221354df828eba40f55e92) Thanks [@cevr](https://github.com/cevr)! - `effect/noComments` autofix removes a JSX comment child together with its braces, so `{/* note */}` no longer leaves an empty `{}`.
+
 ## 0.31.0
 
 ### Minor Changes
