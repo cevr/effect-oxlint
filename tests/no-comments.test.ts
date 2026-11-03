@@ -76,6 +76,31 @@ describe("noComments autofix", () => {
     expect(fix("export const a = 1 /* why */ + 2;\n")).toBe("export const a = 1 + 2;\n");
   });
 
+  test("removes a JSX comment child with its braces", () => {
+    const fixJsx = (source: string) =>
+      fixFixtures("noComments", { "fixed.tsx": source }).get("fixed.tsx");
+    expect(
+      fixJsx(
+        [
+          "export const A = () => (",
+          "  <div>",
+          "    {/* a note */}",
+          "    <b />",
+          "  </div>",
+          ");",
+          "",
+        ].join("\n"),
+      ),
+    ).toBe(["export const A = () => (", "  <div>", "    <b />", "  </div>", ");", ""].join("\n"));
+    expect(fixJsx("export const B = () => <i>{/* a note */}</i>;\n")).toBe(
+      "export const B = () => <i></i>;\n",
+    );
+  });
+
+  test("keeps the braces of an object literal that only held a comment", () => {
+    expect(fix("export const a = { /* empty */ };\n")).toBe("export const a = { };\n");
+  });
+
   test("keeps tool directives", () => {
     const kept = [
       "// oxlint-disable-next-line no-shadow -- fixture shadows an import",

@@ -7,19 +7,35 @@
  */
 import type { Comment } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
-import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { AST, Diagnostic, Rule, RuleContext, Visitor } from "../vendor/effect-oxlint/index.js";
 import { isToolDirective } from "./_comment-directives.js";
 
 const isBlank = (text: string) => /^[\t ]*$/u.test(text);
 
+type Range = readonly [number, number];
+
+const encloses = (outer: Range, inner: Range) => outer[0] < inner[0] && inner[1] < outer[1];
+
 /**
- * The range to delete with a comment: its whole line when it stands alone,
+ * The span a comment occupies: the braces around it when it is the only
+ * content of a JSX expression container, else the comment itself.
+ */
+const occupiedSpan = (comment: Comment, emptyJsxContainers: ReadonlyArray<Range>): Range =>
+  Option.getOrElse(
+    Option.fromNullishOr(
+      emptyJsxContainers.find((container) => encloses(container, comment.range)),
+    ),
+    () => comment.range,
+  );
+
+/**
+ * The range to delete with a span: its whole line when it stands alone,
  * the space before it when it trails code, and one space beside it when it
  * sits between tokens.
  */
-const removalRange = (text: string, comment: Comment): [number, number] => {
-  const [start, end] = comment.range;
+const removalRange = (text: string, [start, end]: Range): [number, number] => {
   const lineStart = text.lastIndexOf("\n", start - 1) + 1;
   const newline = text.indexOf("\n", end);
   let lineEnd = text.length;
@@ -51,8 +67,13 @@ export const noComments = Rule.define({
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    return {
-      Program: () =>
+    return yield* Visitor.accumulate(
+      "JSXExpressionContainer",
+      (node) =>
+        Option.flatMap(AST.narrow(node, "JSXExpressionContainer"), (container) =>
+          Option.as(AST.narrow(container.expression, "JSXEmptyExpression"), container.range),
+        ),
+      (emptyJsxContainers) =>
         Effect.forEach(
           ctx.sourceCode
             .getAllComments()
@@ -61,11 +82,14 @@ export const noComments = Rule.define({
             ctx.report(
               Diagnostic.withFix(
                 Diagnostic.fromId({ node: comment, messageId: "comment" }),
-                (fixer) => fixer.removeRange(removalRange(ctx.sourceCode.text, comment)),
+                (fixer) =>
+                  fixer.removeRange(
+                    removalRange(ctx.sourceCode.text, occupiedSpan(comment, emptyJsxContainers)),
+                  ),
               ),
             ),
           { discard: true },
         ),
-    };
+    );
   },
 });
