@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.31.0
+
+### Minor Changes
+
+- [`9819af9`](https://github.com/cevr/effect-oxlint/commit/9819af9537ee1f6ef58eeb3a28717b46204b2a21) Thanks [@cevr](https://github.com/cevr)! - Add `effect/noComments` to the recommended preset. It reports every comment except tool directives: oxlint and ESLint suppressions, `@ts-*`, `@effect-diagnostics`, triple-slash references, bundler annotations such as `#__PURE__`, JSX pragmas, and formatter and coverage ignores. A codebase that documents itself in comments can turn it off with `"effect/noComments": "off"` after spreading the preset.
+
 ## 0.30.0
 
 ### Minor Changes
