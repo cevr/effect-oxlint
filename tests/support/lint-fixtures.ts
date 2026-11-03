@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -78,6 +78,35 @@ export const lintFixtures = (
     findings.get(file)?.push({ line: Number(line), message });
   }
   return findings;
+};
+
+/** Apply one rule's autofixes to named fixture files and return each file's text afterwards. */
+export const fixFixtures = (
+  rule: string,
+  fixtures: Readonly<Record<string, string>>,
+): ReadonlyMap<string, string> => {
+  const directory = mkdtempSync(join(tmpdir(), "oxlint-plugin-effect-"));
+  for (const [name, source] of Object.entries(fixtures)) {
+    mkdirSync(dirname(join(directory, name)), { recursive: true });
+    writeFileSync(join(directory, name), source);
+  }
+  writeFileSync(
+    join(directory, "oxlint.json"),
+    JSON.stringify({ jsPlugins: [pluginPath], rules: { [`effect/${rule}`]: "error" } }),
+  );
+  const result = runCommand(
+    ["bunx", "oxlint", "--fix", "--config", "oxlint.json", ...Object.keys(fixtures)],
+    directory,
+  );
+  const fixed = new Map(
+    Object.keys(fixtures).map((name) => [name, readFileSync(join(directory, name), "utf8")]),
+  );
+  rmSync(directory, { force: true, recursive: true });
+  if (result.exitCode !== 0 && result.exitCode !== 1) {
+    // oxlint-disable-next-line effect/noThrowStatement, effect/noNewError -- bun:test harness: a crashed oxlint must fail the calling test
+    throw new Error(`oxlint failed: ${result.stderr}`);
+  }
+  return fixed;
 };
 
 /** Lines reported in one fixture, in source order. */

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { lintFixtures } from "./support/lint-fixtures.js";
+import { fixFixtures, lintFixtures } from "./support/lint-fixtures.js";
 
 const findings = lintFixtures("noComments", {
   "comments.ts": [
@@ -50,5 +50,38 @@ describe("noComments", () => {
     for (const line of [1, 7, 9, 10, 11, 18, 20, 21, 22, 23]) {
       expect(lines()).not.toContain(line);
     }
+  });
+});
+
+describe("noComments autofix", () => {
+  const fix = (source: string) => fixFixtures("noComments", { "fixed.ts": source }).get("fixed.ts");
+
+  test("removes a comment that sits alone on its lines, with its line", () => {
+    expect(fix(["// a note", "export const a = 1;", ""].join("\n"))).toBe("export const a = 1;\n");
+    expect(
+      fix(
+        ["export const a = 1;", "  /**", "   * Docs.", "   */", "export const b = 2;", ""].join(
+          "\n",
+        ),
+      ),
+    ).toBe(["export const a = 1;", "export const b = 2;", ""].join("\n"));
+  });
+
+  test("removes a trailing comment and the space before it", () => {
+    expect(fix("export const a = 1; // a note\n")).toBe("export const a = 1;\n");
+  });
+
+  test("removes an inline comment and one space beside it", () => {
+    expect(fix("export const a = f(/* why */ 1);\n")).toBe("export const a = f(1);\n");
+    expect(fix("export const a = 1 /* why */ + 2;\n")).toBe("export const a = 1 + 2;\n");
+  });
+
+  test("keeps tool directives", () => {
+    const kept = [
+      "// oxlint-disable-next-line no-shadow -- fixture shadows an import",
+      "export const pure = /* #__PURE__ */ Symbol();",
+      "",
+    ].join("\n");
+    expect(fix(kept)).toBe(kept);
   });
 });
