@@ -49,6 +49,7 @@ describe("recommended preset", () => {
       "effect/noAs": "error",
       "effect/noAsyncFunction": "error",
       "effect/noChainedTypeAssertions": "error",
+      "effect/noComments": "error",
       "effect/noConditionalEmptyObjectSpread": "error",
       "effect/noDynamicImports": "error",
       "effect/noEagerAcquire": "error",

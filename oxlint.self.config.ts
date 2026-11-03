@@ -12,7 +12,12 @@ export default {
     "tests/integration/**",
     "tests/probes/**",
   ],
-  rules: recommended,
+  rules: {
+    ...recommended,
+    // This repo predates effect/noComments and documents each rule's contract
+    // in comments; like most existing codebases, it opts out.
+    "effect/noComments": "off",
+  },
   overrides: [
     {
       // Build scripts and the test harness are host adapters, not Effect programs:

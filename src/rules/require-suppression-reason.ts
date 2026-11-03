@@ -3,6 +3,7 @@ import type { Comment } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { directivePattern } from "./_comment-directives.js";
 
 type DirectiveKind = "effect-diagnostics" | "lint" | "typescript";
 
@@ -17,13 +18,6 @@ interface Finding {
   readonly messageId: "effectPrefix" | "missingReason" | "missingTarget";
   readonly data: Readonly<Record<string, string>>;
 }
-
-/**
- * A directive at the start of a comment line, after any JSDoc `*` gutter.
- * The rules and reason run to the next directive or the end of the comment.
- */
-const directivePattern =
-  /(?:^|\n)[\t *]*(?<name>(?:oxlint|eslint)-disable(?:-next-line|-line)?|@effect-diagnostics(?:-next-line)?|@ts-(?:expect-error|ignore|nocheck))(?=$|[\s:])/gu;
 
 /** ESLint-style reason separator: `--` with whitespace on both sides. */
 const reasonSeparator = /\s--\s/u;
