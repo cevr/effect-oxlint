@@ -67,13 +67,40 @@ type Named = ESTree.Node & { readonly name: string };
  */
 type Source =
   | { readonly kind: "local" }
+  | { readonly kind: "protocol" }
   | { readonly kind: "unknown" }
   | { readonly kind: "module"; readonly from: string; readonly key: Option.Option<string> };
 
 type ModuleSource = Extract<Source, { readonly kind: "module" }>;
 
 const local: Source = { kind: "local" };
+/**
+ * A local object or class that defines a protocol the language calls by itself: a
+ * `then` (awaited, resolved) or a computed key (`[Symbol.iterator]`, `[Symbol.asyncIterator]`).
+ * Read plainly it is the file's own; read through `await`, iteration or spread, the
+ * value is what that code makes, which the rule does not follow.
+ */
+const protocol: Source = { kind: "protocol" };
 const unknown: Source = { kind: "unknown" };
+
+/** The sources of a value read through a protocol call (`await x`, `[a] = x`, `for (a of x)`, `...x`). */
+const throughProtocol = (sources: ReadonlyArray<Source>): ReadonlyArray<Source> =>
+  sources.map((source) => {
+    if (source.kind === "protocol") return unknown;
+    return source;
+  });
+
+/** Whether a key may name a protocol method: computed, or `then`. */
+const isProtocolKey = (key: ESTree.Node, computed: boolean): boolean =>
+  computed ||
+  (key.type === "Identifier" && key.name === "then") ||
+  (key.type === "Literal" && key.value === "then");
+
+/** Whether an object literal defines a protocol method (see `protocol`). */
+const definesProtocol = (node: ESTree.ObjectExpression): boolean =>
+  node.properties.some(
+    (property) => property.type === "Property" && isProtocolKey(property.key, property.computed),
+  );
 const moduleWhole = (from: string): Source => ({ kind: "module", from, key: Option.none() });
 
 /** A source read at `key`: a module's export narrows to it, anything else keeps its kind. */
@@ -84,7 +111,9 @@ const member = (source: Source, key: Option.Option<string>): Source => {
 
 /** Whether a source is proven not a package's: made locally, or one of the project's modules. */
 const isOwn = (source: Source): boolean =>
-  source.kind === "local" || (source.kind === "module" && isProjectModule(source.from));
+  source.kind === "local" ||
+  source.kind === "protocol" ||
+  (source.kind === "module" && isProjectModule(source.from));
 
 /** Whether a source is a package's export (the module whole for an unknown key). */
 const isPackage = (source: Source): source is ModuleSource =>
@@ -137,7 +166,22 @@ const bound = (
   sources: ReadonlyArray<Source>,
 ): ReadonlyArray<Source> => {
   if (name === target) return sources;
-  return sources.map((source) => member(source, patternKey(name)));
+  const read = sources.map((source) => member(source, patternKey(name)));
+  if (iteratedBetween(name, target)) return throughProtocol(read);
+  return read;
+};
+
+/** Whether an array pattern sits between a name and its pattern's root: `[x] = v` iterates `v`. */
+const iteratedBetween = (node: ESTree.Node, target: ESTree.Node): boolean => {
+  if (node === target) return false;
+  return Option.match(Option.fromNullishOr(node.parent), {
+    onNone: () => false,
+    onSome: (parent) => {
+      if (parent.type === "ArrayPattern") return true;
+      if (parent === target) return false;
+      return iteratedBetween(parent, target);
+    },
+  });
 };
 
 /** An expression its wrapper passes through unchanged: `x as T`, `x!`, `(x)`, `await x`, `a?.b`. */
@@ -151,9 +195,6 @@ const wrapped = (node: ESTree.Node): Option.Option<ESTree.Node> => {
     case "ParenthesizedExpression":
     case "ChainExpression":
       return Option.some(node.expression);
-    case "AwaitExpression":
-    case "SpreadElement":
-      return Option.some(node.argument);
     case "AssignmentExpression":
       return Option.some(node.right);
     case "SequenceExpression":
@@ -185,18 +226,13 @@ const parts = (node: ESTree.Node): Option.Option<ReadonlyArray<ESTree.Node>> => 
       return Option.some([node.consequent, node.alternate]);
     case "LogicalExpression":
       return Option.some([node.left, node.right]);
-    case "TaggedTemplateExpression":
-      return Option.some([node.tag, ...node.quasi.expressions]);
     default:
       return Option.none();
   }
 };
 
 /** A function whose body the rule can read for what it returns. */
-type FunctionNode = Extract<
-  ESTree.Node,
-  { readonly type: "ArrowFunctionExpression" | "FunctionDeclaration" | "FunctionExpression" }
->;
+type FunctionNode = ESTree.ArrowFunctionExpression | ESTree.Function;
 
 const isFunctionNode = (node: ESTree.Node): node is FunctionNode =>
   node.type === "ArrowFunctionExpression" ||
@@ -212,12 +248,14 @@ const hasAccessor = (node: ESTree.Node): boolean =>
 const isNode = (value: unknown): value is ESTree.Node =>
   Predicate.hasProperty(value, "type") && Predicate.isString(value.type);
 
-/** `for (const x of xs)`: the iterated value `x` takes an element of. */
-const loopValue = (declaration: ESTree.Node): Option.Option<ESTree.Node> => {
+/** `for (const x of xs)` / `for (const k in o)`: the loop whose iterated value `x` takes from. */
+const loopOf = (
+  declaration: ESTree.Node,
+): Option.Option<ESTree.ForOfStatement | ESTree.ForInStatement> => {
   const loop = declaration.parent;
   if (loop?.type !== "ForOfStatement" && loop?.type !== "ForInStatement") return Option.none();
   if (loop.left !== declaration) return Option.none();
-  return Option.some(loop.right);
+  return Option.some(loop);
 };
 
 /** `declare function afterAll(...)`, `declare class`: an ambient declaration of something defined elsewhere. */
@@ -260,20 +298,140 @@ export const noTestLifecycleHooks = Rule.define({
       if (node.type !== "VariableDeclarator") return [unknown];
       const declaration = node.parent;
       if (declaration?.type !== "VariableDeclaration" || isAmbient(declaration)) return [unknown];
-      const value = Option.orElse(Option.fromNullishOr(node.init), () => loopValue(declaration));
-      return Option.match(value, {
-        onNone: () => [local],
+      return Option.match(Option.fromNullishOr(node.init), {
+        onNone: () =>
+          Option.match(loopOf(declaration), {
+            onNone: () => [local],
+            onSome: (loop) => bound(definition.name, node.id, loopSources(loop, hops)),
+          }),
         onSome: (init) => bound(definition.name, node.id, sourcesOf(init, hops)),
       });
     };
 
-    /** A parameter: made by its caller, so local, but a default value (`(m = require("x"))`) is followed. */
-    const parameterSources = (definition: Definition, hops: number): ReadonlyArray<Source> => [
-      local,
-      ...defaultsAbove(definition.name, definition.node).flatMap((value) =>
-        bound(definition.name, value, sourcesOf(value, hops)),
-      ),
-    ];
+    /** What a loop variable takes: an element `for…of` iterates out (a protocol call), or a key `for…in` names. */
+    const loopSources = (
+      loop: ESTree.ForOfStatement | ESTree.ForInStatement,
+      hops: number,
+    ): ReadonlyArray<Source> => {
+      if (loop.type === "ForInStatement") return [local];
+      return throughProtocol(sourcesOf(loop.right, hops));
+    };
+
+    /**
+     * A parameter takes what its callers pass, so it is followed into every call:
+     * only a function the file defines and calls directly, never passed, returned or
+     * exported, has known callers. Any other parameter (a callback's, a method's) is
+     * unknown, and so is a catch binding. A default value is followed too.
+     */
+    const parameterSources = (definition: Definition, hops: number): ReadonlyArray<Source> => {
+      const fn = definition.node;
+      if (!isFunctionNode(fn)) return [unknown];
+      const top = paramTop(definition.name, fn);
+      const position = fn.params.findIndex((param) => param === top);
+      const passed = Option.match(callSitesOf(fn), {
+        onNone: () => [unknown],
+        onSome: (calls) =>
+          calls.flatMap((call) =>
+            argumentSources(call, position, top.type === "RestElement", hops),
+          ),
+      });
+      return [
+        ...bound(definition.name, top, passed),
+        ...defaultsAbove(definition.name, fn).flatMap((value) =>
+          bound(definition.name, value, sourcesOf(value, hops)),
+        ),
+      ];
+    };
+
+    /** The parameter a name is bound in: itself, or the pattern it sits in. */
+    const paramTop = (node: ESTree.Node, fn: ESTree.Node): ESTree.Node =>
+      Option.match(
+        Option.filter(Option.fromNullishOr(node.parent), (parent) => parent !== fn),
+        { onNone: () => node, onSome: (parent) => paramTop(parent, fn) },
+      );
+
+    /** What a call passes at a parameter's position; a spread before it, or a missing argument (`undefined`). */
+    const argumentSources = (
+      call: ESTree.CallExpression,
+      position: number,
+      rest: boolean,
+      hops: number,
+    ): ReadonlyArray<Source> => {
+      if (position < 0) return [unknown];
+      const before = call.arguments.slice(0, position + 1);
+      if (before.some((argument) => argument.type === "SpreadElement")) return [unknown];
+      const end = Option.getOrElse(
+        Option.liftPredicate(position + 1, () => !rest),
+        () => call.arguments.length,
+      );
+      const passed = call.arguments.slice(position, end);
+      return [local, ...passed.flatMap((argument) => sourcesOf(argument, hops))];
+    };
+
+    /** The outermost expression a node is, through type wrappers: `(f as T)`, `f!`. */
+    const outermost = (node: ESTree.Node): ESTree.Node =>
+      Option.match(
+        Option.filter(
+          Option.fromNullishOr(node.parent),
+          (parent) =>
+            typeWrappers.has(parent.type) &&
+            Option.exists(wrapped(parent), (inner) => inner === node),
+        ),
+        { onNone: () => node, onSome: outermost },
+      );
+
+    /** The call a node is the callee of, through type wrappers. */
+    const callOf = (node: ESTree.Node): Option.Option<ESTree.CallExpression> => {
+      const top = outermost(node);
+      return Option.filter(
+        Option.flatMap(Option.fromNullishOr(top.parent), (parent) => {
+          if (parent.type !== "CallExpression") return Option.none();
+          return Option.some(parent);
+        }),
+        (call) => call.callee === top,
+      );
+    };
+
+    /**
+     * Every call of a function, when all its uses are known: an IIFE, or a name
+     * (a declaration, or a `const` it initialises) read only as a direct callee.
+     * A function passed, returned, exported or put in a value escapes: none.
+     */
+    const callSitesOf = (fn: FunctionNode): Option.Option<ReadonlyArray<ESTree.CallExpression>> => {
+      const direct = callOf(fn);
+      if (Option.isSome(direct)) return Option.some([direct.value]);
+      const names = namesOf(fn);
+      if (Option.isNone(names)) return Option.none();
+      const reads = names.value.flatMap((variable) =>
+        variable.references.filter((reference) => !reference.isWrite()),
+      );
+      const calls = reads.flatMap((reference) => Option.toArray(callOf(reference.identifier)));
+      return Option.liftPredicate(calls, (found) => found.length === reads.length);
+    };
+
+    /**
+     * The names a function is known by: its own name, and the variable it initialises.
+     * None when it is exported, or held anywhere else (an argument, a property, a return).
+     */
+    const namesOf = (fn: FunctionNode): Option.Option<ReadonlyArray<Variable>> => {
+      const top = outermost(fn);
+      const holder = top.parent;
+      if (holder?.type === "ExportNamedDeclaration" || holder?.type === "ExportDefaultDeclaration")
+        return Option.none();
+      const own = ctx.sourceCode
+        .getDeclaredVariables(fn)
+        .filter((variable) =>
+          variable.defs.some((definition) => definition.type === "FunctionName"),
+        );
+      if (fn.type === "FunctionDeclaration") return Option.some(own);
+      if (
+        holder?.type !== "VariableDeclarator" ||
+        holder.init !== top ||
+        holder.id.type !== "Identifier"
+      )
+        return Option.none();
+      return Option.some([...own, ...ctx.sourceCode.getDeclaredVariables(holder)]);
+    };
 
     /** The default values a pattern position sits under, up to its function: `(x = d)`, `({ x } = d)`. */
     const defaultsAbove = (node: ESTree.Node, fn: ESTree.Node): ReadonlyArray<ESTree.Node> =>
@@ -290,21 +448,37 @@ export const noTestLifecycleHooks = Rule.define({
         },
       );
 
+    /** A static member's value: a field's initialiser; a method is the class's own; an accessor is not followed. */
+    const staticSources = (
+      element: Exclude<ESTree.ClassElement, ESTree.StaticBlock | ESTree.TSIndexSignature>,
+      hops: number,
+    ): ReadonlyArray<Source> => {
+      if (element.type === "MethodDefinition" || element.type === "TSAbstractMethodDefinition") {
+        if (element.kind === "get" || element.kind === "set") return [unknown];
+        return [];
+      }
+      return Option.match(Option.fromNullishOr(element.value), {
+        onNone: () => [],
+        onSome: (value) => sourcesOf(value, hops),
+      });
+    };
+
     /** A class as a value: its statics, its base class; a decorator or static block is not followed. */
     const classSources = (node: ESTree.Node, hops: number): ReadonlyArray<Source> => {
       if (node.type !== "ClassDeclaration" && node.type !== "ClassExpression") return [unknown];
       if (isAmbient(node) || node.decorators.length > 0) return [unknown];
       const statics = node.body.body.flatMap((element): ReadonlyArray<Source> => {
         if (element.type === "StaticBlock") return [unknown];
-        if (element.type === "TSIndexSignature" || !element.static) return [];
-        if (element.type === "MethodDefinition" || element.type === "TSAbstractMethodDefinition") {
-          if (element.kind === "get" || element.kind === "set") return [unknown];
-          return [];
-        }
-        return Option.match(Option.fromNullishOr(element.value), {
-          onNone: () => [],
-          onSome: (value) => sourcesOf(value, hops),
-        });
+        if (element.type === "TSIndexSignature") return [];
+        // A decorator is a call the language makes on the class's definition, and may replace any part.
+        if (element.decorators.length > 0) return [unknown];
+        if (!element.static) return [];
+        return [
+          ...Option.toArray(
+            Option.liftPredicate(protocol, () => isProtocolKey(element.key, element.computed)),
+          ),
+          ...staticSources(element, hops),
+        ];
       });
       const base = Option.match(Option.fromNullishOr(node.superClass), {
         onNone: (): ReadonlyArray<Source> => [],
@@ -319,7 +493,8 @@ export const noTestLifecycleHooks = Rule.define({
         case "Parameter":
           return parameterSources(definition, hops);
         case "CatchClause":
-          return [local];
+          // What a `catch` binds is whatever was thrown, by any code its `try` ran.
+          return [unknown];
         case "FunctionName":
           if (isAmbient(definition.node)) return [unknown];
           return [local];
@@ -341,8 +516,9 @@ export const noTestLifecycleHooks = Rule.define({
         onSome: (value) => {
           const assignment = value.parent;
           const sources = sourcesOf(value, hops);
-          if (assignment?.type !== "AssignmentExpression")
-            return bound(reference.identifier, value, sources);
+          if (assignment?.type === "ForOfStatement" || assignment?.type === "ForInStatement")
+            return bound(reference.identifier, assignment.left, loopSources(assignment, hops));
+          if (assignment?.type !== "AssignmentExpression") return [unknown];
           return bound(reference.identifier, assignment.left, sources);
         },
       });
@@ -505,14 +681,25 @@ export const noTestLifecycleHooks = Rule.define({
       if (hops <= 0) return [unknown];
       if (node.type === "CallExpression" && isRequire(node.callee, hops))
         return [moduleOf(Option.fromUndefinedOr(node.arguments[0]))];
-      const args = node.arguments.flatMap((argument) => sourcesOf(argument, hops));
-      const followed = Option.filter(
-        functionsOf(node.callee),
-        () => node.type === "CallExpression",
-      );
+      return invokeSources(node.callee, node.arguments, node.type === "NewExpression", hops);
+    };
+
+    /**
+     * What calling `callee` with `args` gives, for an explicit call and for one the
+     * language makes (a tagged template calls its tag): what a function the file
+     * defines returns, with its arguments; what a project export makes; else unknown.
+     */
+    const invokeSources = (
+      calleeNode: ESTree.Node,
+      argumentNodes: ReadonlyArray<ESTree.Node>,
+      construct: boolean,
+      hops: number,
+    ): ReadonlyArray<Source> => {
+      const args = argumentNodes.flatMap((argument) => sourcesOf(argument, hops));
+      const followed = Option.filter(functionsOf(calleeNode), () => !construct);
       if (Option.isSome(followed))
         return [...followed.value.flatMap((fn) => returnSources(fn, hops - 1)), ...args];
-      const callee = sourcesOf(node.callee, hops);
+      const callee = sourcesOf(calleeNode, hops);
       if (
         callee.length > 0 &&
         callee.every((source) => source.kind === "module" && isProjectModule(source.from))
@@ -528,7 +715,41 @@ export const noTestLifecycleHooks = Rule.define({
       if (Option.isSome(inner)) return sourcesOf(inner.value, hops);
       if (hasAccessor(node)) return [unknown];
       const made = parts(node);
-      if (Option.isSome(made)) return made.value.flatMap((part) => sourcesOf(part, hops));
+      if (Option.isSome(made))
+        return [
+          ...Option.toArray(
+            Option.liftPredicate(
+              protocol,
+              () => node.type === "ObjectExpression" && definesProtocol(node),
+            ),
+          ),
+          ...made.value.flatMap((part) => sourcesOf(part, hops)),
+        ];
+      return implicitSources(node, hops);
+    };
+
+    /**
+     * The forms where the language calls code by itself: `await` resolves a thenable,
+     * a spread iterates, a tagged template calls its tag. What that code gives is
+     * followed only as far as an explicit call would be.
+     */
+    const implicitSources = (node: ESTree.Node, hops: number): ReadonlyArray<Source> => {
+      switch (node.type) {
+        case "AwaitExpression":
+          return throughProtocol(sourcesOf(node.argument, hops));
+        case "SpreadElement":
+          if (node.parent?.type === "ObjectExpression") return sourcesOf(node.argument, hops);
+          return throughProtocol(sourcesOf(node.argument, hops));
+        case "TaggedTemplateExpression":
+          if (hops <= 0) return [unknown];
+          return invokeSources(node.tag, node.quasi.expressions, false, hops);
+        default:
+          return namedSources(node, hops);
+      }
+    };
+
+    /** A name, a member, a class, an import or a call. */
+    const namedSources = (node: ESTree.Node, hops: number): ReadonlyArray<Source> => {
       switch (node.type) {
         case "Identifier":
           return bindingSources(node, hops);
