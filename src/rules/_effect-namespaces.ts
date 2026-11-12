@@ -1,4 +1,4 @@
-import type { ESTree } from "@oxlint/plugins";
+import type { Definition, ESTree } from "@oxlint/plugins";
 import * as Option from "effect/Option";
 
 import { Scope } from "../vendor/effect-oxlint/index.js";
@@ -30,6 +30,17 @@ export const importedNamespaces = (
   return namespaces;
 };
 
+/** Whether a definition is an import from the effect package, one of its subpaths, or an @effect package. */
+const isEffectImportBinding = (definition: Definition): boolean =>
+  definition.type === "ImportBinding" &&
+  definition.parent?.type === "ImportDeclaration" &&
+  isEffectPackageImport(definition.parent);
+
+/**
+ * The namespace names that mean effect's module where `node` is read: a name
+ * bound nowhere (the ambient default), or one imported from an effect package.
+ * A local declaration or an import from any other module shadows the name.
+ */
 export const visibleNamespaces = (
   ctx: RuleContext["Service"],
   node: ESTree.Node,
@@ -39,8 +50,7 @@ export const visibleNamespaces = (
     [...namespaces].filter((namespace) =>
       Option.match(Scope.findVariableUp(ctx.sourceCode.getScope(node), namespace), {
         onNone: () => true,
-        onSome: (variable) =>
-          variable.defs.some((definition) => definition.type === "ImportBinding"),
+        onSome: (variable) => variable.defs.some(isEffectImportBinding),
       }),
     ),
   );

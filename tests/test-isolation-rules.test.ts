@@ -403,6 +403,42 @@ describe("noFixedWaitInTests", () => {
   });
 });
 
+describe("Effect namespaces from other modules", () => {
+  test("a project import named Effect is not effect's namespace", () => {
+    const findings = lintFixtures("noFixedWaitInTests", {
+      "local.ts": "export const Effect = { sleep: (ms: number) => Promise.resolve(ms) };",
+      "local-effect.test.ts": [
+        'import { test } from "bun:test";',
+        'import { Effect } from "./local.ts";',
+        'test("a local Effect binding", async () => {',
+        "  await Effect.sleep(5);",
+        "});",
+      ].join("\n"),
+      "aliased.test.ts": [
+        'import { Effect as E } from "effect";',
+        'import { Effect } from "./local.ts";',
+        "async function t() { await Effect.sleep(5); }",
+        'function* u() { yield* E.sleep("5 millis"); }',
+      ].join("\n"),
+      "real.test.ts": [
+        'import { Effect } from "effect";',
+        'function* t() { yield* Effect.sleep("5 millis"); }',
+      ].join("\n"),
+    });
+    expect(reportedLines(findings, "local-effect.test.ts")).toEqual([]);
+    expect(reportedLines(findings, "aliased.test.ts")).toEqual([4]);
+    expect(reportedLines(findings, "real.test.ts")).toEqual([2]);
+  });
+
+  test("a project import named Effect does not trip noSilentCatchAll", () => {
+    const results = lintCases("noSilentCatchAll", {
+      valid: ['import { Effect } from "./local.js"; Effect.catchAll(job, () => Effect.void);'],
+      invalid: ['import { Effect } from "effect"; Effect.catchAll(job, () => Effect.void);'],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+});
+
 describe("effect.testFiles setting", () => {
   const fixtures = {
     "tests/support/helpers.ts": "window.__STATE__ = {};",
