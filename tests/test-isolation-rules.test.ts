@@ -588,6 +588,13 @@ describe("noTestLifecycleHooks", () => {
         "[1].map((afterAll) => afterAll());",
         "declare const beforeEach: (f: () => void) => void; beforeEach(() => {});",
         "declare function beforeAll(f: () => void): void; beforeAll(() => {});",
+        // Batch bd: one condition of a whitelisted shape broken alone.
+        'const { afterAll = require("vitest").afterAll } = () => {}; afterAll(() => {});',
+        'const [afterAll = require("vitest").afterAll] = function () {}; afterAll(() => {});',
+        "declare const afterAll = () => {}; afterAll(() => {});",
+        "function run(afterEach) { afterEach(() => {}); }",
+        'import type { afterAll } from "./hooks.js"; afterAll(() => {});',
+        'import type afterAll from "./hooks.js"; afterAll(() => {});',
         "function afterAll() {} const run = (afterAll) => afterAll(() => {});",
         // Modules: a package, require of any path, a namespace's member, a type import.
         'import { afterAll } from "vitest"; afterAll(() => {});',

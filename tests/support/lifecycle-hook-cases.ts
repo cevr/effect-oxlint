@@ -381,6 +381,14 @@ const valueCases = (): ReadonlyArray<HookCase> =>
 /**
  * A hook-named binding made in the file: the three quiet shapes, and the shapes next
  * to them the rule must still report. Each gives the lines before the call, and the call.
+ * Each condition of the rule's whitelist has a near miss that breaks it alone:
+ * - one binding: `redeclaredFunction`; never written: `reassignedFunction`;
+ * - a function declaration's own name: `functionParameter`;
+ * - a plain const name: `functionLiteralDestructure`, `functionLiteralArrayDestructure`;
+ * - `const`: `letArrow`, `varFunction`; not `declare`: `declaredConstArrow`;
+ * - the literal init: `wrappedArrow`, `localCallResult`;
+ * - a value import: `typeImport`, `typeOnlyImport`, `typeOnlyDefaultImport`;
+ * - a project path: the package modules of `importForms`.
  */
 export const localBindings = {
   functionDeclaration: {
@@ -473,6 +481,35 @@ export const localBindings = {
       `function ${hook}(f: () => void) {\n  f();\n}\nconst run = (${hook}: any) =>\n  ${hook}(() => {});`,
   },
   global: { quiet: false, write: (hook) => `${hook}(() => {});` },
+  // A destructuring whose init is a function literal: only `node.id === name` tells it from a const arrow.
+  functionLiteralDestructure: {
+    quiet: false,
+    write: (hook) =>
+      `const { ${hook} = (globalThis as any).${hook} } = () => {};\n${hook}(() => {});`,
+  },
+  functionLiteralArrayDestructure: {
+    quiet: false,
+    write: (hook) =>
+      `const [${hook} = (globalThis as any).${hook}] = function () {};\n${hook}(() => {});`,
+  },
+  // An ambient const with a function literal: it emits nothing, so the global hook runs.
+  declaredConstArrow: {
+    quiet: false,
+    write: (hook) => `declare const ${hook} = (f: () => void) => f();\n${hook}(() => {});`,
+  },
+  // A function declaration's parameter: its definition's node is the FunctionDeclaration.
+  functionParameter: {
+    quiet: false,
+    write: (hook) => `function run(${hook}: any) { ${hook}(() => {}); }`,
+  },
+  typeOnlyImport: {
+    quiet: false,
+    write: (hook) => `import type { ${hook} } from "./setup.js";\n${hook}(() => {});`,
+  },
+  typeOnlyDefaultImport: {
+    quiet: false,
+    write: (hook) => `import type ${hook} from "./setup.js";\n${hook}(() => {});`,
+  },
 } satisfies Record<string, { readonly quiet: boolean; readonly write: (hook: string) => string }>;
 
 /** Where a shape sits: the module's top level, or inside a test's callback. */
@@ -490,7 +527,10 @@ const moduleOnlyBindings: ReadonlySet<string> = new Set([
   "exportedFunction",
   "declaredFunction",
   "declaredConst",
+  "declaredConstArrow",
   "typeImport",
+  "typeOnlyImport",
+  "typeOnlyDefaultImport",
   "projectNamespaceMember",
 ]);
 
