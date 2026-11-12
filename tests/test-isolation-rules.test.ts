@@ -6,6 +6,14 @@ import {
   lintFixtures,
   reportedLines,
 } from "./support/lint-fixtures.js";
+import {
+  forms,
+  hookCases,
+  hooks,
+  projectModules,
+  reportedHookCases,
+  runnerModules,
+} from "./support/lifecycle-hook-cases.js";
 
 describe("noModuleMocks", () => {
   test("reports every Vitest and Jest mocking entry point", () => {
@@ -467,6 +475,42 @@ describe("noTestLifecycleHooks", () => {
     expect(reportedLines(findings, "globals.test.ts")).toEqual([1]);
     expect(findings.get("hooks.test.ts")?.[1]?.message).toContain("Avoid afterAll().");
     expect(findings.get("hooks.test.ts")?.[3]?.message).toContain("Avoid afterEach().");
+  });
+
+  test("reports a runner's hook in every binding form and no project module's", () => {
+    const reported = reportedHookCases();
+    const cases = hookCases();
+    expect(cases.length).toBe(
+      Object.keys(forms).length * (runnerModules.length + projectModules.length) * hooks.length,
+    );
+    expect(cases.filter((hookCase) => hookCase.runner !== reported.has(hookCase.id))).toEqual([]);
+  });
+
+  test("follows require made with createRequire and leaves local bindings", () => {
+    const results = lintCases("noTestLifecycleHooks", {
+      extension: "test.ts",
+      valid: [
+        'const { afterAll } = require("./setup.cjs"); afterAll(() => {});',
+        "function run(afterAll) { afterAll(() => {}); }",
+        'const { afterAll } = load("mocha"); afterAll(() => {});',
+        'const hooks = require("mocha"); hooks.describe("x", () => {});',
+        'import { test } from "vitest"; test.each([1])("x", () => {});',
+        'import * as hooks from "./hooks.js"; const ns = hooks.api; ns.afterAll(() => {});',
+        "const a = b.afterAll; const b = a.next; a(() => {});",
+      ],
+      invalid: [
+        'import { createRequire } from "node:module"; const require = createRequire(import.meta.url); const { beforeEach } = require("mocha"); beforeEach(() => {});',
+        'const { "afterEach": done } = require("node:test"); done(() => {});',
+        'const { beforeAll = () => {} } = require("node:test"); beforeAll(() => {});',
+        'import { default as m } from "mocha"; m.afterAll(() => {});',
+        'const afterAll = require("mocha").setup.afterAll; afterAll(() => {});',
+        'const { afterEach } = require("mocha").hooks; afterEach(() => {});',
+        'import { test } from "vitest"; test.beforeEach(() => {});',
+        'import { it } from "@effect/vitest"; it.afterAll(() => {});',
+        'import * as bt from "bun:test"; const { afterAll: done } = bt; done(() => {});',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
   test("leaves a local function or a non-test import named like a hook", () => {
