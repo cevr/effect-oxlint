@@ -106,6 +106,25 @@ describe("silent catch handlers", () => {
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
+
+  test("reports Effect 4's catch and catchCause beside Effect 3's names", () => {
+    const results = lintCases("noSilentCatchAll", {
+      valid: [
+        withImports("job.pipe(Effect.catch((error) => Effect.logError(error)));"),
+        withImports("job.pipe(Effect.catchTag('NotFound', () => Effect.void));"),
+        withImports("const local = { catch: (f) => f() }; local.catch(() => Effect.void);"),
+      ],
+      invalid: [
+        withImports("job.pipe(Effect.catchAll(() => Effect.void));"),
+        withImports("job.pipe(Effect.catch(() => Effect.void));"),
+        withImports("job.pipe(Effect.catchCause(() => Effect.void));"),
+        withImports("Effect.catch(job, () => Effect.void);"),
+        withImports("Effect.catchCause(job, () => { return Effect.void; });"),
+        'import { Effect as E } from "effect";\nexport const v4 = job.pipe(E.catch(() => E.void));',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
 });
 
 describe("retry schedules", () => {

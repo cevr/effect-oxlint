@@ -8,6 +8,9 @@ import * as Predicate from "effect/Predicate";
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
 
+/** The catch-everything combinators: Effect 4's `catch` and `catchCause`, and Effect 3's names. */
+const catchAllNames = ["catch", "catchCause", "catchAll", "catchAllCause"] as const;
+
 type Handler = ESTree.ArrowFunctionExpression | ESTree.Function;
 
 const isFunction = (node: ESTree.Argument): node is Handler =>
@@ -57,9 +60,9 @@ export const noSilentCatchAll = Rule.define({
       CallExpression: (node) => {
         if (node.type !== "CallExpression" || node.callee.type === "Super") return Effect.void;
         const namespaces = visibleNamespaces(ctx, node, effectNamespaces);
-        const catchesAll =
-          isStaticMember(node.callee, namespaces, "catchAll") ||
-          isStaticMember(node.callee, namespaces, "catchAllCause");
+        const catchesAll = catchAllNames.some((name) =>
+          isStaticMember(node.callee, namespaces, name),
+        );
         if (!catchesAll) return Effect.void;
         const silentHandler = Option.filter(
           Option.filter(handlerArgument(node), isFunction),

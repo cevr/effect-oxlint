@@ -119,6 +119,13 @@ interface AccumulatorCopy {
   readonly accumulator: Variable;
 }
 
+/** The variable the reducer's accumulator parameter declares. */
+function accumulatorVariable(sourceCode: SourceCode, reducer: Reducer): Option.Option<Variable> {
+  return Arr.findFirst(sourceCode.getDeclaredVariables(reducer.callback), (variable) =>
+    variable.identifiers.some((identifier) => identifier.start === reducer.accumulator.start),
+  );
+}
+
 // Local change: the method, reducer, and accumulator lookups are gathered as one Option.
 function accumulatorCopyCandidate(
   sourceCode: SourceCode,
@@ -128,23 +135,37 @@ function accumulatorCopyCandidate(
     method: arrayMethodTarget(node.callee),
     reducer: enclosingReducer(node),
   });
-  return Option.flatMap(lookups, ({ method, reducer }) => {
-    const accumulator = Arr.findFirst(
-      sourceCode.getDeclaredVariables(reducer.callback),
-      (variable) =>
-        variable.identifiers.some((identifier) => identifier.start === reducer.accumulator.start),
-    );
-    return Option.map(accumulator, (variable) => ({ method, reducer, accumulator: variable }));
-  });
+  return Option.flatMap(lookups, ({ method, reducer }) =>
+    Option.map(accumulatorVariable(sourceCode, reducer), (variable) => ({
+      method,
+      reducer,
+      accumulator: variable,
+    })),
+  );
 }
 
-/** Reject non-spread copies of reducer accumulators; pair with oxc/no-accumulating-spread. */
+/**
+ * Local change: a spread of the accumulator into an array or object literal
+ * (`[...acc, x]`, `{ ...acc, [k]: v }`) is a copy too, reported here rather
+ * than left to oxc/no-accumulating-spread, which the recommended preset does not enable.
+ */
+function spreadsAccumulator(sourceCode: SourceCode, node: ESTree.SpreadElement): boolean {
+  const literal = node.parent;
+  if (literal.type !== "ArrayExpression" && literal.type !== "ObjectExpression") return false;
+  return Option.exists(enclosingReducer(node), (reducer) =>
+    Option.exists(accumulatorVariable(sourceCode, reducer), (accumulator) =>
+      referencesAccumulator(sourceCode, node.argument, accumulator),
+    ),
+  );
+}
+
+/** Reject copies of reducer accumulators: copy calls, and spreads into a fresh array or object. */
 export const noReduceAccumulatorCopy = Rule.define({
   name: "no-reduce-accumulator-copy",
   meta: Rule.meta({
     type: "problem",
     description:
-      "Disallow copying growing reducer accumulators with Object.assign, Array.from, or array copy methods.",
+      "Disallow copying growing reducer accumulators with spreads, Object.assign, Array.from, or array copy methods.",
     messages: {
       accumulatorCopy:
         "Do not copy the reducer accumulator on every iteration; growing copies can cause quadratic work. Mutate a fresh, locally owned accumulator and return it, or use an iterator pipeline/flatMap.",
@@ -186,6 +207,12 @@ export const noReduceAccumulatorCopy = Rule.define({
         );
         if (!copies) return Effect.void;
         return context.report(Diagnostic.fromId({ node, messageId: "accumulatorCopy" }));
+      },
+      SpreadElement: (node: ESTree.SpreadElement) => {
+        if (!spreadsAccumulator(sourceCode, node)) return Effect.void;
+        return context.report(
+          Diagnostic.fromId({ node: node.parent, messageId: "accumulatorCopy" }),
+        );
       },
     };
   },
