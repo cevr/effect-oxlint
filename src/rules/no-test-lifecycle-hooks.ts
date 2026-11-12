@@ -11,15 +11,16 @@ const lifecycleHooks = ["afterAll", "afterEach", "beforeAll", "beforeEach"] as c
 
 const hookNames: ReadonlySet<string> = new Set(lifecycleHooks);
 
-const testModules = new Set([
-  "bun:test",
-  "vitest",
-  "@effect/vitest",
-  "effect-bun-test",
-  "@jest/globals",
-]);
+/** Specifier prefixes of the project's own modules: relative, absolute, and the usual path aliases. */
+const projectPrefixes = [".", "/", "@/", "~", "#"] as const;
 
-const isTestModule = (from: string): boolean => testModules.has(from);
+/**
+ * A package a hook can come from (`bun:test`, `vitest`, `node:test`, `mocha`, ...):
+ * any specifier that does not name one of the project's own modules, whose
+ * helpers may share a hook's name.
+ */
+const isTestModule = (from: string): boolean =>
+  !projectPrefixes.some((prefix) => from.startsWith(prefix));
 
 export const noTestLifecycleHooks = Rule.define({
   name: "no-test-lifecycle-hooks",
