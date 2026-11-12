@@ -439,6 +439,59 @@ describe("Effect namespaces from other modules", () => {
   });
 });
 
+describe("noTestLifecycleHooks", () => {
+  test("reports a hook imported under another name or called through a namespace", () => {
+    const findings = lintFixtures("noTestLifecycleHooks", {
+      "hooks.test.ts": [
+        'import * as bt from "bun:test";',
+        'import { afterAll as cleanup, beforeEach as setup, afterAll } from "bun:test";',
+        "afterAll(() => {});", // 3
+        "cleanup(() => {});", // 4
+        "setup(() => {});", // 5
+        "bt.afterEach(() => {});", // 6
+        "",
+      ].join("\n"),
+      "vitest.test.ts": [
+        'import * as vt from "vitest";',
+        'import { beforeAll as before } from "@effect/vitest";',
+        'import { afterEach } from "effect-bun-test";',
+        "vt.beforeAll(() => {});", // 4
+        "before(() => {});", // 5
+        "afterEach(() => {});", // 6
+        "",
+      ].join("\n"),
+      "globals.test.ts": "beforeEach(() => {});\n", // 1
+    });
+    expect(reportedLines(findings, "hooks.test.ts")).toEqual([3, 4, 5, 6]);
+    expect(reportedLines(findings, "vitest.test.ts")).toEqual([4, 5, 6]);
+    expect(reportedLines(findings, "globals.test.ts")).toEqual([1]);
+    expect(findings.get("hooks.test.ts")?.[1]?.message).toContain("Avoid afterAll().");
+    expect(findings.get("hooks.test.ts")?.[3]?.message).toContain("Avoid afterEach().");
+  });
+
+  test("leaves a local function or a non-test import named like a hook", () => {
+    const results = lintCases("noTestLifecycleHooks", {
+      extension: "test.ts",
+      valid: [
+        "const afterAll = (f) => f(); afterAll(() => {});",
+        "function beforeEach(f) { return f(); } beforeEach(() => {});",
+        'import { afterAll } from "./fixtures.js"; afterAll(() => {});',
+        'import * as hooks from "./hooks.js"; hooks.afterEach(() => {});',
+        'import * as bt from "bun:test"; bt.test("x", () => {});',
+        "const bt = { afterEach: (f) => f() }; bt.afterEach(() => {});",
+      ],
+      invalid: [
+        'import { afterAll } from "bun:test"; afterAll(() => {});',
+        'import { afterEach as after } from "vitest"; after(() => {});',
+        'import * as bt from "bun:test"; bt.beforeAll(() => {});',
+        'import { beforeEach } from "@jest/globals"; beforeEach(() => {});',
+        "afterAll(() => {});",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+});
+
 describe("effect.testFiles setting", () => {
   const fixtures = {
     "tests/support/helpers.ts": "window.__STATE__ = {};",

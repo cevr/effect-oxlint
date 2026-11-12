@@ -1,9 +1,25 @@
 /** Ban test lifecycle hooks in favor of Effect scopes and scoped test variants. */
-import { AST, Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import type { ESTree } from "@oxlint/plugins";
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-const lifecycleHooks = new Set(["afterAll", "afterEach", "beforeAll", "beforeEach"]);
+import { memberName, nameBindings } from "./_name-bindings.js";
+
+const lifecycleHooks = ["afterAll", "afterEach", "beforeAll", "beforeEach"] as const;
+
+const hookNames: ReadonlySet<string> = new Set(lifecycleHooks);
+
+const testModules = new Set([
+  "bun:test",
+  "vitest",
+  "@effect/vitest",
+  "effect-bun-test",
+  "@jest/globals",
+]);
+
+const isTestModule = (from: string): boolean => testModules.has(from);
 
 export const noTestLifecycleHooks = Rule.define({
   name: "no-test-lifecycle-hooks",
@@ -13,24 +29,36 @@ export const noTestLifecycleHooks = Rule.define({
   }),
   create: function* () {
     const ctx = yield* RuleContext;
+    const bindings = nameBindings(ctx);
+
+    /** The hook a callee calls: a test runner's hook under any import name, a global hook, or `ns.<hook>` of a runner namespace. */
+    const hookOf = (callee: ESTree.Node): Option.Option<string> => {
+      if (callee.type === "Identifier") {
+        return Arr.findFirst(
+          lifecycleHooks,
+          (hook) =>
+            bindings.isGlobal(callee, hook) || bindings.importsAs(callee, isTestModule, hook),
+        );
+      }
+      if (callee.type !== "MemberExpression") return Option.none();
+      if (!bindings.importsAs(callee.object, isTestModule, "*")) return Option.none();
+      return Option.filter(memberName(callee), (name) => hookNames.has(name));
+    };
 
     return {
-      CallExpression: (node) =>
-        Option.match(AST.narrow(node, "CallExpression"), {
+      CallExpression: (node) => {
+        if (node.type !== "CallExpression") return Effect.void;
+        return Option.match(hookOf(node.callee), {
           onNone: () => Effect.void,
-          onSome: (call) => {
-            const hook = Option.filter(AST.calleeName(call), (name) => lifecycleHooks.has(name));
-            if (Option.isNone(hook)) return Effect.void;
-            const name = hook.value;
-
-            return ctx.report(
+          onSome: (name) =>
+            ctx.report(
               Diagnostic.make({
-                node: call,
+                node,
                 message: `Avoid ${name}(). Use effect-bun-test scoped tests and Effect.acquireRelease for fixture lifecycles.`,
               }),
-            );
-          },
-        }),
+            ),
+        });
+      },
     };
   },
 });
