@@ -62,8 +62,11 @@ describe("anti-slop rules synced from upstream", () => {
         "function run(Object) { return items.reduce((acc, item) => Object.assign({}, acc), {}); }",
         "const Array = custom; items.reduce((acc, item) => Array.from(acc), []);",
         "items.reduce((acc, item) => { let alias = acc; alias = item; return Object.assign({}, alias); }, {});",
-        "items.reduce((acc, item) => [...acc, item], []);",
-        "items.reduce((acc, item) => ({ ...acc, [item.id]: item }), {});",
+        "items.reduce((acc, item) => { acc.push([...item.parts]); return acc; }, []);",
+        "items.reduce((acc, item) => ({ ...item, total: acc.total + 1 }), { total: 0 });",
+        "items.reduce((acc, item) => { const copy = () => [...acc]; return acc; }, []);",
+        "items.reduce((acc, item) => Math.max(...acc, item), []);",
+        "items.map((acc) => [...acc]);",
       ],
       invalid: [
         "items.reduce((acc, item) => Object.assign({}, acc, { [item.id]: item }), {});",
@@ -86,6 +89,12 @@ describe("anti-slop rules synced from upstream", () => {
         "items.reduce((acc, item) => acc.toSorted(), []);",
         "items.reduce((acc, item) => acc.toReversed(), []);",
         "items.reduce((acc, item) => acc.with(0, item), []);",
+        "items.reduce((acc, item) => [...acc, item], []);",
+        "items.reduce<Array<number>>((acc, x) => [...acc, x], []);",
+        "items.reduce((acc, item) => ({ ...acc, [item.id]: item }), {});",
+        "items.reduceRight(function (acc, item) { return [item, ...acc]; }, []);",
+        "items.reduce((acc, item) => { const alias = acc; return { ...alias, [item.id]: item }; }, {});",
+        "items.reduce((acc, item) => { const next = [...acc]; next.push(item); return next; }, []);",
       ],
     });
     expect(results.reportedValid).toEqual([]);
