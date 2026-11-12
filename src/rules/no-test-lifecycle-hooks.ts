@@ -36,11 +36,21 @@ const isProjectModule = (from: string): boolean =>
 const madeHere: ReadonlySet<string> = new Set([
   "ArrowFunctionExpression",
   "BinaryExpression",
-  "ClassExpression",
   "FunctionExpression",
   "Literal",
   "UnaryExpression",
   "UpdateExpression",
+]);
+
+/** Wrappers that change an expression's type, not its value: `x as T`, `x!`, `(x)`, `a?.b`. */
+const typeWrappers: ReadonlySet<string> = new Set([
+  "ChainExpression",
+  "ParenthesizedExpression",
+  "TSAsExpression",
+  "TSInstantiationExpression",
+  "TSNonNullExpression",
+  "TSSatisfiesExpression",
+  "TSTypeAssertion",
 ]);
 
 /** The modules `createRequire` comes from. */
@@ -182,6 +192,26 @@ const parts = (node: ESTree.Node): Option.Option<ReadonlyArray<ESTree.Node>> => 
   }
 };
 
+/** A function whose body the rule can read for what it returns. */
+type FunctionNode = Extract<
+  ESTree.Node,
+  { readonly type: "ArrowFunctionExpression" | "FunctionDeclaration" | "FunctionExpression" }
+>;
+
+const isFunctionNode = (node: ESTree.Node): node is FunctionNode =>
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression";
+
+/** A value read through code the rule does not follow: an object literal's getter or setter. */
+const hasAccessor = (node: ESTree.Node): boolean =>
+  node.type === "ObjectExpression" &&
+  node.properties.some((property) => property.type === "Property" && property.kind !== "init");
+
+/** A child of a node, when it is a node: a value of one of its visitor keys. */
+const isNode = (value: unknown): value is ESTree.Node =>
+  Predicate.hasProperty(value, "type") && Predicate.isString(value.type);
+
 /** `for (const x of xs)`: the iterated value `x` takes an element of. */
 const loopValue = (declaration: ESTree.Node): Option.Option<ESTree.Node> => {
   const loop = declaration.parent;
@@ -237,16 +267,64 @@ export const noTestLifecycleHooks = Rule.define({
       });
     };
 
+    /** A parameter: made by its caller, so local, but a default value (`(m = require("x"))`) is followed. */
+    const parameterSources = (definition: Definition, hops: number): ReadonlyArray<Source> => [
+      local,
+      ...defaultsAbove(definition.name, definition.node).flatMap((value) =>
+        bound(definition.name, value, sourcesOf(value, hops)),
+      ),
+    ];
+
+    /** The default values a pattern position sits under, up to its function: `(x = d)`, `({ x } = d)`. */
+    const defaultsAbove = (node: ESTree.Node, fn: ESTree.Node): ReadonlyArray<ESTree.Node> =>
+      Option.match(
+        Option.filter(Option.fromNullishOr(node.parent), (parent) => parent !== fn),
+        {
+          onNone: () => [],
+          onSome: (parent) => {
+            const above = defaultsAbove(parent, fn);
+            if (parent.type === "AssignmentPattern" && parent.left === node)
+              return [parent.right, ...above];
+            return above;
+          },
+        },
+      );
+
+    /** A class as a value: its statics, its base class; a decorator or static block is not followed. */
+    const classSources = (node: ESTree.Node, hops: number): ReadonlyArray<Source> => {
+      if (node.type !== "ClassDeclaration" && node.type !== "ClassExpression") return [unknown];
+      if (isAmbient(node) || node.decorators.length > 0) return [unknown];
+      const statics = node.body.body.flatMap((element): ReadonlyArray<Source> => {
+        if (element.type === "StaticBlock") return [unknown];
+        if (element.type === "TSIndexSignature" || !element.static) return [];
+        if (element.type === "MethodDefinition" || element.type === "TSAbstractMethodDefinition") {
+          if (element.kind === "get" || element.kind === "set") return [unknown];
+          return [];
+        }
+        return Option.match(Option.fromNullishOr(element.value), {
+          onNone: () => [],
+          onSome: (value) => sourcesOf(value, hops),
+        });
+      });
+      const base = Option.match(Option.fromNullishOr(node.superClass), {
+        onNone: (): ReadonlyArray<Source> => [],
+        onSome: (superClass) => sourcesOf(superClass, hops),
+      });
+      return [local, ...base, ...statics];
+    };
+
     /** Where a definition's value comes from. */
     const definitionSources = (definition: Definition, hops: number): ReadonlyArray<Source> => {
       switch (definition.type) {
         case "Parameter":
+          return parameterSources(definition, hops);
         case "CatchClause":
           return [local];
         case "FunctionName":
-        case "ClassName":
           if (isAmbient(definition.node)) return [unknown];
           return [local];
+        case "ClassName":
+          return classSources(definition.node, hops);
         case "ImportBinding":
           return [importSource(definition)];
         case "Variable":
@@ -281,19 +359,166 @@ export const noTestLifecycleHooks = Rule.define({
             ...variable.references
               .filter((reference) => reference.isWrite() && !reference.init)
               .flatMap((reference) => writeSources(reference, hops - 1)),
+            ...Option.toArray(
+              Option.liftPredicate(unknown, () => !isSealed(variable, id, hops - 1)),
+            ),
           ],
         },
       );
     };
 
-    /** A call's value: a module for `require("x")`, else whatever its callee and arguments are. */
+    /** The outermost read a name is part of: `o`, `o.a.b`, `(o as T).a`. */
+    const readTop = (id: ESTree.Node): ESTree.Node =>
+      Option.match(Option.fromNullishOr(id.parent), {
+        onNone: () => id,
+        onSome: (parent) => {
+          if (parent.type === "MemberExpression" && parent.object === id) return readTop(parent);
+          if (
+            typeWrappers.has(parent.type) &&
+            Option.exists(wrapped(parent), (inner) => inner === id)
+          )
+            return readTop(parent);
+          return id;
+        },
+      });
+
+    /** Whether a read leaves its binding unchanged: a direct call, an alias that is sealed, a value used up. */
+    const readSeals = (
+      id: ESTree.Node,
+      top: ESTree.Node,
+      parent: ESTree.Node,
+      except: ESTree.Node,
+      hops: number,
+    ): boolean => {
+      if (parent.type === "VariableDeclarator" && parent.init === top)
+        return ctx.sourceCode
+          .getDeclaredVariables(parent)
+          .every((alias) => isSealed(alias, except, hops - 1));
+      if (top === id && parent.type === "CallExpression" && parent.callee === top) return true;
+      return top !== id && consumed(parent, top);
+    };
+
+    /** A read whose value is used up where it is read: a test, an operand, a statement. */
+    const consumed = (parent: ESTree.Node, top: ESTree.Node): boolean => {
+      switch (parent.type) {
+        case "IfStatement":
+        case "WhileStatement":
+        case "DoWhileStatement":
+        case "SwitchStatement":
+        case "BinaryExpression":
+        case "TemplateLiteral":
+        case "ExpressionStatement":
+        case "ExportSpecifier":
+        case "TSTypeQuery":
+          return true;
+        case "UnaryExpression":
+          return parent.operator !== "delete";
+        case "ConditionalExpression":
+          return parent.test === top;
+        default:
+          return false;
+      }
+    };
+
+    /**
+     * Whether nothing but plain reads can change what a binding holds: every other
+     * read is a direct call, a member read used up in place, or an alias that is
+     * itself sealed. A binding passed to a call (`Object.assign(o, ...)`), a member
+     * assigned (`o.a = ...`) or a method called (`o.load()`) may be changed.
+     */
+    const isSealed = (variable: Variable, except: ESTree.Node, hops: number): boolean => {
+      if (variable.defs.some((definition) => definition.node.type === "ImportNamespaceSpecifier"))
+        return true;
+      if (hops <= 0) return false;
+      return variable.references.every((reference) => {
+        const id = reference.identifier;
+        if (reference.isWrite() || id === except) return true;
+        const top = readTop(id);
+        return Option.exists(Option.fromNullishOr(top.parent), (parent) =>
+          readSeals(id, top, parent, except, hops),
+        );
+      });
+    };
+
+    /** The functions a callee calls, when it is one the file defines and never rebinds. */
+    const functionsOf = (callee: ESTree.Node): Option.Option<ReadonlyArray<FunctionNode>> => {
+      const target = unwrap(callee);
+      if (isFunctionNode(target)) return Option.some([target]);
+      if (target.type !== "Identifier") return Option.none();
+      return Option.flatMap(variableOf(target), (variable) => {
+        if (variable.references.some((reference) => reference.isWrite() && !reference.init))
+          return Option.none();
+        const functions = variable.defs.flatMap((definition) => {
+          const node = definition.node;
+          if (definition.type === "FunctionName" && isFunctionNode(node)) return [node];
+          if (node.type !== "VariableDeclarator" || node.id !== definition.name) return [];
+          return Option.toArray(Option.filter(Option.fromNullishOr(node.init), isFunctionNode)).map(
+            (init) => init,
+          );
+        });
+        return Option.liftPredicate(functions, (found) => found.length === variable.defs.length);
+      });
+    };
+
+    /** The `return` statements of a body, outside its nested functions: each one's value, if any. */
+    const returnsIn = (node: ESTree.Node): ReadonlyArray<Option.Option<ESTree.Node>> => {
+      if (node.type === "ReturnStatement") return [Option.fromNullishOr(node.argument)];
+      if (isFunctionNode(node)) return [];
+      const keys = new Set(ctx.sourceCode.visitorKeys[node.type] ?? []);
+      return Object.entries(node)
+        .filter(([key]) => keys.has(key))
+        .flatMap(([, child]: [string, unknown]) => [child].flat())
+        .flatMap((child) => Option.toArray(Option.liftPredicate(child, isNode)))
+        .flatMap(returnsIn);
+    };
+
+    /** What a function returns: its body's value, or each `return`'s; a generator is not followed. */
+    const returnSources = (fn: FunctionNode, hops: number): ReadonlyArray<Source> => {
+      if (fn.generator) return [unknown];
+      return Option.match(Option.fromNullishOr(fn.body), {
+        onNone: () => [unknown],
+        onSome: (body) => bodySources(body, hops),
+      });
+    };
+
+    /** A function body's value: a concise body's expression, or what each `return` gives (none: local). */
+    const bodySources = (body: ESTree.Node, hops: number): ReadonlyArray<Source> => {
+      if (body.type !== "BlockStatement") return sourcesOf(body, hops);
+      const returns = body.body.flatMap(returnsIn);
+      return [
+        local,
+        ...returns.flatMap((value) =>
+          Option.match(value, { onNone: () => [local], onSome: (node) => sourcesOf(node, hops) }),
+        ),
+      ];
+    };
+
+    /**
+     * A call's value: a module for `require("x")`; what a function the file defines
+     * returns, with its arguments; what a project module's export makes. Any other
+     * call's or construction's result is unknown.
+     */
     const callSources = (
       node: ESTree.CallExpression | ESTree.NewExpression,
       hops: number,
     ): ReadonlyArray<Source> => {
+      if (hops <= 0) return [unknown];
       if (node.type === "CallExpression" && isRequire(node.callee, hops))
         return [moduleOf(Option.fromUndefinedOr(node.arguments[0]))];
-      return [node.callee, ...node.arguments].flatMap((part) => sourcesOf(part, hops));
+      const args = node.arguments.flatMap((argument) => sourcesOf(argument, hops));
+      const followed = Option.filter(
+        functionsOf(node.callee),
+        () => node.type === "CallExpression",
+      );
+      if (Option.isSome(followed))
+        return [...followed.value.flatMap((fn) => returnSources(fn, hops - 1)), ...args];
+      const callee = sourcesOf(node.callee, hops);
+      if (
+        callee.length > 0 &&
+        callee.every((source) => source.kind === "module" && isProjectModule(source.from))
+      )
+        return [...callee, ...args];
+      return [unknown];
     };
 
     /** Where an expression's value can come from; an unmodelled form is unknown. */
@@ -301,11 +526,14 @@ export const noTestLifecycleHooks = Rule.define({
       if (madeHere.has(node.type)) return [local];
       const inner = wrapped(node);
       if (Option.isSome(inner)) return sourcesOf(inner.value, hops);
+      if (hasAccessor(node)) return [unknown];
       const made = parts(node);
       if (Option.isSome(made)) return made.value.flatMap((part) => sourcesOf(part, hops));
       switch (node.type) {
         case "Identifier":
           return bindingSources(node, hops);
+        case "ClassExpression":
+          return classSources(node, hops);
         case "MemberExpression":
           return sourcesOf(node.object, hops).map((source) => member(source, memberName(node)));
         case "ImportExpression":

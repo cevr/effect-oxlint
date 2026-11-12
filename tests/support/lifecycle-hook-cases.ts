@@ -39,11 +39,23 @@ export const projectModules = [
   "#test/hooks",
 ] as const;
 
-/** A source of the module whole: the lines that bind it, and the expression that reads it. */
+/**
+ * A source of the module whole: the lines that bind it, and the expression that reads
+ * it; `awaited` when the expression is a promise of it (`import("x")`).
+ */
 interface Source {
   readonly prelude: string;
   readonly expression: string;
+  readonly awaited?: boolean;
 }
+
+/** The expression a source's module reads as: awaited when it is a promise. */
+const readModule = (source: Source): string => awaitIf(source.awaited === true, source.expression);
+
+const awaitIf = (awaited: boolean, expression: string): string => {
+  if (awaited) return `await ${expression}`;
+  return expression;
+};
 
 export const moduleSources = {
   require: (from) => ({ prelude: "", expression: `require("${from}")` }),
@@ -56,7 +68,7 @@ export const moduleSources = {
     prelude: 'import { createRequire } from "node:module";\n',
     expression: `createRequire(import.meta.url)("${from}")`,
   }),
-  dynamicImport: (from) => ({ prelude: "", expression: `await import("${from}")` }),
+  dynamicImport: (from) => ({ prelude: "", expression: `import("${from}")`, awaited: true }),
   importEquals: (from) => ({ prelude: `import mod = require("${from}");\n`, expression: "mod" }),
   namespaceImport: (from) => ({ prelude: `import * as mod from "${from}";\n`, expression: "mod" }),
   defaultImport: (from) => ({ prelude: `import mod from "${from}";\n`, expression: "mod" }),
@@ -123,14 +135,162 @@ export const forms = {
         Object.entries(bindings).map(([binding, write]) => [
           `${source}.${wrapper}.${binding}`,
           (from: string, hook: string) => {
-            const { prelude, expression } = bind(from);
-            return `${prelude}${write(wrap(expression), hook)}`;
+            const module: Source = bind(from);
+            return `${module.prelude}${write(wrap(readModule(module)), hook)}`;
           },
         ]),
       ),
     ),
   ),
 };
+
+/** What a value producer makes of a module expression: the lines it adds, and the expression of its result. */
+interface Produced {
+  readonly prelude: string;
+  readonly value: string;
+}
+
+/**
+ * Code a module passes through before it is bound: a function the file defines and
+ * calls, a class, an object. `traceable` producers return or hold the module where the
+ * rule can follow it; the rest hide it (a getter, a method, a mutation), so the rule
+ * cannot prove their result the project's and reports a callee spelled like a hook.
+ */
+export const producers = {
+  none: { traceable: true, make: (e, awaited) => ({ prelude: "", value: awaitIf(awaited, e) }) },
+  arrowThunk: {
+    traceable: true,
+    make: (e, awaited) => ({
+      prelude: `const make = () => ${e};\n`,
+      value: awaitIf(awaited, "make()"),
+    }),
+  },
+  functionDeclaration: {
+    traceable: true,
+    make: (e, awaited) => ({
+      prelude: `function make() {\n  return ${e};\n}\n`,
+      value: awaitIf(awaited, "make()"),
+    }),
+  },
+  asyncThunk: {
+    traceable: true,
+    make: (e, awaited) => ({
+      prelude: `const make = async () => ${awaitIf(awaited, e)};\n`,
+      value: "await make()",
+    }),
+  },
+  iife: {
+    traceable: true,
+    make: (e, awaited) => ({ prelude: "", value: awaitIf(awaited, `(() => ${e})()`) }),
+  },
+  optionalCall: {
+    traceable: true,
+    make: (e, awaited) => ({
+      prelude: `const make = () => ${e};\n`,
+      value: awaitIf(awaited, "make?.()"),
+    }),
+  },
+  identity: {
+    traceable: true,
+    make: (e, awaited) => ({
+      prelude: "const pass = (m: any) => m;\n",
+      value: awaitIf(awaited, `pass(${e})`),
+    }),
+  },
+  defaultParameter: {
+    traceable: true,
+    make: (e, awaited) => ({
+      prelude: `const make = (m = ${e}) => m;\n`,
+      value: awaitIf(awaited, "make()"),
+    }),
+  },
+  staticField: {
+    traceable: true,
+    make: (e, awaited) => ({
+      prelude: `class Holder {\n  static mod = ${e};\n}\n`,
+      value: awaitIf(awaited, "Holder.mod"),
+    }),
+  },
+  objectMethod: {
+    traceable: false,
+    make: (e, awaited) => ({
+      prelude: `const factory = { make() { return ${e}; } };\n`,
+      value: awaitIf(awaited, "factory.make()"),
+    }),
+  },
+  getter: {
+    traceable: false,
+    make: (e, awaited) => ({
+      prelude: `const holder = { get mod() { return ${e}; } };\n`,
+      value: awaitIf(awaited, "holder.mod"),
+    }),
+  },
+  newClass: {
+    traceable: false,
+    make: (e, awaited) => ({
+      prelude: `class Holder {\n  mod = ${e};\n}\n`,
+      value: awaitIf(awaited, "new Holder().mod"),
+    }),
+  },
+  classMethod: {
+    traceable: false,
+    make: (e, awaited) => ({
+      prelude: `class Factory {\n  make() {\n    return ${e};\n  }\n}\n`,
+      value: awaitIf(awaited, "new Factory().make()"),
+    }),
+  },
+  objectAssign: {
+    traceable: false,
+    make: (e, awaited) => ({
+      prelude: `const target = {};\nObject.assign(target, ${awaitIf(awaited, e)});\n`,
+      value: "target",
+    }),
+  },
+  memberAssign: {
+    traceable: false,
+    make: (e, awaited) => ({
+      prelude: `const target: any = {};\ntarget.mod = ${awaitIf(awaited, e)};\n`,
+      value: "target.mod",
+    }),
+  },
+} satisfies Record<
+  string,
+  { readonly traceable: boolean; readonly make: (e: string, awaited: boolean) => Produced }
+>;
+
+/**
+ * Each module source × producer × binding, from one runner and one project module and
+ * through one wrapper, each turning with the case.
+ */
+export const producerCases = (): ReadonlyArray<HookCase> =>
+  Object.entries(moduleSources).flatMap(([source, bind], sourceIndex) =>
+    Object.entries(producers).flatMap(([producer, { traceable, make }], producerIndex) =>
+      Object.entries(bindings).flatMap(([binding, write], bindingIndex) => {
+        const turn = sourceIndex + producerIndex + bindingIndex;
+        const wrapperEntries = Object.entries(wrappers);
+        const [wrapper, wrap] = wrapperEntries[turn % wrapperEntries.length] ?? [
+          "none",
+          wrappers.none,
+        ];
+        const modules = [
+          { from: runnerModules[turn % runnerModules.length] ?? "vitest", runner: true },
+          { from: projectModules[turn % projectModules.length] ?? "./setup.js", runner: false },
+        ];
+        return modules.map(({ from, runner }, moduleIndex) => {
+          const hook = hooks[(turn + moduleIndex) % hooks.length] ?? "afterAll";
+          const module: Source = bind(from);
+          const produced = make(module.expression, module.awaited === true);
+          return {
+            id: `${source}.${producer}.${wrapper}.${binding}/${from}/${hook}`,
+            // A hidden value is reported where 0.32.1 matched it: a callee spelled like the hook.
+            runner: (traceable && runner) || (!traceable && hookNamedBindings.has(binding)),
+            // `export {}` makes the file a module, so `await (...)` parses as an await, not a call of `await`.
+            source: `export {};\n${module.prelude}${produced.prelude}${write(wrap(produced.value), hook)}\n`,
+          };
+        });
+      }),
+    ),
+  );
 
 /**
  * Values that are no module's: one made in the file, which the rule must leave, and
@@ -193,17 +353,18 @@ export const hookCases = (): ReadonlyArray<HookCase> => [
 ];
 
 /** Lint every case in one oxlint run: the ids of the cases the rule reported on their call. */
-export const reportedHookCases = (): ReadonlySet<string> => {
-  const cases = hookCases();
+export const reportedHookCases = (
+  cases: ReadonlyArray<HookCase> = hookCases(),
+): ReadonlySet<string> => {
   const findings = lintFixtures(
     "noTestLifecycleHooks",
     Object.fromEntries(cases.map((hookCase, index) => [caseFile(index), hookCase.source])),
   );
   return new Set(
-    cases
-      .filter((hookCase, index) =>
-        reportedLines(findings, caseFile(index)).includes(callLine(hookCase.source.trimEnd())),
-      )
-      .map((hookCase) => hookCase.id),
+    cases.flatMap((hookCase, index) => {
+      if (!reportedLines(findings, caseFile(index)).includes(callLine(hookCase.source.trimEnd())))
+        return [];
+      return [hookCase.id];
+    }),
   );
 };

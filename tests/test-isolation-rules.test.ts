@@ -13,6 +13,8 @@ import {
   hooks,
   importForms,
   moduleSources,
+  producerCases,
+  producers,
   projectModules,
   reportedHookCases,
   runnerModules,
@@ -508,6 +510,59 @@ describe("noTestLifecycleHooks", () => {
     expect(
       cases.filter((hookCase) => hookCase.runner !== reported.has(hookCase.id)).map(({ id }) => id),
     ).toEqual([]);
+  });
+
+  test("reports a runner's hook through every value producer, and a hidden value spelled like a hook", () => {
+    const cases = producerCases();
+    expect(cases.length).toBe(
+      Object.keys(moduleSources).length *
+        Object.keys(producers).length *
+        Object.keys(bindings).length *
+        2,
+    );
+    const reported = reportedHookCases(cases);
+    expect(
+      cases.filter((hookCase) => hookCase.runner !== reported.has(hookCase.id)).map(({ id }) => id),
+    ).toEqual([]);
+  });
+
+  test("reports what a call returns unless the file's own function returns it", () => {
+    const results = lintCases("noTestLifecycleHooks", {
+      extension: "test.ts",
+      valid: [
+        "const make = () => ({ afterAll: (f) => f() }); const { afterAll } = make(); afterAll(() => {});",
+        "function make() { if (1) return { afterAll() {} }; return {}; } const { afterAll } = make(); afterAll();",
+        "const { afterAll } = (() => ({ afterAll() {} }))(); afterAll();",
+        'const make = () => require("./setup.js"); const { afterAll } = make(); afterAll();',
+        'import { make } from "./hooks.js"; const { beforeEach } = make(); beforeEach();',
+        "const o = { afterAll() {} }; if (o.afterAll) {} const { afterAll } = o; afterAll();",
+        "class H { static afterAll() {} } const { afterAll } = H; afterAll();",
+      ],
+      invalid: [
+        'const load = () => require("vitest"); const { afterAll } = load(); afterAll(() => {});',
+        'function hooks() { return require("vitest"); } const { afterAll } = hooks(); afterAll();',
+        'const load = async () => import("vitest"); const { afterAll } = await load(); afterAll();',
+        'const { afterAll } = (() => require("vitest"))(); afterAll(() => {});',
+        'const o = { get afterAll() { return require("vitest").afterAll; } }; const { afterAll } = o; afterAll();',
+        'const { afterAll } = new (class { afterAll = require("vitest").afterAll })(); afterAll();',
+        'const o = {}; Object.assign(o, require("vitest")); const { afterAll } = o; afterAll();',
+        'const o: any = {}; o.afterAll = require("vitest").afterAll; const { afterAll } = o; afterAll();',
+        'const o: any = {}; const p = o; p.afterAll = require("vitest").afterAll; const { afterAll } = o; afterAll();',
+        "const o = { afterAll() {} }; o.load(); const { afterAll } = o; afterAll();",
+        'const pass = (m) => m; const { afterAll } = pass(require("vitest")); afterAll();',
+        'function f(m = require("vitest")) { return m; } const { afterAll } = f(); afterAll();',
+        'function f({ afterAll } = require("vitest")) { afterAll(); }',
+        'class H { static afterAll = require("vitest").afterAll; } const { afterAll } = H; afterAll();',
+        "class H { static { } } const { afterAll } = H; afterAll();",
+        'class H extends require("vitest").Base {} const { afterAll } = H; afterAll();',
+        "function* gen() { yield 1; } const { afterAll } = gen(); afterAll();",
+        "const { afterAll } = new Map(); afterAll();",
+        'const make = () => require("vitest"); const { afterAll: done } = make(); done();',
+        "const { afterAll } = load()(); afterAll();",
+        "const f = () => g(); const { afterAll } = f(); afterAll();",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
   test("reports a hook-named binding it cannot prove local or the project's, as 0.32.1 did", () => {
