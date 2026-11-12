@@ -13,9 +13,12 @@ import {
   hooks,
   importForms,
   moduleSources,
+  producerCases,
+  producers,
   projectModules,
   reportedHookCases,
   runnerModules,
+  localCases,
   valueSources,
   wrappers,
 } from "./support/lifecycle-hook-cases.js";
@@ -482,8 +485,7 @@ describe("noTestLifecycleHooks", () => {
     expect(findings.get("hooks.test.ts")?.[3]?.message).toContain("Avoid afterEach().");
   });
 
-  test("reports a runner's hook in every binding form and no project module's", () => {
-    const reported = reportedHookCases();
+  test("reports every hook-named call in the binding matrix but the three local shapes", () => {
     const cases = hookCases();
     expect(Object.keys(forms).length).toBe(
       Object.keys(importForms).length +
@@ -495,126 +497,153 @@ describe("noTestLifecycleHooks", () => {
       Object.keys(forms).length * (runnerModules.length + projectModules.length) +
         Object.keys(valueSources).length *
           Object.keys(wrappers).length *
-          Object.keys(bindings).length,
+          Object.keys(bindings).length +
+        localCases().length,
     );
-    for (const runner of [true, false])
+    // Every hook meets both sides of the contract.
+    for (const quiet of [true, false])
       expect(
         new Set(
           cases
-            .filter((hookCase) => hookCase.runner === runner)
+            .filter((hookCase) => hookCase.quiet === quiet && (quiet || hookCase.named))
             .map(({ id }) => id.split("/").at(-1)),
         ),
       ).toEqual(new Set(hooks));
+    const reported = reportedHookCases(cases);
     expect(
-      cases.filter((hookCase) => hookCase.runner !== reported.has(hookCase.id)).map(({ id }) => id),
+      cases
+        .filter((hookCase) => hookCase.named && !hookCase.quiet && !reported.has(hookCase.id))
+        .map(({ id }) => id),
+    ).toEqual([]);
+    expect(
+      cases.filter((hookCase) => hookCase.quiet && reported.has(hookCase.id)).map(({ id }) => id),
     ).toEqual([]);
   });
 
-  test("reports a hook-named binding it cannot prove local or the project's, as 0.32.1 did", () => {
-    const results = lintCases("noTestLifecycleHooks", {
-      extension: "test.ts",
-      valid: [
-        "function run(afterAll) { afterAll(() => {}); }",
-        "const run = ({ beforeEach }) => beforeEach(() => {});",
-        "try {} catch (afterEach) { afterEach(() => {}); }",
-        "let afterAll = () => {}; afterAll = () => {}; afterAll(() => {});",
-        "let beforeEach; beforeEach(() => {});",
-        "const { afterAll } = { afterAll: (f) => f() }; afterAll(() => {});",
-        "const [afterEach] = [(f) => f()]; afterEach(() => {});",
-        "const beforeAll = 1 ? null : (f) => f(); beforeAll?.(() => {});",
-        "const { afterAll } = require(`./setup.js`); afterAll(() => {});",
-        'import { make } from "./hooks.js"; const { afterAll } = make(); afterAll(() => {});',
-        'import { afterAll } from "./hooks.js"; (afterAll as any)(() => {});',
-        "function after() {} after();",
-        "const before = () => {}; before();",
-        "const test = { afterAll: () => {} }; test.afterAll();",
-        'import { it } from "./runner.js"; it.beforeEach(() => {});',
-      ],
-      invalid: [
-        "const { afterAll } = globalThis; afterAll(() => {});",
-        "const { afterAll } = window; afterAll(() => {});",
-        'const { afterAll } = load("mocha"); afterAll(() => {});',
-        "const afterEach = getHooks().afterEach; afterEach(() => {});",
-        "declare const beforeEach: (f: () => void) => void; beforeEach(() => {});",
-        "declare function beforeAll(f: () => void): void; beforeAll(() => {});",
-        "let afterAll = () => {}; afterAll = globalThis.afterAll; afterAll(() => {});",
-        'let afterAll; ({ afterAll } = require("vitest")); afterAll(() => {});',
-        "const { afterAll } = this; afterAll(() => {});",
-        "const { afterAll } = require(name); afterAll(() => {});",
-        "const { afterAll } = await import(name); afterAll(() => {});",
-        'const hooks = cond ? require("./hooks.js") : require("vitest"); const { afterEach } = hooks; afterEach(() => {});',
-        'import v = require("vitest"); v.afterAll(() => {});',
-        "import v = Foo.Bar; const { afterAll } = v; afterAll(() => {});",
-        "for (const afterAll of list) afterAll(() => {});",
-        'import { afterAll } from "vitest"; (afterAll as any)(() => {});',
-        'import { afterAll } from "vitest"; afterAll!(() => {});',
-        'import { afterAll } from "vitest"; (0, afterAll)(() => {});',
-        "after(() => {});",
-        "before(() => {});",
-        "test.beforeEach(() => {});",
-        "describe.afterAll(() => {});",
-        'import { it } from "vitest"; it.afterEach(() => {});',
-        'import { after as done } from "node:test"; done(() => {});',
-        'import * as v from "vitest"; (v as any).afterAll(() => {});',
-      ],
-    });
-    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  test("reports a hook-named binding through every value producer", () => {
+    const cases = producerCases();
+    expect(cases.length).toBe(
+      Object.keys(moduleSources).length *
+        Object.keys(producers).length *
+        Object.keys(bindings).length *
+        2,
+    );
+    expect(cases.filter((hookCase) => hookCase.quiet)).toEqual([]);
+    const reported = reportedHookCases(cases);
+    expect(
+      cases.filter((hookCase) => hookCase.named && !reported.has(hookCase.id)).map(({ id }) => id),
+    ).toEqual([]);
   });
 
-  test("follows require made with createRequire and leaves local bindings", () => {
-    const results = lintCases("noTestLifecycleHooks", {
-      extension: "test.ts",
-      valid: [
-        'const { afterAll } = require("./setup.cjs"); afterAll(() => {});',
-        "function run(afterAll) { afterAll(() => {}); }",
-        'const hooks = require("mocha"); hooks.describe("x", () => {});',
-        'import { test } from "vitest"; test.each([1])("x", () => {});',
-        'import * as hooks from "./hooks.js"; const ns = hooks.api; ns.afterAll(() => {});',
-        "const a = b.afterAll; const b = a.next; a(() => {});",
-      ],
-      invalid: [
-        'import { createRequire } from "node:module"; const require = createRequire(import.meta.url); const { beforeEach } = require("mocha"); beforeEach(() => {});',
-        'const { "afterEach": done } = require("node:test"); done(() => {});',
-        'const { beforeAll = () => {} } = require("node:test"); beforeAll(() => {});',
-        'import { default as m } from "mocha"; m.afterAll(() => {});',
-        'const afterAll = require("mocha").setup.afterAll; afterAll(() => {});',
-        'const { afterEach } = require("mocha").hooks; afterEach(() => {});',
-        'import { test } from "vitest"; test.beforeEach(() => {});',
-        'import { it } from "@effect/vitest"; it.afterAll(() => {});',
-        'import * as bt from "bun:test"; const { afterAll: done } = bt; done(() => {});',
-      ],
-    });
-    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
-  });
-
-  test("leaves a local function or a non-test import named like a hook", () => {
+  test("leaves only a function declaration, a const function and a project import", () => {
     const results = lintCases("noTestLifecycleHooks", {
       extension: "test.ts",
       valid: [
         "const afterAll = (f) => f(); afterAll(() => {});",
+        "const afterEach = function (f) { f(); }; afterEach(() => {});",
         "function beforeEach(f) { return f(); } beforeEach(() => {});",
+        "export function beforeAll(f) { f(); } beforeAll(() => {});",
+        'describe("x", () => { function afterAll(f) { f(); } afterAll(() => {}); });',
+        "function after() {} after();",
+        "const before = () => {}; before();",
+        "const beforeAll = async () => {}; await beforeAll();",
         'import { afterAll } from "./fixtures.js"; afterAll(() => {});',
-        'import * as hooks from "./hooks.js"; hooks.afterEach(() => {});',
+        'import afterAll from "./fixtures.js"; afterAll(() => {});',
+        'import { afterAll } from "./hooks.js"; (afterAll as any)(() => {});',
         'import { afterEach } from "../support/setup.js"; afterEach(() => {});',
         'import { beforeAll } from "/repo/test/setup.js"; beforeAll(() => {});',
         'import { beforeEach } from "@/test/hooks"; beforeEach(() => {});',
         'import { afterAll } from "~/test/hooks"; afterAll(() => {});',
         'import { afterEach } from "#test/hooks"; afterEach(() => {});',
-        'import * as bt from "bun:test"; bt.test("x", () => {});',
-        "const bt = { afterEach: (f) => f() }; bt.afterEach(() => {});",
       ],
       invalid: [
-        'import { afterAll } from "bun:test"; afterAll(() => {});',
-        'import { afterEach as after } from "vitest"; after(() => {});',
-        'import * as bt from "bun:test"; bt.beforeAll(() => {});',
-        'import { beforeEach } from "@jest/globals"; beforeEach(() => {});',
-        'import { beforeEach } from "node:test"; beforeEach(() => {});',
-        'import { afterEach } from "node:test"; afterEach(() => {});',
-        'import { beforeEach } from "mocha"; beforeEach(() => {});',
-        'import { afterAll as done } from "mocha"; done(() => {});',
-        'import * as nt from "node:test"; nt.afterEach(() => {});',
-        'import { afterAll } from "@playwright/test"; afterAll(() => {});',
+        // Batch bc: a destructuring default holds the package's hook when the key is missing.
+        'const { afterAll = require("vitest").afterAll } = {}; afterAll(() => {});',
+        'const hooks = {}; const { afterAll = require("vitest").afterAll } = hooks; afterAll(() => {});',
+        'const [afterAll = require("vitest").afterAll] = []; afterAll(() => {});',
+        'const { a: { afterAll = require("vitest").afterAll } = {} } = {}; afterAll(() => {});',
+        'for (const { afterAll = require("vitest").afterAll } of [{}]) afterAll(() => {});',
+        'import * as v from "vitest"; const { afterAll = v.afterAll } = {}; afterAll(() => {});',
+        'let afterAll; ({ afterAll = require("vitest").afterAll } = {}); afterAll(() => {});',
+        // Local-looking bindings outside the three shapes.
+        "const { afterAll } = { afterAll: (f) => f() }; afterAll(() => {});",
+        "const { afterAll = () => {} } = {}; afterAll(() => {});",
+        "const [afterEach] = [(f) => f()]; afterEach(() => {});",
+        "let afterAll = () => {}; afterAll(() => {});",
+        "var afterAll = () => {}; afterAll(() => {});",
+        "let beforeEach; beforeEach(() => {});",
+        "const afterAll = ((f) => f()) as any; afterAll(() => {});",
+        "const beforeAll = 1 ? null : (f) => f(); beforeAll?.(() => {});",
+        "function afterAll() {} afterAll = globalThis.afterAll; afterAll(() => {});",
+        "function afterAll() {} var afterAll = globalThis.afterAll; afterAll(() => {});",
+        "const make = () => (f) => f(); const afterAll = make(); afterAll(() => {});",
+        "const make = () => ({ afterAll: (f) => f() }); const { afterAll } = make(); afterAll(() => {});",
+        "const o = { afterAll() {} }; const { afterAll } = o; afterAll();",
+        "class H { static afterAll() {} } const { afterAll } = H; afterAll();",
+        "function run(afterAll) { afterAll(() => {}); }",
+        "const run = ({ beforeEach }) => beforeEach(() => {});",
+        "function run(beforeAll = () => {}) { beforeAll(); }",
+        "for (const afterAll of [(f) => f()]) afterAll(() => {});",
+        "try {} catch (afterEach) { afterEach(() => {}); }",
+        "[1].map((afterAll) => afterAll());",
+        "declare const beforeEach: (f: () => void) => void; beforeEach(() => {});",
+        "declare function beforeAll(f: () => void): void; beforeAll(() => {});",
+        // Batch bd: one condition of a whitelisted shape broken alone.
+        'const { afterAll = require("vitest").afterAll } = () => {}; afterAll(() => {});',
+        'const [afterAll = require("vitest").afterAll] = function () {}; afterAll(() => {});',
+        "declare const afterAll = () => {}; afterAll(() => {});",
+        "function run(afterEach) { afterEach(() => {}); }",
+        'import type { afterAll } from "./hooks.js"; afterAll(() => {});',
+        'import type afterAll from "./hooks.js"; afterAll(() => {});',
+        "function afterAll() {} const run = (afterAll) => afterAll(() => {});",
+        // Modules: a package, require of any path, a namespace's member, a type import.
+        'import { afterAll } from "vitest"; afterAll(() => {});',
+        'import { afterAll } from "vitest"; (afterAll as any)(() => {});',
+        'import { afterAll } from "vitest"; afterAll!(() => {});',
+        'import { afterAll } from "vitest"; (0, afterAll)(() => {});',
+        'const { afterAll } = require("./setup.js"); afterAll(() => {});',
+        'const afterAll = require("./setup.js").afterAll; afterAll(() => {});',
+        'import * as hooks from "./hooks.js"; const afterAll = hooks.afterAll; afterAll(() => {});',
+        'import { make } from "./hooks.js"; const { afterAll } = make(); afterAll(() => {});',
+        'import { type afterAll } from "./hooks.js"; afterAll(() => {});',
+        'export { afterAll } from "vitest"; afterAll(() => {});',
+        "const { afterAll } = await import(name); afterAll(() => {});",
+        "const { afterAll } = globalThis; afterAll(() => {});",
         "afterAll(() => {});",
+        "after(() => {});",
+        "before(() => {});",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  test("reports a runner's member hook and a package namespace's", () => {
+    const results = lintCases("noTestLifecycleHooks", {
+      extension: "test.ts",
+      valid: [
+        'import * as hooks from "./hooks.js"; hooks.afterEach(() => {});',
+        'import * as hooks from "./hooks.js"; const ns = hooks.api; ns.afterAll(() => {});',
+        'import * as bt from "bun:test"; bt.test("x", () => {});',
+        "const bt = { afterEach: (f) => f() }; bt.afterEach(() => {});",
+        'const hooks = require("mocha"); hooks.describe("x", () => {});',
+        'import { test } from "vitest"; test.each([1])("x", () => {});',
+        'import { afterAll as cleanup } from "./hooks.js"; cleanup(() => {});',
+        "const a = b.afterAll; const b = a.next; a(() => {});",
+      ],
+      invalid: [
+        "test.beforeEach(() => {});",
+        "describe.afterAll(() => {});",
+        'import { it } from "vitest"; it.afterEach(() => {});',
+        'import { it } from "./runner.js"; it.beforeEach(() => {});',
+        "const test = { afterAll: () => {} }; test.afterAll();",
+        'import * as bt from "bun:test"; bt.beforeAll(() => {});',
+        'import * as v from "vitest"; (v as any).afterAll(() => {});',
+        'import m from "mocha"; m.afterAll(() => {});',
+        'import { default as m } from "mocha"; m.afterAll(() => {});',
+        'import v = require("vitest"); v.afterAll(() => {});',
+        'import { afterEach as after } from "vitest"; after(() => {});',
+        'import { afterAll as done } from "mocha"; done(() => {});',
+        'import { "afterEach" as done } from "node:test"; done(() => {});',
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
