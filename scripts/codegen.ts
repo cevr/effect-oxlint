@@ -117,17 +117,15 @@ const loadEntry = (file: string) => {
     },
     onSome: (exportName) =>
       loadPresetDocs(file, exportName).pipe(
-        Effect.map(
-          (docs): ReadonlyArray<RuleEntry> => [
-            {
-              fileName: file.replace(".ts", ""),
-              exportName,
-              category: detectCategory(content, file),
-              recommended: docs.recommended !== false,
-              recommendedOptions: Option.fromUndefinedOr(docs.recommendedOptions),
-            },
-          ],
-        ),
+        Effect.map((docs): ReadonlyArray<RuleEntry> => [
+          {
+            fileName: file.replace(".ts", ""),
+            exportName,
+            category: detectCategory(content, file),
+            recommended: docs.recommended !== false,
+            recommendedOptions: Option.fromUndefinedOr(docs.recommendedOptions),
+          },
+        ]),
       ),
   });
 };

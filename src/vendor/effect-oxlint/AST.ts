@@ -291,22 +291,20 @@ export const objectHasKey: {
 export const objectGetValue: {
   (key: string): (node: ESTree.ObjectExpression) => Option.Option<ESTree.Expression>;
   (node: ESTree.ObjectExpression, key: string): Option.Option<ESTree.Expression>;
-} = dual(
-  2,
-  (node: ESTree.ObjectExpression, key: string): Option.Option<ESTree.Expression> =>
-    pipe(
-      node.properties,
-      Arr.findFirst(
-        (p): p is ESTree.ObjectProperty =>
-          p.type === "Property" &&
-          (identifierName(p.key).pipe(
-            Option.map((n) => n === key),
-            Option.getOrElse(() => false),
-          ) ||
-            (p.key.type === "Literal" && p.key.value === key)),
-      ),
-      Option.map((p) => p.value),
+} = dual(2, (node: ESTree.ObjectExpression, key: string): Option.Option<ESTree.Expression> =>
+  pipe(
+    node.properties,
+    Arr.findFirst(
+      (p): p is ESTree.ObjectProperty =>
+        p.type === "Property" &&
+        (identifierName(p.key).pipe(
+          Option.map((n) => n === key),
+          Option.getOrElse(() => false),
+        ) ||
+          (p.key.type === "Literal" && p.key.value === key)),
     ),
+    Option.map((p) => p.value),
+  ),
 );
 
 // ---------------------------------------------------------------------------
