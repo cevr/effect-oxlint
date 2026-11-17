@@ -38,6 +38,41 @@ describe("tn1Lint", () => {
     ]);
   });
 
+  // Mutant: the package's lintSync not used (every file spawns the bin): the stub
+  // package has no bin, so a spawn reports that it could not run. Mutant: a
+  // lintSync that throws ignored, so the rule goes quiet on a failed network.
+  test("runs the networks through the package's lintSync when it exports one", () => {
+    const sidecar = {
+      "node_modules/@cevr/tn1-lint/package.json": '{ "name": "@cevr/tn1-lint", "main": "lint.js" }',
+      "node_modules/@cevr/tn1-lint/lint.js": [
+        "exports.lintSync = ({ rule, weights, path, text }) => {",
+        '  if (weights.endsWith("missing.tn1")) throw new Error(`tn1-lint: cannot read ${weights}`);',
+        '  const at = text.indexOf("NARRATE");',
+        "  if (at < 0) return [];",
+        "  const span = { offset: Buffer.byteLength(text.slice(0, at)), length: 7 };",
+        '  return [{ message: `${rule}: by lintSync`, code: `ergo-tn1(${rule})`, severity: "advice", filename: path, labels: [{ span }] }];',
+        "};",
+      ].join("\n"),
+    };
+    const found = lintFixtures(
+      "tn1Lint",
+      { ...sidecar, "e.ts": ['export const name = "éé";', "// NARRATE", ""].join("\n") },
+      { options: [{ nets: { narration: stub.weights } }], threads: 1 },
+    );
+    expect(found.get("e.ts")).toEqual([{ line: 2, message: "narration: by lintSync" }]);
+    const failed = lintFixtures(
+      "tn1Lint",
+      { ...sidecar, "f.ts": "export const one = 1;\n" },
+      { options: [{ nets: { narration: "missing.tn1" } }], threads: 1 },
+    );
+    expect(failed.get("f.ts")).toEqual([
+      {
+        line: 1,
+        message: expect.stringContaining("tn1-lint: network narration: tn1-lint: cannot read"),
+      },
+    ]);
+  });
+
   // Mutant: a failed run or a missing package ignored, so a configured rule goes quiet.
   test("reports a failed run and a missing package once, at the file's start", () => {
     const failed = lintFixtures(

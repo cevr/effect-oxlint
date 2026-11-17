@@ -32,10 +32,12 @@ export default {
     },
     {
       // tn1Lint runs the @cevr/tn1-lint binary: a host adapter that spawns a
-      // process and resolves a package from the lint root.
+      // process, and resolves and loads the package the lint root installed
+      // (its lintSync), which no static import can name.
       files: ["src/rules/tn1-lint.ts"],
       rules: {
         "effect/noNodeBuiltinImport": "off",
+        "effect/noDynamicImports": "off",
       },
     },
     {
