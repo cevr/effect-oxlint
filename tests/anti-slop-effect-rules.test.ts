@@ -444,7 +444,7 @@ describe("Effect rules ported from anti-slop", () => {
         // The status is read before the decode.
         `${imports}export const get = Effect.fn("get")(function* (client: HttpClient.HttpClient) { const response = yield* client.get("/user"); if (response.status !== 200) return yield* Effect.fail(new Failed({ status: response.status })); return yield* HttpClientResponse.schemaBodyJson(User)(response); });`,
         // fetch, with res.ok checked first.
-        `export async function load(url: string) { const res = await fetch(url); if (!res.ok) throw new Error(String(res.status)); return res.json(); }`,
+        `export async function load(url: string) { const res = await fetch(url); if (!res.ok) throw new Error("not ok"); return res.json(); }`,
         // A json field of something that is not a response.
         `export const read = (config: { json: string }) => JSON.parse(config.json);`,
       ],
