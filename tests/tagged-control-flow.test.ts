@@ -5,7 +5,7 @@ import { preferCatchTag } from "../src/rules/prefer-catch-tag.js";
 import { preferMatchTagsExhaustive } from "../src/rules/prefer-match-tags-exhaustive.js";
 import { preferPredicateIsTagged } from "../src/rules/prefer-predicate-is-tagged.js";
 import { Testing } from "../src/vendor/effect-oxlint/index.js";
-import { lintCases } from "./support/lint-fixtures.js";
+import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
 
 const tagEquals = (subject: string, tag: string) =>
   Testing.binaryExpr("===", Testing.memberExpr(subject, "_tag"), Testing.strLiteral(tag));
@@ -346,5 +346,22 @@ describe("tagged union declarations", () => {
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+});
+
+// The AS5 conflict fixture (prefer-tagged-error-handling vs preferPredicateIsTagged): each
+// tag test in a broad catch handler or a catchIf predicate, written with `_tag` or with
+// Predicate.isTagged, gets one finding with one remedy, Effect.catchTag/catchTags.
+// Mutants: Predicate.isTagged not read as a tag test (lines 15 and 38 go quiet); a ternary
+// handler of Effect.catch not read (lines 8 and 15); preferPredicateIsTagged not skipping a
+// broad catch handler (a second finding, another remedy, on line 9).
+describe("tag tests in Effect recovery handlers", () => {
+  const fixture =
+    '// The shared fixture: a broad Effect.catch handler that narrows two tags with `||`.\nimport { Effect, Predicate } from "effect";\n\ndeclare const task: Effect.Effect<number, { readonly _tag: "NotFound" } | { readonly _tag: "Gone" } | { readonly _tag: "Denied" }>;\ndeclare const recover: Effect.Effect<number>;\n\nexport const program = task.pipe(\n  Effect.catch((error) =>\n    error._tag === "NotFound" || error._tag === "Gone" ? recover : Effect.fail(error),\n  ),\n);\n\n// The same narrowing written as preferPredicateIsTagged asks, inline.\nexport const inline = task.pipe(\n  Effect.catch((error) =>\n    Predicate.isTagged(error, "NotFound") || Predicate.isTagged(error, "Gone")\n      ? recover\n      : Effect.fail(error),\n  ),\n);\n\n// And as a named refinement composed from Predicate.isTagged.\nconst isMissing = Predicate.or(Predicate.isTagged("NotFound"), Predicate.isTagged("Gone"));\nexport const named = task.pipe(\n  Effect.catch((error) => (isMissing(error) ? recover : Effect.fail(error))),\n);\n\n// catchIf with the inline tags: preferPredicateIsTagged exempts a catchIf predicate.\nexport const catchIf = task.pipe(\n  Effect.catchIf(\n    (error) => error._tag === "NotFound" || error._tag === "Gone",\n    () => recover,\n  ),\n);\n\n// catchIf with Predicate.isTagged: anti-slop reports it.\nexport const catchIfTagged = task.pipe(\n  Effect.catchIf((error) => Predicate.isTagged(error, "NotFound"), () => recover),\n);\n';
+  test("get preferCatchTag alone, once per handler", () => {
+    const lines = (rule: string) =>
+      (lintFixtures(rule, { "a.ts": fixture }).get("a.ts") ?? []).map((finding) => finding.line);
+    expect(lines("preferCatchTag")).toEqual([8, 15, 30, 38]);
+    expect(lines("preferPredicateIsTagged")).toEqual([]);
   });
 });

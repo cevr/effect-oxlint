@@ -8,6 +8,7 @@ import { isEffectPackageImport } from "./_effect-namespaces.js";
 import {
   effectCallbackLocation,
   hasOneTaggedSubject,
+  isInsideBroadCatchHandler,
   tagComparisonsInOr,
 } from "./_tagged-control-flow.js";
 
@@ -38,7 +39,9 @@ export const preferPredicateIsTagged = Rule.define({
         if (node.parent?.type === "LogicalExpression" && node.parent.operator === "||") {
           return Effect.void;
         }
-        if (isCatchIfPredicate(node)) return Effect.void;
+        // In a catchIf predicate or a broad catch handler, preferCatchTag gives the
+        // one remedy (Effect.catchTag/catchTags); Predicate.isTagged would be a detour.
+        if (isCatchIfPredicate(node) || isInsideBroadCatchHandler(node)) return Effect.void;
         if (!Option.exists(tagComparisonsInOr(node), hasOneTaggedSubject)) return Effect.void;
         return context.report(
           Diagnostic.make({
