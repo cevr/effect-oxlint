@@ -1,5 +1,11 @@
 # oxlint-plugin-effect
 
+## 0.32.4
+
+### Patch Changes
+
+- [`338a275`](https://github.com/cevr/effect-oxlint/commit/338a27575f3cc2cdb254c0a6d483563a5c87f02a) Thanks [@cevr](https://github.com/cevr)! - Require `@oxlint/plugins` `^1.94.0` (was `^1.64.0`). Built and tested against Effect 4.1.4; the `effect` peer range is unchanged.
+
 ## 0.32.3
 
 ### Patch Changes
