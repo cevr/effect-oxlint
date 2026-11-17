@@ -5,10 +5,12 @@
  * judgement an exact rule cannot, such as a comment that narrates the next
  * line. `@cevr/tn1-lint` is its linter: a native binary, the same on every
  * host, that reads TypeScript and prints oxlint's JSON report. This rule
- * does not bundle the engine or the weights: it runs the installed
- * package's binary on the file's text (as its standard input, `-`, so an unsaved buffer is
- * what is read), once per configured network, and reports each finding at
- * its span. A finding is a hint with a probability; configure the rule as
+ * does not bundle the engine or the weights: it hands the file's text (an
+ * unsaved buffer is what is read) to the installed package once per
+ * configured network, and reports each finding at its span. Through the
+ * package's `lintSync`, one `tn1-lint serve` process answers the whole lint
+ * run; with the `binary` option, or a package from before `lintSync`, the
+ * binary runs once per file and network with the text as its standard input. A finding is a hint with a probability; configure the rule as
  * "warn". It is opt-in: install `@cevr/tn1-lint` beside the plugin and name
  * each network's weights file.
  *
@@ -23,6 +25,7 @@ import { dirname, join, resolve } from "node:path";
 
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
@@ -46,6 +49,30 @@ const Report = Schema.Struct({
 });
 
 const decodeReport = Schema.decodeUnknownOption(Schema.fromJsonString(Report));
+
+const decodeDiagnostics = Schema.decodeUnknownOption(Report.fields.diagnostics);
+
+type Diagnostics = (typeof Report.Type)["diagnostics"];
+
+/** A request of the package's `lintSync`: one text, one network. */
+interface Request {
+  readonly rule: string;
+  readonly weights: string;
+  readonly path: string;
+  readonly text: string;
+}
+
+/** The package's `lintSync`; its reply is decoded again (it is the package's contract, not checked here). */
+type LintSync = (request: Request) => Diagnostics;
+
+/** A network's findings on one request, or why the run failed. */
+type Runner = (request: Request) => Effect.Effect<ReadonlyArray<Finding>, string>;
+
+const SidecarModule = Schema.Struct({
+  lintSync: Schema.declare((input): input is LintSync => Predicate.isFunction(input)),
+});
+
+const decodeSidecarModule = Schema.decodeUnknownOption(SidecarModule);
 
 /** A finding of one network: its message and its range in UTF-16 code units. */
 interface Finding {
@@ -88,21 +115,69 @@ const hint = (error: Error): string => {
   return " (the host could not copy oxlint's memory to start a process; run oxlint with --threads=4 or fewer)";
 };
 
-/** The package's binary: the `binary` option, else `@cevr/tn1-lint` as the lint root resolves it. */
-const binaryOf = (cwd: string, binary: Option.Option<string>): Option.Option<string> =>
-  Option.match(binary, {
-    onSome: (path) => Option.some(resolve(cwd, path)),
-    onNone: () =>
-      Option.map(
-        Option.liftThrowable(() =>
-          createRequire(join(cwd, "package.json")).resolve("@cevr/tn1-lint/package.json"),
-        )(),
-        (manifest) => join(dirname(manifest), "bin", "tn1-lint"),
+/** Each diagnostic's labels as findings, in UTF-16 ranges of `text`. */
+const findingsOf = (text: string, diagnostics: Diagnostics): ReadonlyArray<Finding> => {
+  const toUnit = utf16Index(text);
+  return diagnostics.flatMap((diagnostic) =>
+    diagnostic.labels.map(({ span }): Finding => ({
+      message: diagnostic.message,
+      range: [toUnit(span.offset), toUnit(span.offset + span.length)],
+    })),
+  );
+};
+
+/** The runner of the package's `lintSync`: one `tn1-lint serve` process for the whole lint run. */
+const sidecarRunner =
+  (lintSync: LintSync): Runner =>
+  (request) =>
+    Effect.try({
+      try: () => lintSync(request),
+      catch: (error) => `network ${request.rule}: ${String(error).replace(/^Error: /u, "")}`,
+    }).pipe(
+      Effect.flatMap((reply) =>
+        Option.match(decodeDiagnostics(reply), {
+          onNone: () =>
+            Effect.fail(`network ${request.rule}: tn1-lint replied with no diagnostics`),
+          onSome: (diagnostics) => Effect.succeed(findingsOf(request.text, diagnostics)),
+        }),
       ),
+    );
+
+/**
+ * The runner: the `binary` option's process per file and network, else
+ * `@cevr/tn1-lint` as the lint root resolves it, through its `lintSync` when
+ * it exports one (a package from before `lintSync` runs its bin per file).
+ */
+const runnerOf = (cwd: string, binary: Option.Option<string>): Option.Option<Runner> =>
+  Option.match(binary, {
+    onSome: (path) => Option.some(spawnRunner(resolve(cwd, path))),
+    onNone: () => {
+      const fromRoot = createRequire(join(cwd, "package.json"));
+      return Option.map(
+        Option.liftThrowable(() => fromRoot.resolve("@cevr/tn1-lint/package.json"))(),
+        (manifest) =>
+          Option.match(
+            Option.flatMap(
+              Option.liftThrowable(() => fromRoot("@cevr/tn1-lint"))(),
+              decodeSidecarModule,
+            ),
+            {
+              onSome: (module) => sidecarRunner(module.lintSync),
+              onNone: () => spawnRunner(join(dirname(manifest), "bin", "tn1-lint")),
+            },
+          ),
+      );
+    },
   });
 
-/** The findings of one network on `text`, or why the run failed. */
-const runNetwork = (
+/** The runner of one `tn1-lint lint` process per file and network. */
+const spawnRunner =
+  (binary: string): Runner =>
+  (request) =>
+    spawnNetwork(binary, request.rule, request.weights, request.text);
+
+/** The findings of one network on `text` from one process, or why the run failed. */
+const spawnNetwork = (
   binary: string,
   name: string,
   weights: string,
@@ -123,18 +198,9 @@ const runNetwork = (
       const reason = run.stderr.trim().split("\n")[0] ?? `exit ${String(run.status)}`;
       return Effect.fail(`network ${name}: ${reason}`);
     }
-    const toUnit = utf16Index(text);
     return Option.match(decodeReport(run.stdout), {
       onNone: () => Effect.fail(`network ${name}: tn1-lint printed no oxlint JSON report`),
-      onSome: (report) =>
-        Effect.succeed(
-          report.diagnostics.flatMap((diagnostic) =>
-            diagnostic.labels.map(({ span }): Finding => ({
-              message: diagnostic.message,
-              range: [toUnit(span.offset), toUnit(span.offset + span.length)],
-            })),
-          ),
-        ),
+      onSome: (report) => Effect.succeed(findingsOf(text, report.diagnostics)),
     });
   });
 
@@ -167,17 +233,22 @@ export const tn1Lint = Rule.define({
     return {
       Program: () => {
         if (nets.length === 0) return Effect.void;
-        return Option.match(binaryOf(ctx.cwd, Option.fromUndefinedOr(options?.binary)), {
+        return Option.match(runnerOf(ctx.cwd, Option.fromUndefinedOr(options?.binary)), {
           onNone: () =>
             report(
               "tn1-lint: the package @cevr/tn1-lint is not installed here; add it beside oxlint-plugin-effect, or set the rule's binary option.",
               atStart,
             ),
-          onSome: (binary) =>
+          onSome: (runner) =>
             Effect.forEach(
               nets,
               ([name, weights]) =>
-                runNetwork(binary, name, resolve(ctx.cwd, weights), ctx.sourceCode.text).pipe(
+                runner({
+                  rule: name,
+                  weights: resolve(ctx.cwd, weights),
+                  path: ctx.filename,
+                  text: ctx.sourceCode.text,
+                }).pipe(
                   Effect.flatMap((findings) =>
                     Effect.forEach(findings, (finding) => report(finding.message, finding.range), {
                       discard: true,
