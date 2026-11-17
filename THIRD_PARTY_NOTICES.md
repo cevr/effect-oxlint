@@ -4,7 +4,15 @@ The anti-slop rules include code derived from
 [`dmmulroy/anti-slop`](https://github.com/dmmulroy/anti-slop), synced to commit
 `c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b`. The rejection-handler exemption in
 `noUnknownParameters` comes from the vendored copy in
-[`joelhooks/rat-stack`](https://github.com/joelhooks/rat-stack).
+[`joelhooks/rat-stack`](https://github.com/joelhooks/rat-stack). The Effect
+service rules (`requireCauseWhenNarrowing`, `noOrdieInServiceConstruction`,
+`noReprovideAmbientService`, `preferYieldService`, `noServiceParameters`,
+`noDisabledTypeAssertionRules`, `noServiceConstructorImports`,
+`noTestCodeInSrc`, `requireServiceMakeLayer`), the Refactoring rules `mysteriousName`
+and `repeatedSwitches`, and `src/rules/_anti-slop-effect.ts`
+are ported from the fork
+[`K-Mistele/anti-slop`](https://github.com/K-Mistele/anti-slop) at commit
+`b7c1619`, under the same license.
 
 MIT License
 

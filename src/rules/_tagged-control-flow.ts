@@ -106,6 +106,71 @@ export const effectCallbackLocation = (
     callbackLocation(callback, operation),
   );
 
+/** `Predicate.isTagged`, as a member of the `Predicate` namespace. */
+const isPredicateIsTagged = (node: ESTree.Node): boolean =>
+  node.type === "MemberExpression" &&
+  !node.computed &&
+  node.object.type === "Identifier" &&
+  node.object.name === "Predicate" &&
+  node.property.type === "Identifier" &&
+  node.property.name === "isTagged";
+
+/** The subject of `Predicate.isTagged(subject, "Tag")` or `Predicate.isTagged("Tag")(subject)`. */
+const isTaggedCallSubject = (node: ESTree.Expression): Option.Option<string> => {
+  if (node.type !== "CallExpression") return Option.none();
+  const { callee } = node;
+  if (isPredicateIsTagged(callee) && node.arguments.length === 2) {
+    return Option.flatMap(Arr.head(node.arguments), argumentKey);
+  }
+  if (
+    callee.type === "CallExpression" &&
+    isPredicateIsTagged(callee.callee) &&
+    callee.arguments.length === 1 &&
+    node.arguments.length === 1
+  ) {
+    return Option.flatMap(Arr.head(node.arguments), argumentKey);
+  }
+  return Option.none();
+};
+
+const argumentKey = (argument: ESTree.Argument): Option.Option<string> => {
+  if (argument.type === "SpreadElement") return Option.none();
+  return expressionKey(argument);
+};
+
+/**
+ * Whether `node` tests `subject` by its tag: `subject._tag === "Tag"`,
+ * `Predicate.isTagged(subject, "Tag")` or `Predicate.isTagged("Tag")(subject)`,
+ * alone or joined by `||`.
+ */
+export const isTagTestOn = (node: ESTree.Expression, subject: string): boolean => {
+  if (node.type === "LogicalExpression" && node.operator === "||") {
+    return isTagTestOn(node.left, subject) && isTagTestOn(node.right, subject);
+  }
+  return (
+    Option.exists(tagComparison(node), (comparison) => comparison.subject === subject) ||
+    Option.contains(isTaggedCallSubject(node), subject)
+  );
+};
+
+/** The handler argument of a broad Effect recovery: `Effect.catch` or `Effect.catchAll`, data-first or piped. */
+export const broadCatchHandler = (node: ESTree.CallExpression): Option.Option<ESTree.Argument> => {
+  if (!isEffectCall(node, "catch") && !isEffectCall(node, "catchAll")) return Option.none();
+  let handlerIndex = 1;
+  if (node.arguments.length === 1) handlerIndex = 0;
+  return Arr.get(node.arguments, handlerIndex);
+};
+
+/** Whether the nearest enclosing function is the handler of `Effect.catch` or `Effect.catchAll`. */
+export const isInsideBroadCatchHandler = (node: ESTree.Node): boolean =>
+  ["catch", "catchAll"].some((operation) =>
+    Option.exists(effectCallbackLocation(node, operation), (location) => {
+      let handlerIndex = 1;
+      if (location.argumentCount === 1) handlerIndex = 0;
+      return location.index === handlerIndex;
+    }),
+  );
+
 export const isInsideCatchAllHandler = (node: ESTree.Node): boolean =>
   Option.exists(effectCallbackLocation(node, "catchAll"), (location) => {
     let handlerIndex = 1;

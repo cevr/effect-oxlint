@@ -6,7 +6,12 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
-import { isEffectCall, tagComparisonsInOr, taggedSwitchSubject } from "./_tagged-control-flow.js";
+import {
+  broadCatchHandler,
+  isEffectCall,
+  isTagTestOn,
+  taggedSwitchSubject,
+} from "./_tagged-control-flow.js";
 
 const isFunction = (
   argument: ESTree.Argument,
@@ -36,17 +41,11 @@ const returnedExpression = (
     return Option.fromNullishOr(statement.argument);
   });
 
-/** Whether `expression` is one or more `parameter._tag === "Tag"` checks joined by `||`. */
-const isTagCheckOn = (expression: ESTree.Expression, parameter: string): boolean =>
-  Option.exists(tagComparisonsInOr(expression), (comparisons) =>
-    comparisons.every((comparison) => comparison.subject === parameter),
-  );
-
 const hasManualTagPredicate = (argument: ESTree.Argument): boolean =>
   isFunction(argument) &&
   Option.exists(
     Option.all([identifierParameter(argument), returnedExpression(argument)]),
-    ([parameter, expression]) => isTagCheckOn(expression, parameter),
+    ([parameter, expression]) => isTagTestOn(expression, parameter),
   );
 
 const hasTagSwitch = (node: ESTree.SwitchStatement, parameter: string): boolean => {
@@ -57,23 +56,29 @@ const hasTagSwitch = (node: ESTree.SwitchStatement, parameter: string): boolean 
   );
 };
 
+/** A handler that answers by a ternary on its parameter's tag: `(e) => isTagged(e, "A") ? x : y`. */
+const hasTagTernary = (
+  fn: ESTree.ArrowFunctionExpression | ESTree.Function,
+  parameter: string,
+): boolean =>
+  Option.exists(
+    returnedExpression(fn),
+    (expression) =>
+      expression.type === "ConditionalExpression" && isTagTestOn(expression.test, parameter),
+  );
+
 const hasManualTagDispatch = (argument: ESTree.Argument): boolean => {
-  if (!isFunction(argument) || argument.body?.type !== "BlockStatement") return false;
+  if (!isFunction(argument)) return false;
+  if (Option.exists(identifierParameter(argument), (p) => hasTagTernary(argument, p))) return true;
+  if (argument.body?.type !== "BlockStatement") return false;
   const statements = argument.body.body;
   return Option.exists(identifierParameter(argument), (parameter) =>
     statements.some((statement) => {
-      if (statement.type === "IfStatement") return isTagCheckOn(statement.test, parameter);
+      if (statement.type === "IfStatement") return isTagTestOn(statement.test, parameter);
       if (statement.type === "SwitchStatement") return hasTagSwitch(statement, parameter);
       return false;
     }),
   );
-};
-
-const catchAllHandler = (node: ESTree.CallExpression): Option.Option<ESTree.Argument> => {
-  if (!isEffectCall(node, "catchAll")) return Option.none();
-  let handlerIndex = 1;
-  if (node.arguments.length === 1) handlerIndex = 0;
-  return Arr.get(node.arguments, handlerIndex);
 };
 
 export const preferCatchTag = Rule.define({
@@ -91,7 +96,7 @@ export const preferCatchTag = Rule.define({
           if (node.arguments.length === 2) predicateIndex = 0;
           const predicate = Arr.get(node.arguments, predicateIndex);
           if (!Option.exists(predicate, hasManualTagPredicate)) return Effect.void;
-        } else if (!Option.exists(catchAllHandler(node), hasManualTagDispatch)) {
+        } else if (!Option.exists(broadCatchHandler(node), hasManualTagDispatch)) {
           return Effect.void;
         }
         return context.report(
