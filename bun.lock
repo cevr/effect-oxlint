@@ -26,8 +26,12 @@
         "vitest": "latest",
       },
       "peerDependencies": {
+        "@cevr/tn1-lint": ">=0.1.0",
         "effect": ">=4.1.0 <5",
       },
+      "optionalPeers": [
+        "@cevr/tn1-lint",
+      ],
     },
   },
   "packages": {

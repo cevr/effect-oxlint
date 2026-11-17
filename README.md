@@ -158,6 +158,21 @@ These rules encode a project policy the preset cannot assume. The plugin registe
 | `effect/noWithWrapperCall`           | Pipes values through `withX` adapters instead of wrapping calls or callbacks; `allow` exempts names, `testFiles` narrows the test exemption                                                                                                                                |
 | `effect/noInterruptibleMemo`         | Memoizes a run that must start once as a started fiber; `Effect.cached*` gives up a run its callers leave (on effect 4.0.0 later callers get the interruption back while the entry lives; from 4.0.1 the next caller starts the run again)                                 |
 | `effect/requireSpawnBudget`          | Gives a test that calls a process starter (Bun, `node:child_process`) or `ChildProcess.make`, itself or through a helper, its timeout, after its body, as `{ timeout }`, or by its suite's; groups, fixtures and hooks are not tests; `minimum` sets the least it may name |
+| `effect/tn1Lint`                     | Reports the advisory findings of TN1 networks, run by the installed `@cevr/tn1-lint` package; `nets` names each network's weights file                                                                                                                                     |
+
+### TN1 networks
+
+`effect/tn1Lint` reports judgements no exact rule can make, such as a comment that narrates the line under it. Each is decided by a TN1 network: a small all-integer network whose weights file is reviewable text, giving the same answer on every host, locally and for free. The engine is not bundled. The rule runs the binary of the [`@cevr/tn1-lint`](https://www.npmjs.com/package/@cevr/tn1-lint) package once per configured network, with the file's text on its standard input, and reports each finding with its probability. Install the package beside the plugin, and set the rule to `warn`:
+
+```json
+{
+  "rules": {
+    "effect/tn1Lint": ["warn", { "nets": { "narration": "lint/narration.tn1" } }]
+  }
+}
+```
+
+Weights paths are read from the lint root. The `binary` option names another `tn1-lint` binary. A missing package, an unreadable weights file or a failed run is one finding at the file's start, so a configured rule never goes quiet. On Linux, Node starts the binary by `fork`, and under the kernel's heuristic overcommit that fork can fail with `ENOMEM` when oxlint's threads hold more memory than the host has free. Run oxlint with `--threads=4` or fewer there.
 
 ## Test Files
 

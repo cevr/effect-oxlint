@@ -82,7 +82,13 @@
     "vitest": "latest"
   },
   "peerDependencies": {
+    "@cevr/tn1-lint": ">=0.1.0",
     "effect": ">=4.1.0 <5"
+  },
+  "peerDependenciesMeta": {
+    "@cevr/tn1-lint": {
+      "optional": true
+    }
   },
   "packageManager": "bun@1.4.4"
 }

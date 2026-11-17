@@ -80,3 +80,4 @@ export * from "./require-force-kill-after.js";
 export * from "./require-named-effect-fn.js";
 export * from "./require-spawn-budget.js";
 export * from "./require-suppression-reason.js";
+export * from "./tn1-lint.js";

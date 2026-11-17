@@ -31,6 +31,14 @@ export default {
       },
     },
     {
+      // tn1Lint runs the @cevr/tn1-lint binary: a host adapter that spawns a
+      // process and resolves a package from the lint root.
+      files: ["src/rules/tn1-lint.ts"],
+      rules: {
+        "effect/noNodeBuiltinImport": "off",
+      },
+    },
+    {
       // Two effect releases' modules are not one type, so the test harness
       // that compares them reads 4.0.0's under the installed release's types,
       // in this one file.

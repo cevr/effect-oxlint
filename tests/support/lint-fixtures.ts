@@ -2,6 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+import * as Option from "effect/Option";
+
 import { runCommand } from "./run-command.js";
 
 const pluginPath = new URL("../../dist/plugin.js", import.meta.url).pathname;
@@ -26,7 +28,16 @@ export interface LintConfig {
   readonly settings?: { readonly [key: string]: ConfigValue };
   /** oxlint `overrides`, such as a boundary file that turns the rule off. */
   readonly overrides?: ReadonlyArray<ConfigValue>;
+  /** oxlint's `--threads`, for a rule that starts a process (see the tn1Lint rule). */
+  readonly threads?: number;
 }
+
+/** oxlint's `--threads` flag for `threads`, or none. */
+const threadFlags = (threads: Option.Option<number>): ReadonlyArray<string> =>
+  Option.match(threads, {
+    onNone: () => [],
+    onSome: (count) => [`--threads=${String(count)}`],
+  });
 
 /**
  * Lint named fixture files through the compiled plugin with one rule enabled.
@@ -56,7 +67,16 @@ export const lintFixtures = (
     }),
   );
   const result = runCommand(
-    ["bunx", "oxlint", "--format", "unix", "--config", "oxlint.json", ...Object.keys(fixtures)],
+    [
+      "bunx",
+      "oxlint",
+      "--format",
+      "unix",
+      "--config",
+      "oxlint.json",
+      ...threadFlags(Option.fromUndefinedOr(config.threads)),
+      ...Object.keys(fixtures),
+    ],
     directory,
   );
   rmSync(directory, { force: true, recursive: true });
