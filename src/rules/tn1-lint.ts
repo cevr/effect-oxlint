@@ -34,7 +34,7 @@ const Options = Schema.UndefinedOr(
   }),
 );
 
-const Span = Schema.Struct({ offset: Schema.Number, length: Schema.Number });
+const Span = Schema.Struct({ offset: Schema.Int, length: Schema.Int });
 
 const Report = Schema.Struct({
   diagnostics: Schema.Array(
