@@ -39,6 +39,15 @@ export default {
       },
     },
     {
+      // The rules walk oxlint's ESTree, whose `node.type` union is the host's:
+      // this repo cannot remodel it as a tagged enum with one exhaustive match,
+      // which is repeatedSwitches' remedy.
+      files: ["src/rules/**"],
+      rules: {
+        "effect/repeatedSwitches": "off",
+      },
+    },
+    {
       // Two effect releases' modules are not one type, so the test harness
       // that compares them reads 4.0.0's under the installed release's types,
       // in this one file.

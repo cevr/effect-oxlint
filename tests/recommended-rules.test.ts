@@ -48,8 +48,10 @@ describe("recommended preset", () => {
   test("enables the complete maintained rule set at error severity", () => {
     expect(recommended).toEqual({
       complexity: ["error", { max: 21 }],
+      "effect/decodeAfterStatus": "error",
       "effect/maxCognitiveComplexity": ["error", { max: 21 }],
       "effect/maxHalsteadDifficulty": ["error", { max: 79 }],
+      "effect/mysteriousName": "error",
       "effect/noAliasTestLayer": "error",
       "effect/noArrayFilterMap": "error",
       "effect/noAs": "error",
@@ -116,6 +118,7 @@ describe("recommended preset", () => {
       "effect/preferServiceOf": "error",
       "effect/preferTaggedConstructors": "error",
       "effect/preferYieldService": "error",
+      "effect/repeatedSwitches": "error",
       "effect/requireCauseWhenNarrowing": "error",
       "effect/requireForceKillAfter": "error",
       "effect/requireNamedEffectFn": "error",

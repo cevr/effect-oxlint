@@ -3,7 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { lintCases, lintFixtures } from "./support/lint-fixtures.js";
 
 // Cases ported from each rule's upstream test in K-Mistele/anti-slop at b7c1619
-// (src/effect/rules/<rule>.test.ts, src/rules/no-reprovide-ambient-service.test.ts).
+// (src/effect/rules/<rule>.test.ts, src/martinfowler/rules/<rule>.test.ts,
+// src/rules/no-reprovide-ambient-service.test.ts).
 describe("Effect rules ported from anti-slop", () => {
   test("requireCauseWhenNarrowing", () => {
     const results = lintCases("requireCauseWhenNarrowing", {
@@ -298,6 +299,165 @@ describe("Effect rules ported from anti-slop", () => {
         { options: [{ allowTagOnly: false }] },
       ).get("options-case.ts") ?? [],
     ).not.toEqual([]);
+  });
+
+  test("mysteriousName", () => {
+    const results = lintCases("mysteriousName", {
+      valid: [
+        "export function loadAndReconcileConfigurationSources() {}",
+        "export const getCachedOrAcquireCredential = () => cache.get();",
+        "export const handle = openFile(path);",
+        "const handle = { close() {} };",
+        "export const make = Effect.gen(function* () { return {} });",
+        "export function fetch(request: Request) { return respond(request); }",
+        "export const layer = Layer.effect(Service, make);",
+        "export function syncMailbox() { const run = () => step(); run(); }",
+        "export function processRefund() {}",
+        "export const runMigrations = Effect.fn('db.runMigrations')(function* () {});",
+        "import { load } from './load.ts'; export const loadUser = load;",
+        "function a() {} function f() { let current = a; current = b; return current; }",
+        "function parseItems(payload) { const raw = payload; return raw; }",
+        "const config = readConfig(); export const settings = config;",
+      ],
+      invalid: [
+        "export function resolve() {}",
+        "export async function process(input: Input) {}",
+        "function handle() {}",
+        "export default function execute() {}",
+        "export const run = () => step();",
+        "export const doWork = async () => {};",
+        "const processData = function (rows) {};",
+        "export const update = Effect.fn('slots.update')(function* () {});",
+        "export const sync = Effect.fn(function* () {});",
+        "\n\t\t\t\tfunction refreshAuthentication() {}\n\t\t\t\texport const executeMutation = refreshAuthentication;\n\t\t\t",
+        "\n\t\t\t\tconst make = Effect.gen(function* () {\n\t\t\t\t\tconst refreshAuthentication = (id, procedure) => run(id, procedure);\n\t\t\t\t\tconst executeMutation = refreshAuthentication;\n\t\t\t\t\treturn { executeMutation };\n\t\t\t\t});\n\t\t\t",
+        '\n\t\t\t\tconst loadSlot = Effect.fn("slot.load")(function* () {});\n\t\t\t\tconst fetchSlot = loadSlot;\n\t\t\t',
+      ],
+    });
+    expect(results.reportedValid).toEqual([]);
+    expect(results.missedInvalid).toEqual([]);
+  });
+  test("mysteriousName by file name", () => {
+    expect(
+      lintFixtures("mysteriousName", { "src/handler.test.ts": "export function handle() {}" }).get(
+        "src/handler.test.ts",
+      ) ?? [],
+    ).toEqual([]);
+    expect(
+      lintFixtures("mysteriousName", {
+        "src/__tests__/handler.ts": "export function handle() {}",
+      }).get("src/__tests__/handler.ts") ?? [],
+    ).toEqual([]);
+    expect(
+      lintFixtures(
+        "mysteriousName",
+        { "options-case.ts": "export function handle() {}" },
+        { options: [{ allowNames: ["handle"] }] },
+      ).get("options-case.ts") ?? [],
+    ).toEqual([]);
+    expect(
+      lintFixtures(
+        "mysteriousName",
+        { "options-case.ts": "const refresh = () => 1; export const run = refresh;" },
+        { options: [{ verbs: [], checkAliases: false }] },
+      ).get("options-case.ts") ?? [],
+    ).toEqual([]);
+    expect(
+      lintFixtures(
+        "mysteriousName",
+        { "options-case.ts": "export function load() {}" },
+        { options: [{ verbs: ["load"] }] },
+      ).get("options-case.ts") ?? [],
+    ).not.toEqual([]);
+  });
+  test("repeatedSwitches", () => {
+    const results = lintCases("repeatedSwitches", {
+      valid: [
+        "function label(e) { switch (e._tag) { case 'A': return 1; case 'B': return 3; default: return 2; } }",
+        "switch (a.kind) { case 'x': case 'y': } switch (b.kind) { case 'x': case 'y': }",
+        "switch (part.type) { case 'text': case 'image': } switch (part.type) { case 'text': case 'tool_use': }",
+        "if (event.type === 'click') a(); function f() { if (event.type === 'key') b(); }",
+        "switch (true) { case a: case b: break; } switch (true) { case a: case b: break; }",
+        "if (k === 'a') a(); log(); if (k === 'b') b(); if (k === 'a') a(); log(); if (k === 'b') b();",
+        "if (a.id === b.id) x(); else if (a.id === c.id) y(); if (a.id === b.id) z(); else if (a.id === c.id) w();",
+      ],
+      invalid: [
+        "\n\t\t\t\tfunction area(shape) { switch (shape.kind) { case 'circle': return 1; case 'square': return 2; } }\n\t\t\t\tfunction name(shape) { switch (shape.kind) { case 'circle': return 'c'; case 'square': return 's'; } }\n\t\t\t",
+        "\n\t\t\t\tfunction a(e) { if (e._tag === 'Ready') return 1; else if (e._tag === 'Done') return 2; }\n\t\t\t\tfunction b(e) { return e._tag === 'Ready' ? 'r' : e._tag === 'Done' ? 'd' : 'x'; }\n\t\t\t",
+        "\n\t\t\t\tfunction a(kind) {\n\t\t\t\t\tif (kind === Kind.A) return 1;\n\t\t\t\t\tif (kind === Kind.B || kind === Kind.C) return 2;\n\t\t\t\t\treturn 3;\n\t\t\t\t}\n\t\t\t\tfunction b(kind) { switch (kind) { case Kind.A: return 'a'; case Kind.C: return 'c'; } }\n\t\t\t",
+        "switch (typeof value) { case 'string': case 'number': } const t = typeof value === 'string' ? 1 : typeof value === 'number' ? 2 : 3;",
+      ],
+    });
+    expect(results.reportedValid).toEqual([]);
+    expect(results.missedInvalid).toEqual([]);
+  });
+  test("repeatedSwitches by file name", () => {
+    expect(
+      lintFixtures(
+        "repeatedSwitches",
+        {
+          "options-case.ts":
+            "switch (e._tag) { case 'A': case 'B': } switch (e._tag) { case 'A': case 'B': }",
+        },
+        { options: [{ minOccurrences: 3 }] },
+      ).get("options-case.ts") ?? [],
+    ).toEqual([]);
+    expect(
+      lintFixtures("repeatedSwitches", {
+        "src/e.test.ts":
+          "switch (e._tag) { case 'A': case 'B': } switch (e._tag) { case 'A': case 'B': }",
+      }).get("src/e.test.ts") ?? [],
+    ).toEqual([]);
+    expect(
+      lintFixtures(
+        "repeatedSwitches",
+        {
+          "options-case.ts":
+            "switch (part.type) { case 'text': case 'image': } switch (part.type) { case 'text': case 'tool_use': }",
+        },
+        { options: [{ minSharedCases: 1 }] },
+      ).get("options-case.ts") ?? [],
+    ).not.toEqual([]);
+    expect(
+      lintFixtures(
+        "repeatedSwitches",
+        {
+          "src/e.test.ts":
+            "switch (e._tag) { case 'A': case 'B': } switch (e._tag) { case 'A': case 'B': }",
+        },
+        { options: [{ ignoreTests: false }] },
+      ).get("src/e.test.ts") ?? [],
+    ).not.toEqual([]);
+  });
+
+  // Own cases: upstream has decode-after-status only as a model question (src/jev/effect-rules.ts).
+  test("decodeAfterStatus", () => {
+    const imports = `import { Effect, Schema } from "effect";\nimport { HttpClient, HttpClientResponse } from "effect/unstable/http";\n`;
+    const results = lintCases("decodeAfterStatus", {
+      valid: [
+        // The response is filtered first.
+        `${imports}export const get = (client: HttpClient.HttpClient) => client.get("/user").pipe(Effect.flatMap(HttpClientResponse.filterStatusOk), Effect.flatMap(HttpClientResponse.schemaBodyJson(User)));`,
+        // The client is filtered, here or where it is built.
+        `${imports}export const make = Effect.gen(function* () { const client = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk); return { get: () => client.get("/user").pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(User))) }; });`,
+        // The status is classified, and the success branch decodes.
+        `${imports}export const get = (client: HttpClient.HttpClient) => client.get("/user").pipe(Effect.flatMap(HttpClientResponse.matchStatus({ "2xx": HttpClientResponse.schemaBodyJson(User), orElse: (response) => Effect.fail(new Failed({ status: response.status })) })));`,
+        // The status is read before the decode.
+        `${imports}export const get = Effect.fn("get")(function* (client: HttpClient.HttpClient) { const response = yield* client.get("/user"); if (response.status !== 200) return yield* Effect.fail(new Failed({ status: response.status })); return yield* HttpClientResponse.schemaBodyJson(User)(response); });`,
+        // fetch, with res.ok checked first.
+        `export async function load(url: string) { const res = await fetch(url); if (!res.ok) throw new Error(String(res.status)); return res.json(); }`,
+        // A json field of something that is not a response.
+        `export const read = (config: { json: string }) => JSON.parse(config.json);`,
+      ],
+      invalid: [
+        `${imports}export const get = (client: HttpClient.HttpClient) => client.get("/user").pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(User)));`,
+        `${imports}export const get = Effect.fn("get")(function* (client: HttpClient.HttpClient) { const response = yield* client.get("/user"); const user = yield* HttpClientResponse.schemaBodyJson(User)(response); if (response.status !== 200) return yield* Effect.fail(new Failed({})); return user; });`,
+        `export async function load(url: string) { const res = await fetch(url); return res.json(); }`,
+        // A status check in another function does not cover this one.
+        `${imports}export const ok = (response: HttpClientResponse.HttpClientResponse) => response.status === 200;\nexport const get = (client: HttpClient.HttpClient) => client.get("/user").pipe(Effect.flatMap(HttpClientResponse.schemaJson(User)));`,
+      ],
+    });
+    expect(results.reportedValid).toEqual([]);
+    expect(results.missedInvalid).toEqual([]);
   });
 
   // Upstream names its own rules `anti-slop/…`; here they are this plugin's. Upstream's three

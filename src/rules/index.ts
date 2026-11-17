@@ -9,8 +9,10 @@ export * from "./no-effect-bind.js";
 export * from "./no-effect-do.js";
 
 // --- AST pattern rules ---
+export * from "./decode-after-status.js";
 export * from "./max-cognitive-complexity.js";
 export * from "./max-halstead-difficulty.js";
+export * from "./mysterious-name.js";
 export * from "./no-alias-test-layer.js";
 export * from "./no-array-filter-map.js";
 export * from "./no-as.js";
@@ -83,6 +85,7 @@ export * from "./prefer-schema-tagged-union.js";
 export * from "./prefer-service-of.js";
 export * from "./prefer-tagged-constructors.js";
 export * from "./prefer-yield-service.js";
+export * from "./repeated-switches.js";
 export * from "./require-cause-when-narrowing.js";
 export * from "./require-force-kill-after.js";
 export * from "./require-named-effect-fn.js";

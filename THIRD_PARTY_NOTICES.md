@@ -8,7 +8,8 @@ The anti-slop rules include code derived from
 service rules (`requireCauseWhenNarrowing`, `noOrdieInServiceConstruction`,
 `noReprovideAmbientService`, `preferYieldService`, `noServiceParameters`,
 `noDisabledTypeAssertionRules`, `noServiceConstructorImports`,
-`noTestCodeInSrc`, `requireServiceMakeLayer`) and `src/rules/_anti-slop-effect.ts`
+`noTestCodeInSrc`, `requireServiceMakeLayer`), the Refactoring rules `mysteriousName`
+and `repeatedSwitches`, and `src/rules/_anti-slop-effect.ts`
 are ported from the fork
 [`K-Mistele/anti-slop`](https://github.com/K-Mistele/anti-slop) at commit
 `b7c1619`, under the same license.

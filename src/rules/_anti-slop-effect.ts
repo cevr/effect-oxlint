@@ -75,7 +75,8 @@ type Wrapped = Extract<
       | "TSSatisfiesExpression"
       | "TSTypeAssertion"
       | "TSNonNullExpression"
-      | "TSInstantiationExpression";
+      | "TSInstantiationExpression"
+      | "ChainExpression";
   }
 >;
 
@@ -85,9 +86,10 @@ const isWrapped = (node: ESTree.Node): node is Wrapped =>
   node.type === "TSSatisfiesExpression" ||
   node.type === "TSTypeAssertion" ||
   node.type === "TSNonNullExpression" ||
-  node.type === "TSInstantiationExpression";
+  node.type === "TSInstantiationExpression" ||
+  node.type === "ChainExpression";
 
-/** The expression under parentheses, type assertions and instantiation expressions. */
+/** The expression under parentheses, type assertions, instantiation expressions and optional chains. */
 export const unwrap = <N extends ESTree.Node>(node: N): N | ESTree.Expression => {
   let current: N | ESTree.Expression = node;
   while (isWrapped(current)) current = current.expression;
