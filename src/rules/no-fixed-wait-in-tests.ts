@@ -1,5 +1,5 @@
 /**
- * Tests wait on the event they depend on or advance virtual time, never on a wall-clock guess.
+ * Tests wait on the event they depend on, never on time passing, real or virtual.
  *
  * Reported in test modules: a sleep (`Effect.sleep`, `Bun.sleep`,
  * `Bun.sleepSync`, `setTimeout` from `timers/promises`) a statement runs, and
@@ -11,6 +11,18 @@
  * may never run, such as a mock's `read: () => Effect.sleep(...)`, and stays
  * allowed. A real-clock fence the subject needs takes a line-local
  * suppression with its reason.
+ *
+ * A virtual-clock advance (`TestClock.adjust`, `TestClock.setTime`) is
+ * reported where it lets time pass to settle rather than moving time to the
+ * input under test: an amount of at most a millisecond (S1), an amount read
+ * through a name that says flush, settle, tick, drain or yield (S2), or an
+ * advance in a loop or under a repeater (S3). A flush amount after an earlier
+ * advance in the same function is the second step of a boundary pair
+ * (`adjust("999 millis")`, assert, `adjust("1 millis")`, assert) and stays
+ * allowed, as does every other advance: `adjust("5 seconds")` then an
+ * assertion of what a timeout did is time as the input. A large advance used
+ * only to let a fiber start is not caught: telling it apart needs the
+ * subject's code.
  */
 import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
@@ -18,8 +30,10 @@ import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { childNodesAt, isAstNode } from "./_ast-children.js";
+import { constResolver } from "./_const-bindings.js";
 import { importedNamespaces, isStaticCall, visibleNamespaces } from "./_effect-namespaces.js";
 import { isTestModule, skipFile } from "./_test-files.js";
+import { enclosingFunction, flushName, isFlushAmount, isRepeated } from "./_virtual-time.js";
 
 type VisitorKeys = Readonly<Record<string, ReadonlyArray<string>>>;
 
@@ -48,7 +62,7 @@ const descendants = (
 ];
 
 const guidance =
-  "A fixed wait guesses when state changes, so it flakes under load and slows the suite. Advance virtual time with TestClock.adjust, or wait on the event itself: a Deferred, Latch, or Queue in Effect code, a condition or locator assertion (expect.poll, waitForFunction) in a browser.";
+  "A fixed wait guesses when state changes, so it flakes under load and slows the suite. Wait on the event itself: a Deferred, Latch, Queue, or Fiber.join in Effect code, a condition or locator assertion (expect.poll, waitForFunction) in a browser. Advance TestClock only to the time under test.";
 
 /** Unwrap `yield* x`, `await x`, and `void x` to the waited expression. */
 const waited = (node: ESTree.Expression): ESTree.Expression => {
@@ -110,18 +124,41 @@ const isTimerPromise = (node: ESTree.NewExpression): boolean => {
   return Option.exists(body, (call) => isTimerSettling(call, resolve.name));
 };
 
+/** The local names of `TestClock` an import binds: from effect, effect/testing, or its own module. */
+const testClockImports = (node: ESTree.ImportDeclaration): ReadonlyArray<string> => {
+  const source = node.source.value;
+  const own = source === "effect/TestClock" || source === "effect/testing/TestClock";
+  const barrel = source === "effect" || source === "effect/testing";
+  return node.specifiers.flatMap((specifier) => {
+    if (specifier.type === "ImportNamespaceSpecifier" && own) return [specifier.local.name];
+    if (
+      specifier.type === "ImportSpecifier" &&
+      barrel &&
+      specifier.imported.type === "Identifier" &&
+      specifier.imported.name === "TestClock"
+    ) {
+      return [specifier.local.name];
+    }
+    return [];
+  });
+};
+
 export const noFixedWaitInTests = Rule.define({
   name: "no-fixed-wait-in-tests",
   meta: Rule.meta({
     type: "problem",
     description:
-      "Bans fixed waits in tests (a waited or stored Effect.sleep or Bun.sleep, waitForTimeout, a timer-only Promise); use TestClock or wait on the event.",
+      "Bans waiting by time in tests (a waited or stored Effect.sleep or Bun.sleep, waitForTimeout, a timer-only Promise, a TestClock advance that only lets fibers settle); wait on the event.",
   }),
   create: function* () {
     const ctx = yield* RuleContext;
     if (!isTestModule(ctx)) return skipFile;
     const effectNamespaces = new Set(["Effect"]);
     const timerPromiseNames = new Set<string>();
+    const testClocks = new Set(["TestClock"]);
+    const resolveConst = constResolver(ctx);
+    /** The functions an advance already ran in: a later flush there is a boundary step (B). */
+    const advancedIn = new Set<ESTree.Node>();
 
     const keys: VisitorKeys = ctx.sourceCode.visitorKeys;
     /** Sleeps already reported: a statement's sleep is also inside its `yield*` or `await`. */
@@ -143,6 +180,39 @@ export const noFixedWaitInTests = Rule.define({
       if (isIdentifierCall(node, timerPromiseNames))
         return Option.some("setTimeout from timers/promises");
       return Option.none();
+    };
+
+    /** Why an advance of the virtual clock settles, if it does (S1, S2, S3; B exempts S1). */
+    const settling = (node: ESTree.CallExpression, method: string): Option.Option<string> => {
+      const amount = Option.filter(
+        Option.fromUndefinedOr(node.arguments[0]),
+        (argument): argument is ESTree.Expression => argument.type !== "SpreadElement",
+      );
+      if (Option.isNone(amount)) return Option.none();
+      const scope = enclosingFunction(node);
+      const boundaryStep = advancedIn.has(scope);
+      advancedIn.add(scope);
+      if (isRepeated(node)) return Option.some(`TestClock.${method} in a loop`);
+      const named = flushName(amount.value);
+      if (Option.isSome(named)) return Option.some(`TestClock.${method} by ${named.value}`);
+      if (method === "adjust" && !boundaryStep && isFlushAmount(resolveConst, amount.value)) {
+        return Option.some("TestClock.adjust by a flush amount");
+      }
+      return Option.none();
+    };
+
+    const reportAdvance = (node: ESTree.CallExpression) => {
+      const clocks = visibleNamespaces(ctx, node, testClocks);
+      const method = Option.fromUndefinedOr(
+        ["adjust", "setTime"].find((name) => isStaticCall(node, clocks, name)),
+      );
+      return Option.match(
+        Option.flatMap(method, (name) => settling(node, name)),
+        {
+          onNone: () => Effect.void,
+          onSome: (wait) => report(node, wait),
+        },
+      );
     };
 
     const reportSleep = (node: ESTree.Node) =>
@@ -180,6 +250,7 @@ export const noFixedWaitInTests = Rule.define({
         for (const name of importedNamespaces(node, "Effect", "effect/Effect")) {
           effectNamespaces.add(name);
         }
+        for (const name of testClockImports(node)) testClocks.add(name);
         const source = node.source.value;
         if (source === "node:timers/promises" || source === "timers/promises") {
           for (const specifier of node.specifiers) {
@@ -202,7 +273,7 @@ export const noFixedWaitInTests = Rule.define({
       },
       AwaitExpression: (node: ESTree.AwaitExpression) => reportWaited(node.argument),
       CallExpression: (node: ESTree.CallExpression) => {
-        if (!isPropertyCall(node, "waitForTimeout")) return Effect.void;
+        if (!isPropertyCall(node, "waitForTimeout")) return reportAdvance(node);
         return report(node, "waitForTimeout");
       },
       NewExpression: (node: ESTree.NewExpression) => {

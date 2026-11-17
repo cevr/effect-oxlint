@@ -350,6 +350,42 @@ describe("noFixedWaitInTests", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
+  // Mutants, one per case group: S1 (a flush amount: literal, string, const,
+  // Duration.zero, Duration.millis) dropped; S2 (a flush name) dropped; S3
+  // (a polling loop, a repeater) dropped, or every loop counted as polling; the boundary step B dropped (999 then 1
+  // reported); every advance reported (5 seconds, setTime); TestClock read
+  // without its import (a local object reported).
+  test("reports a TestClock advance that lets fibers settle and keeps time as the input", () => {
+    const clock =
+      'import { TestClock } from "effect/testing"; import { Duration, Effect } from "effect";';
+    const results = lintCases("noFixedWaitInTests", {
+      extension: "test.ts",
+      valid: [
+        `${clock} function* t() { yield* TestClock.adjust("5 seconds"); expect(timedOut).toBe(true); }`,
+        `${clock} function* t() { yield* TestClock.adjust("999 millis"); check(); yield* TestClock.adjust("1 millis"); }`,
+        `${clock} function* t() { yield* TestClock.setTime(0); }`,
+        `${clock} const step = (n) => TestClock.adjust(Duration.seconds(n));`,
+        `${clock} function* t() { for (const c of cases) { yield* TestClock.adjust("1 second"); check(c); } }`,
+        `${clock} function* t() { for (let i = 0; i < 3; i++) { yield* TestClock.adjust("1 second"); } }`,
+        "const TestClock = { adjust: (n) => n }; TestClock.adjust(0);",
+      ],
+      invalid: [
+        `${clock} function* t() { yield* TestClock.adjust(0); }`,
+        `${clock} function* t() { yield* TestClock.adjust("1 millis"); }`,
+        `${clock} const none = 0; function* t() { yield* TestClock.adjust(none); }`,
+        `${clock} function* t() { yield* TestClock.adjust(Duration.zero); }`,
+        `${clock} function* t() { yield* TestClock.adjust(Duration.millis(1)); }`,
+        `${clock} const CLOCK_FLUSH_MS = 16; function* t() { yield* TestClock.adjust(CLOCK_FLUSH_MS); }`,
+        `${clock} function* t() { yield* TestClock.setTime(settleAt); }`,
+        `${clock} function* t() { while (busy()) { yield* TestClock.adjust("1 second"); } }`,
+        `${clock} function* t() { for (let i = 0; i < 9; i++) { if (done()) break; yield* TestClock.adjust("1 second"); } }`,
+        `${clock} function* t() { yield* TestClock.adjust("1 second").pipe(Effect.repeat({ times: 3 })); }`,
+        'import * as TC from "effect/testing/TestClock"; function* t() { yield* TC.adjust(0); }',
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
   test("skips application modules and explains the replacement", () => {
     const findings = lintFixtures("noFixedWaitInTests", {
       "poll.ts": "async function poll() { await Bun.sleep(100); }",
@@ -360,7 +396,7 @@ describe("noFixedWaitInTests", () => {
       {
         line: 2,
         message:
-          "Avoid a fixed wait in tests (Bun.sleep). A fixed wait guesses when state changes, so it flakes under load and slows the suite. Advance virtual time with TestClock.adjust, or wait on the event itself: a Deferred, Latch, or Queue in Effect code, a condition or locator assertion (expect.poll, waitForFunction) in a browser.",
+          "Avoid a fixed wait in tests (Bun.sleep). A fixed wait guesses when state changes, so it flakes under load and slows the suite. Wait on the event itself: a Deferred, Latch, Queue, or Fiber.join in Effect code, a condition or locator assertion (expect.poll, waitForFunction) in a browser. Advance TestClock only to the time under test.",
       },
     ]);
   });
