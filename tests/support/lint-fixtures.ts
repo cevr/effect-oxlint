@@ -30,6 +30,14 @@ export interface LintConfig {
   readonly overrides?: ReadonlyArray<ConfigValue>;
   /** oxlint's `--threads`, for a rule that starts a process (see the tn1Lint rule). */
   readonly threads?: number;
+  /** The rule's severity: `error` unless a test needs a warning's exit code. */
+  readonly severity?: "error" | "warn";
+}
+
+/** A lint run's exit code and its findings, keyed by fixture name. */
+export interface LintRun {
+  readonly exitCode: number;
+  readonly findings: ReadonlyMap<string, ReadonlyArray<Finding>>;
 }
 
 /** oxlint's `--threads` flag for `threads`, or none. */
@@ -49,7 +57,14 @@ export const lintFixtures = (
   rule: string,
   fixtures: Readonly<Record<string, string>>,
   config: LintConfig = {},
-): ReadonlyMap<string, ReadonlyArray<Finding>> => {
+): ReadonlyMap<string, ReadonlyArray<Finding>> => lintRun(rule, fixtures, config).findings;
+
+/** Lint named fixture files as lintFixtures does, and keep oxlint's exit code. */
+export const lintRun = (
+  rule: string,
+  fixtures: Readonly<Record<string, string>>,
+  config: LintConfig = {},
+): LintRun => {
   const directory = mkdtempSync(join(tmpdir(), "oxlint-plugin-effect-"));
   const findings = new Map<string, Array<Finding>>();
   for (const [name, source] of Object.entries(fixtures)) {
@@ -62,7 +77,7 @@ export const lintFixtures = (
     JSON.stringify({
       jsPlugins: [pluginPath],
       settings: config.settings ?? {},
-      rules: { [`effect/${rule}`]: ["error", ...(config.options ?? [])] },
+      rules: { [`effect/${rule}`]: [config.severity ?? "error", ...(config.options ?? [])] },
       overrides: config.overrides ?? [],
     }),
   );
@@ -91,13 +106,13 @@ export const lintFixtures = (
     throw new Error(`effect/${rule} crashed on ${crashed[1]}`);
   }
   for (const match of result.stdout.matchAll(
-    /^(.+?):(\d+):\d+: (.+) \[Error\/effect\((\w+)\)\]$/gmu,
+    /^(.+?):(\d+):\d+: (.+) \[(?:Error|Warning)\/effect\((\w+)\)\]$/gmu,
   )) {
     const [, file = "", line = "0", message = "", reported = ""] = match;
     if (reported !== rule) continue;
     findings.get(file)?.push({ line: Number(line), message });
   }
-  return findings;
+  return { exitCode: result.exitCode, findings };
 };
 
 /** Apply one rule's autofixes to named fixture files and return each file's text afterwards. */
