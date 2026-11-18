@@ -10,7 +10,9 @@
  * Also reported: `ys.includes(v)`, `indexOf` or `lastIndexOf` with a value
  * read from the loop element, when `ys` is known to be an array.
  * Not reported: a loop over an array literal (a fixed, small count), a
- * searched collection built inside the loop, and test modules. The
+ * search of an array literal or an UPPER_CASE constant (`["a", "b"].includes(x)`,
+ * `KINDS.includes(x)`: a fixed, small table), a searched collection built
+ * inside the loop, and test modules. The
  * search then runs once per outer element: n × m comparisons where a `Map`
  * or `Set` built once costs n + m. Counted cost: `tests/perf/no-linear-search-in-loop.ts`.
  * Source: the react skill, `performance.md` "Use Map/Set for lookups";
@@ -50,7 +52,8 @@ const readsAny = (node: ESTree.Node, names: ReadonlySet<string>): boolean =>
 const declaredIn = (loop: ESTree.Node): ReadonlySet<string> => {
   const names = new Set<string>();
   walk(loop, (node) => {
-    if (node.type === "VariableDeclarator") patternNames(node.id).forEach((name) => names.add(name));
+    if (node.type === "VariableDeclarator")
+      patternNames(node.id).forEach((name) => names.add(name));
     return true;
   });
   return names;
@@ -58,7 +61,19 @@ const declaredIn = (loop: ESTree.Node): ReadonlySet<string> => {
 
 /** A loop over an array literal (`for (const k of ["a", "b"])`): a fixed, small count. */
 const isFixedCollection = (loop: Loop): boolean =>
-  Option.exists(loop.collection, (collection) => unwrapArrayExpression(collection).type === "ArrayExpression");
+  Option.exists(
+    loop.collection,
+    (collection) => unwrapArrayExpression(collection).type === "ArrayExpression",
+  );
+
+/** A searched array literal or UPPER_CASE constant: a fixed table written in the source. */
+const isFixedTable = (searched: ESTree.Node): boolean => {
+  const node = unwrapArrayExpression(searched);
+  return (
+    node.type === "ArrayExpression" ||
+    (node.type === "Identifier" && /^[A-Z][A-Z0-9_]*$/u.test(node.name))
+  );
+};
 
 /** Whether a callback compares one of its parameters with one of `outer`. */
 const comparesKeys = (callback: ESTree.Node, outer: ReadonlySet<string>): boolean => {
@@ -115,6 +130,7 @@ export const noLinearSearchInLoop = Rule.define({
               const skipped =
                 Option.contains(outerText, searched) ||
                 isFixedCollection(loop) ||
+                isFixedTable(method.object) ||
                 readsAny(method.object, loop.elementNames) ||
                 readsAny(method.object, declaredIn(loop.node)) ||
                 !searchesByElement(node, method, loop.elementNames);

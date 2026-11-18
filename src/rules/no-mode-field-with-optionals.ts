@@ -14,7 +14,9 @@
  * is itself optional; a record with snake_case members or an
  * `object: "…"` literal member (a vendor's wire format). Test modules and
  * types declared outside the project (`node_modules`, `.d.ts` files) are
- * skipped. Source: effect `ARCHITECTURE.md` "Status strings and booleans
+ * skipped. Files matching an `allow` glob are left alone: point it at the
+ * modules that mirror a vendor or platform API (a `clients/` folder), whose
+ * types follow the vendor's wire format, not the domain. Source: effect `ARCHITECTURE.md` "Status strings and booleans
  * encoding modes → a lifecycle machine"; react `state-modeling.md` "Each
  * branch has exactly the fields it needs" (catalog SR-E10).
  */
@@ -22,10 +24,15 @@ import type { ESTree } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 import { ancestorsOf, isFunction } from "./_anti-slop-effect.js";
-import { isTestModule, skipFile } from "./_test-files.js";
+import { isTestModule, matchesFileGlobs, skipFile } from "./_test-files.js";
+
+const Options = Schema.UndefinedOr(
+  Schema.Struct({ allow: Schema.optionalKey(Schema.Array(Schema.String)) }),
+);
 
 const modeField = /^(?:status|state|type|kind|mode|phase|stage)$/u;
 const snakeCase = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/u;
@@ -55,7 +62,9 @@ const isStringLiteralType = (node: ESTree.Node): boolean =>
 const isNullish = (node: ESTree.Node): boolean =>
   node.type === "TSNullKeyword" ||
   node.type === "TSUndefinedKeyword" ||
-  (node.type === "TSLiteralType" && node.literal.type === "Literal" && Predicate.isNull(node.literal.value));
+  (node.type === "TSLiteralType" &&
+    node.literal.type === "Literal" &&
+    Predicate.isNull(node.literal.value));
 
 /** The members of a union type; none for another type. */
 const unionMembers = (type: ESTree.Node): ReadonlyArray<ESTree.Node> => {
@@ -114,9 +123,7 @@ const isExternalDeclaration = (filename: string): boolean => {
 
 /** Whether the members make the reported form, after the filters. */
 const isModeRecord = (members: ReadonlyArray<Member>): boolean => {
-  const wire = members.some(
-    (member) => member.isObjectLiteral || snakeCase.test(member.name),
-  );
+  const wire = members.some((member) => member.isObjectLiteral || snakeCase.test(member.name));
   const mode = members.some((member) => member.isMode && !member.optional);
   const optional = members.filter((member) => !member.isMode && member.optional).length;
   return !wire && mode && optional >= 2;
@@ -129,10 +136,23 @@ export const noModeFieldWithOptionals = Rule.define({
     description:
       "Model a mode as a tagged union of one record per mode, not a mode field beside optional fields.",
     docs: { recommended: false },
+    schema: [
+      {
+        type: "object",
+        properties: { allow: { type: "array", items: { type: "string" } } },
+        additionalProperties: false,
+      },
+    ],
+    defaultOptions: [{ allow: [] }],
   }),
-  create: function* () {
+  options: Options,
+  create: function* (options) {
     const ctx = yield* RuleContext;
-    if (isTestModule(ctx) || isExternalDeclaration(ctx.filename)) return skipFile;
+    const skipped =
+      isTestModule(ctx) ||
+      isExternalDeclaration(ctx.filename) ||
+      matchesFileGlobs(ctx, options?.allow ?? []);
+    if (skipped) return skipFile;
 
     const schemaMember = (property: ESTree.Node): Option.Option<Member> => {
       if (property.type !== "Property") return Option.none();
@@ -142,7 +162,8 @@ export const noModeFieldWithOptionals = Rule.define({
           name,
           isMode: modeField.test(name) && literalSchema.test(text),
           optional: optionalSchema.test(text),
-          isObjectLiteral: name === "object" && /^Schema\.Literal\(\s*["'][^"',]*["']\s*\)$/u.test(text),
+          isObjectLiteral:
+            name === "object" && /^Schema\.Literal\(\s*["'][^"',]*["']\s*\)$/u.test(text),
         };
       });
     };

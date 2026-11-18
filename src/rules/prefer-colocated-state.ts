@@ -7,16 +7,13 @@
  * the outermost JSX element around them (outside handlers, hooks and derived
  * values). Two forms:
  * - one element: every reference is an attribute or child of the same
- *   element, so the pair is passed to that element alone. Always reported
- *   when the element is a component; a lower-case element (`<button>`)
- *   follows the subtree form's limits, since moving its state means
- *   extracting a component.
- * - subtree: the references share an ancestor element but sit in several
- *   elements below it. Reported when the component has at least
- *   `minComponentLines` lines (100) and the shared element spans at most
- *   `maxSharedSpanRatio` (0.5) of them: in a small leaf, or when the subtree
- *   is most of the component, moving the state buys nothing.
- * Test modules are skipped. Source: the react skill, `state.md` "State
+ *   component element (`<SearchBox value={query} onChange={setQuery} />`),
+ *   so the pair is passed to that child alone, which can own it.
+ * - a row: the references meet in an element rendered by a `.map` callback,
+ *   so the state belongs to a row component.
+ * Other subtrees (a dialog block, the component's own root) are left alone:
+ * moving them means extracting a component, which a reader decides. Test
+ * modules and `*.fixture.*` files are skipped. Source: the react skill, `state.md` "State
  * Colocation: keep state as close to where it's used as possible" (catalog
  * SR-R07).
  */
@@ -24,20 +21,12 @@ import type { ESTree } from "@oxlint/plugins";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
-import { ancestorsOf } from "./_anti-slop-effect.js";
+import { ancestorsOf, isFunction } from "./_anti-slop-effect.js";
 import { componentsIn, walkComponent } from "./_react.js";
 import type { Component, StatePair } from "./_react.js";
 import { isTestModule, skipFile } from "./_test-files.js";
-
-const Options = Schema.UndefinedOr(
-  Schema.Struct({
-    maxSharedSpanRatio: Schema.optionalKey(Schema.Number),
-    minComponentLines: Schema.optionalKey(Schema.Number),
-  }),
-);
 
 type JsxNode = ESTree.JSXElement | ESTree.JSXFragment;
 type Identifier = Extract<ESTree.Node, { type: "Identifier" }>;
@@ -84,6 +73,27 @@ const sharedDepth = (chains: Arr.NonEmptyReadonlyArray<ReadonlyArray<JsxNode>>):
   return depth;
 };
 
+/** Whether an element sits in the callback of a `.map` call inside the component: a list row. */
+const inMapRow = (element: JsxNode, component: Component): boolean => {
+  for (const ancestor of ancestorsOf(element)) {
+    if (ancestor === component.fn) return false;
+    const parent = ancestor.parent;
+    if (
+      isFunction(ancestor) &&
+      parent?.type === "CallExpression" &&
+      parent.callee.type === "MemberExpression" &&
+      !parent.callee.computed &&
+      parent.callee.property.type === "Identifier" &&
+      parent.callee.property.name === "map"
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const fixtureFile = /\.fixture\.[cm]?[jt]sx?$/u;
+
 interface Placement {
   readonly element: JsxNode;
   readonly oneElement: boolean;
@@ -126,35 +136,18 @@ export const preferColocatedState = Rule.define({
     description:
       "Keep state that one JSX subtree alone uses in a child component for that subtree.",
     docs: { recommended: false, preset: "skills-react" },
-    schema: [
-      {
-        type: "object",
-        properties: {
-          maxSharedSpanRatio: { type: "number" },
-          minComponentLines: { type: "number" },
-        },
-        additionalProperties: false,
-      },
-    ],
-    defaultOptions: [{ maxSharedSpanRatio: 0.5, minComponentLines: 100 }],
   }),
-  options: Options,
-  create: function* (options) {
+  create: function* () {
     const ctx = yield* RuleContext;
-    if (isTestModule(ctx)) return skipFile;
-    const maxRatio = options?.maxSharedSpanRatio ?? 0.5;
-    const minLines = options?.minComponentLines ?? 100;
-    const lines = (node: ESTree.Node): number => ctx.sourceCode.getText(node).split("\n").length;
+    if (isTestModule(ctx) || fixtureFile.test(ctx.filename)) return skipFile;
     const tagOf = (element: JsxNode): string => {
       if (element.type === "JSXFragment") return "<>";
       return `<${ctx.sourceCode.getText(element.openingElement.name)}>`;
     };
 
-    const reported = (placement: Placement, component: Component): boolean => {
-      if (placement.oneElement && !isIntrinsic(placement.element)) return true;
-      const componentLines = lines(component.fn);
-      return componentLines >= minLines && lines(placement.element) <= maxRatio * componentLines;
-    };
+    const reported = (placement: Placement, component: Component): boolean =>
+      (placement.oneElement && !isIntrinsic(placement.element)) ||
+      inMapRow(placement.element, component);
 
     const check = (component: Component) =>
       Effect.forEach(
