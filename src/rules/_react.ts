@@ -30,6 +30,36 @@ export const hookName = (call: ESTree.CallExpression): Option.Option<string> => 
   return Option.none();
 };
 
+/** The program a node belongs to. */
+const programOf = (node: ESTree.Node): Option.Option<ESTree.Program> => {
+  let current: ESTree.Node = node;
+  while (current.parent) current = current.parent;
+  if (current.type === "Program") return Option.some(current);
+  return Option.none();
+};
+
+/** Whether the program imports `name` from `react` under that name. */
+const importsFromReact = (program: ESTree.Program, name: string): boolean =>
+  program.body.some(
+    (statement) =>
+      statement.type === "ImportDeclaration" &&
+      statement.source.value === "react" &&
+      statement.specifiers.some(
+        (specifier) =>
+          specifier.type === "ImportSpecifier" && specifier.local.name === name,
+      ),
+  );
+
+/**
+ * Whether a call is React's `name`: `React.name(…)`, or `name(…)` with `name`
+ * imported from `react` (a local function of the same name is not React's).
+ */
+export const isReactCall = (call: ESTree.CallExpression, name: string): boolean => {
+  if (!Option.contains(hookName(call), name)) return false;
+  if (call.callee.type !== "Identifier") return true;
+  return Option.exists(programOf(call), (program) => importsFromReact(program, name));
+};
+
 const effectHooks: ReadonlySet<string> = new Set(["useEffect", "useLayoutEffect"]);
 
 /** Whether `node` is a `useEffect` or `useLayoutEffect` call. */

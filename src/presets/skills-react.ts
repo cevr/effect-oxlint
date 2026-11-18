@@ -9,7 +9,12 @@ export const skillsReact = {
   "effect/noBooleanStateCluster": "error",
   "effect/noDerivedStateEffect": "error",
   "effect/noEffectEventLogic": "error",
+  "effect/noEffectInFeature": "error",
   "effect/noEffectSyncUp": "error",
+  "effect/noForwardRef": "error",
+  "effect/noParameterlessRenderProp": "error",
   "effect/noPromiseMirroredState": "error",
+  "effect/noSilentContextDefault": "error",
   "effect/preferColocatedState": "error",
+  "effect/preferUse": "error",
 } as const;

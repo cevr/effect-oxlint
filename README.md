@@ -162,6 +162,9 @@ These rules encode a project policy the preset cannot assume. The plugin registe
 | `effect/requireSchemaTaggedError`    | Declares Effect failures as `Schema.TaggedError`: reports classes extending `Error`, `Data.TaggedError`/`Data.Error` (`allowDataTaggedError` keeps them) and hand-written `_tag` failure classes (named `…Error`/`…Failure`/`…Defect` or with a `message`)                 |
 | `effect/noSchemaClass`               | Models app data with `Schema.Struct` and a same-name `interface`, not `Schema.Class` or `Schema.TaggedClass`                                                                                                                                                               |
 | `effect/noModeFieldWithOptionals`   | Models a mode as a union of one record per mode: reports an interface, type literal or `Schema.Struct` with a required literal-union `status`/`state`/`type`/`kind`/`mode`/`phase`/`stage` field and two or more optional siblings. Skips `…Props` types, parameter type literals and wire formats (snake_case members, an `object: "…"` member) |
+| `effect/noCauseRecoveryOutsideBoundary` | Bans `Effect.catchAllCause`, `catchCause` and `sandbox` outside the `boundaries` globs and outside a `// boundary: <reason>` comment: recover typed failures with `catchTag`/`catchTags` |
+| `effect/noKindNamedFiles`           | Bans paths named by kind: `services/`, `utils/`, `helpers/` folders and `*.service.ts`, `utils.ts`, `*.helpers.ts` files (`allow` globs exempt): name by concept |
+| `effect/importBoundary`             | Path-configured import boundaries: each `boundaries` entry gives `files` globs and `deny` or `allowOnly` specifier globs (relative imports matched as resolved paths), for vendor-free domain files, contexts that do not import each other's aggregates and an allow-listed domain package |
 
 ### TN1 networks
 
@@ -191,6 +194,11 @@ Opt-in presets of rules distilled from written practice (the react, composition,
 | `effect/noPromiseMirroredState` | Reports a hand-set loading flag around an `await` (`set(true)`, `await`, `set(false)`) and an effect that copies a promise's result into state: use `useTransition`, a query or a mutation                                        |
 | `effect/preferColocatedState`   | Reports a `useState` pair whose value and setter are used only in JSX under one inner element: move the state into the component for that subtree. A pair passed to one component element is always reported; a pair spread over a subtree, or on one lower-case element, only in a component of at least `minComponentLines` (100) lines whose shared element spans at most `maxSharedSpanRatio` (0.5) of it |
 | `effect/noBooleanStateCluster`  | Reports a component with three or more boolean `useState` pairs, once: name the modes in one state of a union type |
+| `effect/noEffectInFeature`      | Bans `useEffect`/`useLayoutEffect` in feature code: allowed in a hook whose name matches `adapterHooks` (default `Adapter$|Subscription$`) or a file matching an `adapters` glob. Adopt it with a baseline |
+| `effect/noForwardRef`           | React 19: bans `forwardRef`; take `ref` as a prop |
+| `effect/preferUse`              | React 19: `use(Context)` instead of `useContext(Context)` |
+| `effect/noParameterlessRenderProp` | Reports a `render…` prop whose inline function takes no parameters: pass children or a compound part |
+| `effect/noSilentContextDefault` | Reports `createContext` with a default object of functions: default to `null` and throw from the accessor |
 
 Component rules skip test modules: a probe component in a test may sync up on purpose.
 
