@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { lintFixtures } from "./support/lint-fixtures.js";
+import { lintFixtures, lintRun } from "./support/lint-fixtures.js";
 import { tn1Stub } from "./support/tn1-stub.js";
 
 const stub = tn1Stub();
@@ -80,8 +80,49 @@ describe("tn1Lint", () => {
       { options: [{ nets: { narration: "nomem.tn1" } }], threads: 1 },
     );
     expect(nomem.get("g.ts")).toEqual([
-      { line: 1, message: expect.stringContaining("spawn ENOMEM (the host could not copy oxlint's memory") },
+      {
+        line: 1,
+        message: expect.stringContaining("spawn ENOMEM (the host could not copy oxlint's memory"),
+      },
     ]);
+  });
+
+  // BL2's threads-16 run: a sidecar that cannot start (spawn ENOMEM) was a
+  // warning on each of 11,371 files and oxlint exited 0, so a CI step passed
+  // with nothing linted. Mutant: the down sidecar reported on every file.
+  // Mutant: the run's exit code left alone (a warning exits 0).
+  test("a sidecar that cannot start fails the run once, at warning severity too", () => {
+    const down = {
+      "node_modules/@cevr/tn1-lint/package.json": '{ "name": "@cevr/tn1-lint", "main": "lint.js" }',
+      "node_modules/@cevr/tn1-lint/lint.js": [
+        "exports.lintSync = () => {",
+        '  const error = new Error("tn1-lint: cannot start tn1-lint: spawn ENOMEM");',
+        '  error.code = "TN1_SIDECAR_DOWN";',
+        "  throw error;",
+        "};",
+      ].join("\n"),
+    };
+    const files = {
+      "h.ts": "export const one = 1;\n",
+      "i.ts": "export const two = 2;\n",
+      "j.ts": "export const three = 3;\n",
+    };
+    const run = lintRun(
+      "tn1Lint",
+      { ...down, ...files },
+      { options: [{ nets: { narration: stub.weights } }], threads: 1, severity: "warn" },
+    );
+    // Every linted file counts, the stub package's lint.js too (it is linted first).
+    const reported = [...run.findings.values()].flat();
+    expect(reported).toEqual([
+      {
+        line: 1,
+        message: expect.stringContaining(
+          "tn1-lint: the sidecar cannot start, so this run lints no file",
+        ),
+      },
+    ]);
+    expect(run.exitCode).not.toBe(0);
   });
 
   // Mutant: a failed run or a missing package ignored, so a configured rule goes quiet.

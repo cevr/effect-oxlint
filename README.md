@@ -178,7 +178,7 @@ These rules encode a project policy the preset cannot assume. The plugin registe
 }
 ```
 
-Weights paths are read from the lint root. The `binary` option names another `tn1-lint` binary. A missing package, an unreadable weights file or a failed run is one finding at the file's start, so a configured rule never goes quiet. On Linux, Node starts the binary by `fork`, and under the kernel's heuristic overcommit that fork can fail with `ENOMEM` when oxlint's threads hold more memory than the host has free. Run oxlint with `--threads=4` or fewer there.
+Weights paths are read from the lint root. The `binary` option names another `tn1-lint` binary. A missing package, an unreadable weights file or a failed run is one finding at the file's start, so a configured rule never goes quiet. A sidecar that cannot start (the package throws with code `TN1_SIDECAR_DOWN`) is reported once, on the first file, and sets the run's exit code to 1 even at `warn`: every file would go unlinted, and a CI step must not pass on that. On Linux, Node starts the binary by `fork`, and under the kernel's heuristic overcommit that fork can fail with `ENOMEM` when oxlint's threads hold more memory than the host has free. Run oxlint with `--threads=4` or fewer there.
 
 ## Skill Presets
 

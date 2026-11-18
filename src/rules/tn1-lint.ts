@@ -65,8 +65,26 @@ interface Request {
 /** The package's `lintSync`; its reply is decoded again (it is the package's contract, not checked here). */
 type LintSync = (request: Request) => Diagnostics;
 
+/**
+ * A sidecar that is down for the whole process: the package's `lintSync`
+ * threw with code `TN1_SIDECAR_DOWN` (its `serve` process cannot start), so
+ * no later file can be linted either.
+ */
+const SidecarDown = Schema.TaggedStruct("SidecarDown", { reason: Schema.String });
+type SidecarDown = typeof SidecarDown.Type;
+
 /** A network's findings on one request, or why the run failed. */
-type Runner = (request: Request) => Effect.Effect<ReadonlyArray<Finding>, string>;
+type Runner = (request: Request) => Effect.Effect<ReadonlyArray<Finding>, string | SidecarDown>;
+
+/** The package's Error for a sidecar that is down: its `code`. */
+const isSidecarDown = Schema.is(Schema.Struct({ code: Schema.Literal("TN1_SIDECAR_DOWN") }));
+
+/**
+ * The lint run's one report of a down sidecar. A warning on every file
+ * would leave oxlint's exit code 0 with nothing linted, so the first file
+ * reports it, the run's exit code becomes 1, and later files are skipped.
+ */
+const runState = { sidecarDownReported: false };
 
 const SidecarModule = Schema.Struct({
   lintSync: Schema.declare((input): input is LintSync => Predicate.isFunction(input)),
@@ -132,8 +150,11 @@ const sidecarRunner =
   (request) =>
     Effect.try({
       try: () => lintSync(request),
-      catch: (error) =>
-        `network ${request.rule}: ${String(error).replace(/^Error: /u, "")}${hint(String(error))}`,
+      catch: (error): string | SidecarDown => {
+        const reason = `network ${request.rule}: ${String(error).replace(/^Error: /u, "")}${hint(String(error))}`;
+        if (isSidecarDown(error)) return SidecarDown.make({ reason });
+        return reason;
+      },
     }).pipe(
       Effect.flatMap((reply) =>
         Option.match(decodeDiagnostics(reply), {
@@ -231,9 +252,19 @@ export const tn1Lint = Rule.define({
     const report = (message: string, [start, end]: readonly [number, number]) =>
       ctx.report(Diagnostic.make({ node: { range: [start, end] }, message }));
     const atStart = [0, 0] satisfies readonly [number, number];
+    const failRun = (down: SidecarDown) =>
+      Effect.suspend(() => {
+        if (runState.sidecarDownReported) return Effect.void;
+        runState.sidecarDownReported = true;
+        process.exitCode = 1;
+        return report(
+          `tn1-lint: the sidecar cannot start, so this run lints no file with its networks and exits 1: ${down.reason}`,
+          atStart,
+        );
+      });
     return {
       Program: () => {
-        if (nets.length === 0) return Effect.void;
+        if (nets.length === 0 || runState.sidecarDownReported) return Effect.void;
         return Option.match(runnerOf(ctx.cwd, Option.fromUndefinedOr(options?.binary)), {
           onNone: () =>
             report(
@@ -255,7 +286,10 @@ export const tn1Lint = Rule.define({
                       discard: true,
                     }),
                   ),
-                  Effect.catch((reason) => report(`tn1-lint: ${reason}`, atStart)),
+                  Effect.catch((failure) => {
+                    if (Predicate.isString(failure)) return report(`tn1-lint: ${failure}`, atStart);
+                    return failRun(failure);
+                  }),
                 ),
               { discard: true },
             ),
