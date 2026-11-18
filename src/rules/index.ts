@@ -36,6 +36,7 @@ export * from "./no-effect-sync-up.js";
 export * from "./no-empty-test.js";
 export * from "./no-existence-only-assert.js";
 export * from "./no-fixed-wait-in-tests.js";
+export * from "./no-flake-masking.js";
 export * from "./no-forward-ref.js";
 export * from "./no-globals.js";
 export * from "./no-inline-provide.js";
