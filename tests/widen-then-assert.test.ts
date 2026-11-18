@@ -34,6 +34,25 @@ describe("noWidenThenAssert evidence", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
+  // Mutant: primitiveWidening answers none (BL1's seed, 0/10).
+  // Mutant: isLiteralTypes answers true (an assertion to a named type is reported).
+  test("a literal annotated with its primitive keyword, asserted back to literals", () => {
+    const results = lintCases("noWidenThenAssert", {
+      valid: [
+        'function mode() { const raw: string = read(); return raw as "fast" | "slow"; }',
+        'function mode() { const raw: string = "fast"; return raw as Mode; }',
+        'function mode() { const raw: number = "fast"; return raw as "fast"; }',
+        "function mode() { const raw: string = `fast${n}`; return raw as \"fast\"; }",
+      ],
+      invalid: [
+        'function mode(): "fast" | "slow" { const raw: string = "fast"; return raw as "fast" | "slow"; }',
+        "function size() { const raw: number = 3; return raw as 1 | 2 | 3; }",
+        "function mode() { const raw: string = `fast`; return raw as \"fast\"; }",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
   test("stays within one function and after the widening declaration", () => {
     const results = lintCases("noWidenThenAssert", {
       valid: [

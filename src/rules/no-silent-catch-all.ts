@@ -6,10 +6,27 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { staticProperties } from "./_call-arguments.js";
 import { importedNamespaces, isStaticMember, visibleNamespaces } from "./_effect-namespaces.js";
 
 /** The catch-everything combinators: Effect 4's `catch` and `catchCause`, and Effect 3's names. */
 const catchAllNames = ["catch", "catchCause", "catchAll", "catchAllCause"] as const;
+
+/** The combinators that drop every failure with no handler at all. */
+const ignoreNames = ["ignore", "ignoreCause"] as const;
+
+/** Whether `Effect.ignore` is called with options that log what it drops (`{ log: … }`). */
+const logsWhatItDrops = (node: ESTree.MemberExpression): boolean => {
+  const call = node.parent;
+  if (call?.type !== "CallExpression" || call.callee !== node) return false;
+  return call.arguments.some(
+    (argument) =>
+      argument.type === "ObjectExpression" &&
+      staticProperties(argument, "log").some(
+        (property) => !(property.value.type === "Literal" && property.value.value === false),
+      ),
+  );
+};
 
 type Handler = ESTree.ArrowFunctionExpression | ESTree.Function;
 
@@ -56,6 +73,19 @@ export const noSilentCatchAll = Rule.define({
           effectNamespaces.add(name);
         }
         return Effect.void;
+      },
+      MemberExpression: (node) => {
+        if (node.type !== "MemberExpression") return Effect.void;
+        const namespaces = visibleNamespaces(ctx, node, effectNamespaces);
+        if (!ignoreNames.some((name) => isStaticMember(node, namespaces, name))) return Effect.void;
+        if (logsWhatItDrops(node)) return Effect.void;
+        return ctx.report(
+          Diagnostic.make({
+            node,
+            message:
+              "Effect.ignore erases every failure without a trace. Recover a typed failure truthfully, or log what it drops with Effect.ignore({ log: true }).",
+          }),
+        );
       },
       CallExpression: (node) => {
         if (node.type !== "CallExpression" || node.callee.type === "Super") return Effect.void;

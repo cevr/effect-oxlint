@@ -33,6 +33,69 @@ describe("Effect program context", () => {
   });
 });
 
+describe("BL1's seeded misses (0/10 each)", () => {
+  // Mutant: perCallGen answers false (a gen inside a function owns its cache).
+  // Mutant: usedOnlyHere answers true (a service constructor's cache is reported).
+  test("a gen inside a function builds a cache per call when the cache never leaves it", () => {
+    const results = lintCases("noPerCallCacheConstruction", {
+      valid: [
+        withImports(
+          "export const make = (load) => Effect.gen(function* () {\n  const cache = yield* Cache.make({ capacity: 9, lookup: load });\n  return { get: (key) => cache.get(key) };\n});",
+        ),
+        withImports(
+          "export const live = Layer.effect(Tag, Effect.gen(function* () {\n  const cache = yield* Cache.make({ capacity: 9, lookup: load });\n  return yield* cache.get(1);\n}));",
+        ),
+        withImports(
+          "export const make = (load) => Effect.gen(function* () {\n  const cache = yield* Cache.make({ capacity: 9, lookup: load });\n  return cache;\n});",
+        ),
+      ],
+      invalid: [
+        withImports(
+          "export const lookup = (key, load) => Effect.gen(function* () {\n  const cache = yield* Cache.make({ capacity: 9, lookup: load });\n  return yield* cache.get(key);\n});",
+        ),
+        withImports(
+          "export function read(load) {\n  return Effect.gen(function* () {\n    const once = yield* Effect.cached(load);\n    return yield* once;\n  });\n}",
+        ),
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  // Mutant: the ignore visitor removed (Effect.ignore goes unreported).
+  // Mutant: logsWhatItDrops answers true for `log: false`.
+  test("Effect.ignore drops every failure unless it logs them", () => {
+    const results = lintCases("noSilentCatchAll", {
+      valid: [
+        withImports("export const run = (work) => work.pipe(Effect.ignore({ log: true }));"),
+        withImports('export const run = (work) => Effect.ignore(work, { log: "Warn" });'),
+      ],
+      invalid: [
+        withImports("export const run = (work) => work.pipe(Effect.ignore);"),
+        withImports("export const run = (work) => Effect.ignoreCause(work);"),
+        withImports("export const run = (work) => work.pipe(Effect.ignore({ log: false }));"),
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
+  // Mutant: runsSerially reads only a literal `concurrency: 1` (the default is missed).
+  // Mutant: yieldedAsStatement answers false.
+  test("Effect.all is serial by default, and a yield* statement discards its result", () => {
+    const results = lintCases("noSequentialEffectAll", {
+      valid: [
+        withImports("export const both = Effect.gen(function* () {\n  const [x, y] = yield* Effect.all([a, b]);\n  return x + y;\n});"),
+        withImports('export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b], { concurrency: "unbounded" });\n});'),
+        withImports("export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b], { concurrency: 2 });\n});"),
+      ],
+      invalid: [
+        withImports("export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b]);\n});"),
+        withImports("export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b], { mode: \"default\" });\n});"),
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+});
+
 describe("Effect.fn names", () => {
   test("reads the program from the first argument", () => {
     const results = lintCases("requireNamedEffectFn", {
