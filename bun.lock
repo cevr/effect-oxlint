@@ -10,6 +10,7 @@
       "devDependencies": {
         "@changesets/changelog-github": "^1.0.1",
         "@changesets/cli": "^3.0.3",
+        "@cvr/tn1-lint": "^0.1.0",
         "@effect/tsgo": "latest",
         "@effect/vitest": "4.1.4",
         "@types/bun": "latest",
@@ -26,11 +27,11 @@
         "vitest": "latest",
       },
       "peerDependencies": {
-        "@cevr/tn1-lint": ">=0.1.0",
+        "@cvr/tn1-lint": ">=0.1.0",
         "effect": ">=4.1.0 <5",
       },
       "optionalPeers": [
-        "@cevr/tn1-lint",
+        "@cvr/tn1-lint",
       ],
     },
   },
@@ -72,6 +73,14 @@
     "@clack/core": ["@clack/core@1.6.0", "", { "dependencies": { "fast-string-width": "^3.0.2", "fast-wrap-ansi": "^0.2.0", "sisteransi": "^2.0.0" } }, "sha512-4GZynIB2IIe431odxesswvWTCP6orvqd6e2b07b3VFWBQRqUqIHc/EPIZwFoKS692QBp+ooPuXKaJV8g4kXuYA=="],
 
     "@clack/prompts": ["@clack/prompts@1.9.0", "", { "dependencies": { "@clack/core": "1.6.0", "fast-string-width": "^3.0.2", "fast-wrap-ansi": "^0.2.0", "sisteransi": "^2.0.0" } }, "sha512-tEj8X2No2A1c9NDnZECxiiJ8TP3vmFlN9tLlLeSaMqVW4tUmVG2R4qpv/eP4zymWxnymYLkLcIYVV0VcWj3RCQ=="],
+
+    "@cvr/tn1-lint": ["@cvr/tn1-lint@0.1.0", "", { "optionalDependencies": { "@cvr/tn1-lint-darwin-arm64": "0.1.0", "@cvr/tn1-lint-linux-arm64": "0.1.0", "@cvr/tn1-lint-linux-x64": "0.1.0" }, "hasInstallScript": true, "bin": { "tn1-lint": "bin/tn1-lint" } }, "sha512-wStCnvnFWigEJ3jx/u0v/GYKa0Bn+Ozi3JQjsq1X8+TglqI2JiHUTh6mYSBJalpMB5UsUuV/is+qQsXEYaDqwg=="],
+
+    "@cvr/tn1-lint-darwin-arm64": ["@cvr/tn1-lint-darwin-arm64@0.1.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-ubka4iU1Bd+VRMlv1aXyiXVNVYNEM1/xb0nG68Z7DS58eYZvEbhYMpoUxKsJvRRLBSi3ggGQYyrWa98GR7bZ6w=="],
+
+    "@cvr/tn1-lint-linux-arm64": ["@cvr/tn1-lint-linux-arm64@0.1.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-gEJoidPbp/NXGC+OX2BNBGsESkiyTl62n+CjghFtqD/ZWRNMAYZq7OcB9Fcj23BK4RFbv219yVHRpWXeRWjQVA=="],
+
+    "@cvr/tn1-lint-linux-x64": ["@cvr/tn1-lint-linux-x64@0.1.0", "", { "os": "linux", "cpu": "x64" }, "sha512-54dA8zIXdjkFmZ98CQjmw9o0434V1F336e+RI8oSRnlySrHunCxSvAjdECUgTAoDd4B6XUSAHXX5QF0ntPjoSA=="],
 
     "@effect/tsgo": ["@effect/tsgo@0.70.0", "", { "optionalDependencies": { "@effect/tsgo-darwin-arm64": "0.70.0", "@effect/tsgo-darwin-x64": "0.70.0", "@effect/tsgo-linux-arm": "0.70.0", "@effect/tsgo-linux-arm64": "0.70.0", "@effect/tsgo-linux-x64": "0.70.0", "@effect/tsgo-win32-arm64": "0.70.0", "@effect/tsgo-win32-x64": "0.70.0" }, "bin": { "effect-tsgo": "dist/effect-tsgo.cjs" } }, "sha512-kZwLZaAT4of8wu1sTRnk2IZpbjHGQSBKGvfw+nYw2iuvJlkIS0BNYcwA0ohoLPRffUKUP6PY7iBW5Ag4DUxh+Q=="],
 

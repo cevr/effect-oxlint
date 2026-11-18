@@ -1,9 +1,9 @@
 /**
- * Advisory findings of TN1 networks, run by the `@cevr/tn1-lint` package.
+ * Advisory findings of TN1 networks, run by the `@cvr/tn1-lint` package.
  *
  * A TN1 network is a small all-integer (ternary) network that decides one
  * judgement an exact rule cannot, such as a comment that narrates the next
- * line. `@cevr/tn1-lint` is its linter: a native binary, the same on every
+ * line. `@cvr/tn1-lint` is its linter: a native binary, the same on every
  * host, that reads TypeScript and prints oxlint's JSON report. This rule
  * does not bundle the engine or the weights: it hands the file's text (an
  * unsaved buffer is what is read) to the installed package once per
@@ -11,10 +11,16 @@
  * package's `lintSync`, one `tn1-lint serve` process answers the whole lint
  * run; with the `binary` option, or a package from before `lintSync`, the
  * binary runs once per file and network with the text as its standard input. A finding is a hint with a probability; configure the rule as
- * "warn". It is opt-in: install `@cevr/tn1-lint` beside the plugin and name
+ * "warn". It is opt-in: install `@cvr/tn1-lint` beside the plugin and name
  * each network's weights file.
  *
  *   "effect/tn1Lint": ["warn", { "nets": { "narration": "lint/narration.tn1" } }]
+ *
+ * The request, the reply and the report are tn1-lint's own Ergo types, read
+ * through the package's generated `@cvr/tn1-lint/wire` (its types are
+ * imported here; the module itself is the one installed at the lint root,
+ * so the package stays an optional peer). A report that is not that JSON
+ * is a failed run.
  *
  * A missing package, a weights file it cannot read, or a run that fails is
  * one finding at the file's start, so a configured rule never goes quiet.
@@ -28,6 +34,8 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
+import type * as Wire from "@cvr/tn1-lint/wire";
+
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
 
 const Options = Schema.UndefinedOr(
@@ -37,33 +45,21 @@ const Options = Schema.UndefinedOr(
   }),
 );
 
-const Span = Schema.Struct({ offset: Schema.Int, length: Schema.Int });
+type Diagnostics = ReadonlyArray<Wire.Diagnostic>;
 
-const Report = Schema.Struct({
-  diagnostics: Schema.Array(
-    Schema.Struct({
-      message: Schema.String,
-      labels: Schema.Array(Schema.Struct({ span: Span })),
-    }),
+/** The package's `lintSync`: it decodes serve's reply with the same wire module. */
+type LintSync = (request: Wire.Request) => Diagnostics;
+
+/** The package's wire module, as the lint root resolves it. */
+type WireModule = Pick<typeof Wire, "decodeReport">;
+
+const WireModuleSchema = Schema.Struct({
+  decodeReport: Schema.declare((input): input is WireModule["decodeReport"] =>
+    Predicate.isFunction(input),
   ),
 });
 
-const decodeReport = Schema.decodeUnknownOption(Schema.fromJsonString(Report));
-
-const decodeDiagnostics = Schema.decodeUnknownOption(Report.fields.diagnostics);
-
-type Diagnostics = (typeof Report.Type)["diagnostics"];
-
-/** A request of the package's `lintSync`: one text, one network. */
-interface Request {
-  readonly rule: string;
-  readonly weights: string;
-  readonly path: string;
-  readonly text: string;
-}
-
-/** The package's `lintSync`; its reply is decoded again (it is the package's contract, not checked here). */
-type LintSync = (request: Request) => Diagnostics;
+const decodeWireModule = Schema.decodeUnknownOption(WireModuleSchema);
 
 /**
  * A sidecar that is down for the whole process: the package's `lintSync`
@@ -74,7 +70,9 @@ const SidecarDown = Schema.TaggedStruct("SidecarDown", { reason: Schema.String }
 type SidecarDown = typeof SidecarDown.Type;
 
 /** A network's findings on one request, or why the run failed. */
-type Runner = (request: Request) => Effect.Effect<ReadonlyArray<Finding>, string | SidecarDown>;
+type Runner = (
+  request: Wire.Request,
+) => Effect.Effect<ReadonlyArray<Finding>, string | SidecarDown>;
 
 /** The package's Error for a sidecar that is down: its `code`. */
 const isSidecarDown = Schema.is(Schema.Struct({ code: Schema.Literal("TN1_SIDECAR_DOWN") }));
@@ -155,51 +153,59 @@ const sidecarRunner =
         if (isSidecarDown(error)) return SidecarDown.make({ reason });
         return reason;
       },
-    }).pipe(
-      Effect.flatMap((reply) =>
-        Option.match(decodeDiagnostics(reply), {
-          onNone: () =>
-            Effect.fail(`network ${request.rule}: tn1-lint replied with no diagnostics`),
-          onSome: (diagnostics) => Effect.succeed(findingsOf(request.text, diagnostics)),
-        }),
-      ),
-    );
+    }).pipe(Effect.map((diagnostics) => findingsOf(request.text, diagnostics)));
 
 /**
- * The runner: the `binary` option's process per file and network, else
- * `@cevr/tn1-lint` as the lint root resolves it, through its `lintSync` when
- * it exports one (a package from before `lintSync` runs its bin per file).
+ * The runner, from `@cvr/tn1-lint` as the lint root resolves it (none when
+ * it is not installed): the `binary` option's process per file and
+ * network, else the package's `lintSync` when it exports one (a package
+ * from before `lintSync` runs its bin per file). A package with no wire
+ * module is older than the rule and is a failure.
  */
-const runnerOf = (cwd: string, binary: Option.Option<string>): Option.Option<Runner> =>
-  Option.match(binary, {
-    onSome: (path) => Option.some(spawnRunner(resolve(cwd, path))),
-    onNone: () => {
-      const fromRoot = createRequire(join(cwd, "package.json"));
-      return Option.map(
-        Option.liftThrowable(() => fromRoot.resolve("@cevr/tn1-lint/package.json"))(),
-        (manifest) =>
-          Option.match(
-            Option.flatMap(
-              Option.liftThrowable(() => fromRoot("@cevr/tn1-lint"))(),
-              decodeSidecarModule,
+const runnerOf = (cwd: string, binary: Option.Option<string>): Option.Option<Runner> => {
+  const fromRoot = createRequire(join(cwd, "package.json"));
+  return Option.map(
+    Option.liftThrowable(() => fromRoot.resolve("@cvr/tn1-lint/package.json"))(),
+    (manifest): Runner =>
+      Option.match(
+        Option.flatMap(
+          Option.liftThrowable(() => fromRoot("@cvr/tn1-lint/wire"))(),
+          decodeWireModule,
+        ),
+        {
+          onNone: () => () =>
+            Effect.fail(
+              "the installed @cvr/tn1-lint has no wire module (@cvr/tn1-lint/wire); update it",
             ),
-            {
-              onSome: (module) => sidecarRunner(module.lintSync),
-              onNone: () => spawnRunner(join(dirname(manifest), "bin", "tn1-lint")),
-            },
-          ),
-      );
-    },
-  });
+          onSome: (wire) =>
+            Option.match(binary, {
+              onSome: (path) => spawnRunner(wire, resolve(cwd, path)),
+              onNone: () =>
+                Option.match(
+                  Option.flatMap(
+                    Option.liftThrowable(() => fromRoot("@cvr/tn1-lint"))(),
+                    decodeSidecarModule,
+                  ),
+                  {
+                    onSome: (module) => sidecarRunner(module.lintSync),
+                    onNone: () => spawnRunner(wire, join(dirname(manifest), "bin", "tn1-lint")),
+                  },
+                ),
+            }),
+        },
+      ),
+  );
+};
 
 /** The runner of one `tn1-lint lint` process per file and network. */
 const spawnRunner =
-  (binary: string): Runner =>
+  (wire: WireModule, binary: string): Runner =>
   (request) =>
-    spawnNetwork(binary, request.rule, request.weights, request.text);
+    spawnNetwork(wire, binary, request.rule, request.weights, request.text);
 
 /** The findings of one network on `text` from one process, or why the run failed. */
 const spawnNetwork = (
+  wire: WireModule,
   binary: string,
   name: string,
   weights: string,
@@ -220,9 +226,9 @@ const spawnNetwork = (
       const reason = run.stderr.trim().split("\n")[0] ?? `exit ${String(run.status)}`;
       return Effect.fail(`network ${name}: ${reason}`);
     }
-    return Option.match(decodeReport(run.stdout), {
-      onNone: () => Effect.fail(`network ${name}: tn1-lint printed no oxlint JSON report`),
-      onSome: (report) => Effect.succeed(findingsOf(text, report.diagnostics)),
+    return Effect.try({
+      try: () => findingsOf(text, wire.decodeReport(run.stdout).diagnostics),
+      catch: (error) => `network ${name}: ${String(error).replace(/^\w+: /u, "")}`,
     });
   });
 
@@ -231,7 +237,7 @@ export const tn1Lint = Rule.define({
   meta: Rule.meta({
     type: "suggestion",
     description:
-      "Advisory findings of TN1 networks (small integer networks for judgements exact rules cannot make), run by the installed @cevr/tn1-lint package.",
+      "Advisory findings of TN1 networks (small integer networks for judgements exact rules cannot make), run by the installed @cvr/tn1-lint package.",
     docs: { recommended: false },
     schema: [
       {
@@ -268,7 +274,7 @@ export const tn1Lint = Rule.define({
         return Option.match(runnerOf(ctx.cwd, Option.fromUndefinedOr(options?.binary)), {
           onNone: () =>
             report(
-              "tn1-lint: the package @cevr/tn1-lint is not installed here; add it beside oxlint-plugin-effect, or set the rule's binary option.",
+              "tn1-lint: the package @cvr/tn1-lint is not installed here; add it beside oxlint-plugin-effect (the binary option reads its report through the package too).",
               atStart,
             ),
           onSome: (runner) =>
