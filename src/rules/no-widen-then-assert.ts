@@ -6,11 +6,13 @@ import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js"
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import type { ESTree, Scope, Variable } from "@oxlint/plugins";
 
 import { ancestors } from "./_ast-ancestors.js";
 
-type BroadTypeKind = "top" | "object" | "record";
+// Local change: "primitive" is a literal widened to its primitive keyword.
+type BroadTypeKind = "top" | "object" | "record" | "primitive";
 
 // Local change: absent evidence types are Option instead of null.
 type KnownValueEvidence = {
@@ -387,7 +389,10 @@ function widenedDeclarator(
     broadTypeKind(assertion.typeAnnotation),
   );
   const declaredBroadKind = Option.flatMap(declaredType, broadTypeKind);
-  const broadKind = Option.orElse(declaredBroadKind, () => initializerBroadKind);
+  const broadKind = declaredBroadKind.pipe(
+    Option.orElse(() => initializerBroadKind),
+    Option.orElse(() => Option.flatMap(declaredType, (type) => primitiveWidening(type, init))),
+  );
 
   const originalExpression = Option.match(
     Option.zipLeft(initializerAssertion, initializerBroadKind),
@@ -401,6 +406,53 @@ function widenedDeclarator(
   );
 }
 
+/** Whether a literal's value is of the primitive the keyword names. */
+function literalOfKeyword(
+  literal: Extract<ESTree.Expression, { readonly type: "Literal" }>,
+  keyword: string,
+): boolean {
+  switch (keyword) {
+    case "TSStringKeyword":
+      return Predicate.isString(literal.value);
+    case "TSNumberKeyword":
+      return Predicate.isNumber(literal.value);
+    case "TSBooleanKeyword":
+      return Predicate.isBoolean(literal.value);
+    case "TSBigIntKeyword":
+      return Predicate.isBigInt(literal.value);
+    default:
+      return false;
+  }
+}
+
+/**
+ * Local change: a const annotated with a primitive keyword (`string`,
+ * `number`, `boolean`, `bigint`) whose initializer is a literal of that
+ * primitive has erased the literal's type; asserting it back to literal
+ * types is the same widen-then-assert as through `unknown`.
+ */
+function primitiveWidening(
+  declared: ESTree.TSType,
+  init: ESTree.Expression,
+): Option.Option<BroadTypeKind> {
+  const unwrapped = unwrapExpressionParentheses(init);
+  const keyword = unwrapTypeParentheses(declared).type;
+  const plainTemplate =
+    unwrapped.type === "TemplateLiteral" &&
+    unwrapped.expressions.length === 0 &&
+    keyword === "TSStringKeyword";
+  const literal = unwrapped.type === "Literal" && literalOfKeyword(unwrapped, keyword);
+  if (plainTemplate || literal) return Option.some("primitive");
+  return Option.none();
+}
+
+/** Whether the type is a literal type or a union of literal types. */
+function isLiteralTypes(type: ESTree.TSType): boolean {
+  const unwrapped = unwrapTypeParentheses(type);
+  if (unwrapped.type === "TSLiteralType") return true;
+  return unwrapped.type === "TSUnionType" && unwrapped.types.every(isLiteralTypes);
+}
+
 function assertionIsNarrower(
   sourceText: string,
   broadKind: BroadTypeKind,
@@ -409,6 +461,7 @@ function assertionIsNarrower(
 ): boolean {
   if (isBroadType(assertedType)) return false;
   if (broadKind === "top") return true;
+  if (broadKind === "primitive") return isLiteralTypes(assertedType);
   if (typesHaveSameSyntax(sourceText, evidence.type, assertedType)) return true;
   if (broadKind === "object") return isDefinitelyObjectType(assertedType);
   return isDefinitelyNarrowerRecordType(assertedType);

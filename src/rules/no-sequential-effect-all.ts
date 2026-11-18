@@ -33,6 +33,30 @@ const propertyLiteral = (node: ESTree.Expression, name: string): Option.Option<L
   );
 };
 
+/**
+ * Whether the call runs its effects one at a time: no options, or options
+ * without `concurrency` (Effect.all is sequential by default), or a
+ * literal `concurrency: 1`.
+ */
+const runsSerially = (options: Option.Option<ESTree.Expression>): boolean =>
+  Option.match(options, {
+    onNone: () => true,
+    onSome: (node) =>
+      (node.type === "ObjectExpression" && staticProperties(node, "concurrency").length === 0) ||
+      hasLiteralOption(options, "concurrency", 1),
+  });
+
+/** Whether the call is yielded in a statement of its own, so its result is dropped. */
+const yieldedAsStatement = (node: ESTree.CallExpression): boolean => {
+  const yielded = node.parent;
+  return (
+    yielded?.type === "YieldExpression" &&
+    yielded.delegate &&
+    yielded.argument === node &&
+    yielded.parent?.type === "ExpressionStatement"
+  );
+};
+
 /** Whether the options set `name` to the literal `expected`. */
 const hasLiteralOption = (
   options: Option.Option<ESTree.Expression>,
@@ -92,9 +116,11 @@ export const noSequentialEffectAll = Rule.define({
         if (!isStaticMember(node.callee, namespaces, "all")) return Effect.void;
         if (node.arguments[0]?.type !== "ArrayExpression") return Effect.void;
         const options = expressionArgument(node, 1);
-        if (!hasLiteralOption(options, "concurrency", 1)) return Effect.void;
+        if (!runsSerially(options)) return Effect.void;
         const discards =
-          hasLiteralOption(options, "discard", true) || pipedToAsVoid(node, namespaces);
+          hasLiteralOption(options, "discard", true) ||
+          pipedToAsVoid(node, namespaces) ||
+          yieldedAsStatement(node);
         if (!discards) return Effect.void;
         return ctx.report(
           Diagnostic.make({

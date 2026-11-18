@@ -110,8 +110,8 @@ const utf16Index = (text: string): ((byte: number) => number) => {
  * holds more writable memory than the host has free. oxlint holds a large
  * buffer per thread, so a run with fewer threads starts the binary.
  */
-const hint = (error: Error): string => {
-  if (!error.message.includes("ENOMEM")) return "";
+const hint = (message: string): string => {
+  if (!message.includes("ENOMEM")) return "";
   return " (the host could not copy oxlint's memory to start a process; run oxlint with --threads=4 or fewer)";
 };
 
@@ -132,7 +132,8 @@ const sidecarRunner =
   (request) =>
     Effect.try({
       try: () => lintSync(request),
-      catch: (error) => `network ${request.rule}: ${String(error).replace(/^Error: /u, "")}`,
+      catch: (error) =>
+        `network ${request.rule}: ${String(error).replace(/^Error: /u, "")}${hint(String(error))}`,
     }).pipe(
       Effect.flatMap((reply) =>
         Option.match(decodeDiagnostics(reply), {
@@ -193,7 +194,7 @@ const spawnNetwork = (
     // file) leaves the write with EPIPE: its exit status says why.
     const exited = Number.isInteger(run.status);
     if (run.error && !exited)
-      return Effect.fail(`could not run ${binary}: ${run.error.message}${hint(run.error)}`);
+      return Effect.fail(`could not run ${binary}: ${run.error.message}${hint(run.error.message)}`);
     if (run.status !== 0) {
       const reason = run.stderr.trim().split("\n")[0] ?? `exit ${String(run.status)}`;
       return Effect.fail(`network ${name}: ${reason}`);

@@ -47,6 +47,7 @@ describe("tn1Lint", () => {
       "node_modules/@cevr/tn1-lint/lint.js": [
         "exports.lintSync = ({ rule, weights, path, text }) => {",
         '  if (weights.endsWith("missing.tn1")) throw new Error(`tn1-lint: cannot read ${weights}`);',
+        '  if (weights.endsWith("nomem.tn1")) throw new Error("tn1-lint: cannot start tn1-lint: spawn ENOMEM");',
         '  const at = text.indexOf("NARRATE");',
         "  if (at < 0) return [];",
         "  const span = { offset: Buffer.byteLength(text.slice(0, at)), length: 7 };",
@@ -70,6 +71,16 @@ describe("tn1Lint", () => {
         line: 1,
         message: expect.stringContaining("tn1-lint: network narration: tn1-lint: cannot read"),
       },
+    ]);
+    // Mutant: the sidecar's ENOMEM reported without what to do about it
+    // (oxlint at many threads cannot fork; fewer threads can).
+    const nomem = lintFixtures(
+      "tn1Lint",
+      { ...sidecar, "g.ts": "export const one = 1;\n" },
+      { options: [{ nets: { narration: "nomem.tn1" } }], threads: 1 },
+    );
+    expect(nomem.get("g.ts")).toEqual([
+      { line: 1, message: expect.stringContaining("spawn ENOMEM (the host could not copy oxlint's memory") },
     ]);
   });
 
