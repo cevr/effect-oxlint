@@ -10,4 +10,5 @@ export const skillsReact = {
   "effect/noEffectEventLogic": "error",
   "effect/noEffectSyncUp": "error",
   "effect/noPromiseMirroredState": "error",
+  "effect/preferColocatedState": "error",
 } as const;
