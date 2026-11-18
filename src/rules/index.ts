@@ -86,6 +86,7 @@ export * from "./no-unsafe-dictionary-type.js";
 export * from "./no-widen-then-assert.js";
 export * from "./no-with-wrapper-call.js";
 export * from "./prefer-catch-tag.js";
+export * from "./prefer-colocated-state.js";
 export * from "./prefer-effect-fn.js";
 export * from "./prefer-match-tags-exhaustive.js";
 export * from "./prefer-predicate-is-tagged.js";

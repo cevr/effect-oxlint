@@ -5,6 +5,7 @@
     "effect/noDerivedStateEffect": "error",
     "effect/noEffectEventLogic": "error",
     "effect/noEffectSyncUp": "error",
-    "effect/noPromiseMirroredState": "error"
+    "effect/noPromiseMirroredState": "error",
+    "effect/preferColocatedState": "error"
   }
 }
