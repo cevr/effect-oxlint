@@ -1,0 +1,11 @@
+{
+  "plugins": [],
+  "jsPlugins": ["oxlint-plugin-effect/plugin"],
+  "rules": {
+    "effect/noConstantRestated": "error",
+    "effect/noEmptyTest": "error",
+    "effect/noExistenceOnlyAssert": "error",
+    "effect/noRepeatedCase": "error",
+    "effect/noSnapshotWithoutContract": "error"
+  }
+}
