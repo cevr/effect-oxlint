@@ -16,11 +16,15 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { Diagnostic, Rule, Visitor } from "../vendor/effect-oxlint/index.js";
+import { Baseline, baselineJsonSchema, withBaseline } from "./_baseline.js";
 import { isTestModule, lintRootPath, matchesFileGlobs, skipFile } from "./_test-files.js";
 
 const Options = Schema.UndefinedOr(
-  Schema.Struct({ allow: Schema.optionalKey(Schema.Array(Schema.String)) }),
+  Schema.Struct({
+    allow: Schema.optionalKey(Schema.Array(Schema.String)),
+    baseline: Schema.optionalKey(Baseline),
+  }),
 );
 
 const kindFolders: ReadonlySet<string> = new Set(["services", "utils", "utilities", "helpers"]);
@@ -47,7 +51,10 @@ export const noKindNamedFiles = Rule.define({
     schema: [
       {
         type: "object",
-        properties: { allow: { type: "array", items: { type: "string" } } },
+        properties: {
+          allow: { type: "array", items: { type: "string" } },
+          baseline: baselineJsonSchema,
+        },
         additionalProperties: false,
       },
     ],
@@ -55,20 +62,23 @@ export const noKindNamedFiles = Rule.define({
   }),
   options: Options,
   create: function* (options) {
-    const ctx = yield* RuleContext;
-    if (isTestModule(ctx) || matchesFileGlobs(ctx, options?.allow ?? [])) return skipFile;
-    return {
-      Program: (node: ESTree.Program) =>
-        Option.match(kindIn(lintRootPath(ctx)), {
-          onNone: () => Effect.void,
-          onSome: (kind) =>
-            ctx.report(
-              Diagnostic.make({
-                node,
-                message: `This path is named by kind (\`${kind}\`), so the name says what sort of code the file holds, not what it is about, and unrelated concepts collect in one place. Name the folder by the domain concept and the file by what it defines: \`notes/note.ts\`, \`notes/due-date.ts\`, \`notes/postgres.ts\`.`,
-              }),
-            ),
-        }),
-    };
+    return yield* withBaseline(options?.baseline, (ctx) =>
+      Effect.sync((): Visitor.EffectVisitor => {
+        if (isTestModule(ctx) || matchesFileGlobs(ctx, options?.allow ?? [])) return skipFile;
+        return {
+          Program: (node: ESTree.Program) =>
+            Option.match(kindIn(lintRootPath(ctx)), {
+              onNone: () => Effect.void,
+              onSome: (kind) =>
+                ctx.report(
+                  Diagnostic.make({
+                    node,
+                    message: `This path is named by kind (\`${kind}\`), so the name says what sort of code the file holds, not what it is about, and unrelated concepts collect in one place. Name the folder by the domain concept and the file by what it defines: \`notes/note.ts\`, \`notes/due-date.ts\`, \`notes/postgres.ts\`.`,
+                  }),
+                ),
+            }),
+        };
+      }),
+    );
   },
 });

@@ -18,15 +18,17 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { Diagnostic, Rule, Visitor } from "../vendor/effect-oxlint/index.js";
 import { ancestorsOf, isFunction } from "./_anti-slop-effect.js";
 import { functionName, hookName, isEffectHook } from "./_react.js";
+import { Baseline, baselineJsonSchema, withBaseline } from "./_baseline.js";
 import { isTestModule, matchesFileGlobs, skipFile } from "./_test-files.js";
 
 const Options = Schema.UndefinedOr(
   Schema.Struct({
     adapters: Schema.optionalKey(Schema.Array(Schema.String)),
     adapterHooks: Schema.optionalKey(Schema.String),
+    baseline: Schema.optionalKey(Baseline),
   }),
 );
 
@@ -50,6 +52,7 @@ export const noEffectInFeature = Rule.define({
         properties: {
           adapters: { type: "array", items: { type: "string" } },
           adapterHooks: { type: "string" },
+          baseline: baselineJsonSchema,
         },
         additionalProperties: false,
       },
@@ -58,23 +61,26 @@ export const noEffectInFeature = Rule.define({
   }),
   options: Options,
   create: function* (options) {
-    const ctx = yield* RuleContext;
-    if (isTestModule(ctx) || matchesFileGlobs(ctx, options?.adapters ?? [])) return skipFile;
-    const adapterHook = new RegExp(options?.adapterHooks ?? "Adapter$|Subscription$", "u");
-    return {
-      CallExpression: (node: ESTree.CallExpression) => {
-        if (!isEffectHook(node)) return Effect.void;
-        if (Option.exists(enclosingName(node), (name) => adapterHook.test(name))) {
-          return Effect.void;
-        }
-        const hook = Option.getOrElse(hookName(node), () => "useEffect");
-        return ctx.report(
-          Diagnostic.make({
-            node,
-            message: `\`${hook}\` in feature code runs a side effect after render, where the reader cannot see what starts it or when it stops. Derive values during render, run work in the event handler that causes it, read server state through a query, and put a real subscription in a named adapter hook (\`useWindowSizeSubscription\`) or an adapter file the \`adapters\` option lists.`,
-          }),
-        );
-      },
-    };
+    return yield* withBaseline(options?.baseline, (ctx) =>
+      Effect.sync((): Visitor.EffectVisitor => {
+        if (isTestModule(ctx) || matchesFileGlobs(ctx, options?.adapters ?? [])) return skipFile;
+        const adapterHook = new RegExp(options?.adapterHooks ?? "Adapter$|Subscription$", "u");
+        return {
+          CallExpression: (node: ESTree.CallExpression) => {
+            if (!isEffectHook(node)) return Effect.void;
+            if (Option.exists(enclosingName(node), (name) => adapterHook.test(name))) {
+              return Effect.void;
+            }
+            const hook = Option.getOrElse(hookName(node), () => "useEffect");
+            return ctx.report(
+              Diagnostic.make({
+                node,
+                message: `\`${hook}\` in feature code runs a side effect after render, where the reader cannot see what starts it or when it stops. Derive values during render, run work in the event handler that causes it, read server state through a query, and put a real subscription in a named adapter hook (\`useWindowSizeSubscription\`) or an adapter file the \`adapters\` option lists.`,
+              }),
+            );
+          },
+        };
+      }),
+    );
   },
 });

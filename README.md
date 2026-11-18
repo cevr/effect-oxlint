@@ -250,6 +250,16 @@ Rules that treat tests differently read one definition of a test: a `*.test.*` o
 { "rules": { "effect/noSharedTestHome": ["error", { "keys": ["MYAPP_DATA_DIR", "userDir"] }] } }
 ```
 
+## Baselines
+
+A ban that existing code breaks (`effect/noComments`, `effect/noEffectInFeature`, `effect/noKindNamedFiles`, `effect/noCauseRecoveryOutsideBoundary`, `effect/tn1Lint`) is adopted with a `baseline`: each file's path, relative to the lint root, and the count of findings it has today. A key matches the whole path or a suffix at a `/`.
+
+```json
+{ "rules": { "effect/noComments": ["error", { "baseline": { "src/legacy.ts": 12 } }] } }
+```
+
+A file with exactly its count is silent. With more, every finding is reported: a count cannot tell which one is new. With fewer, one `stale baseline` finding names the new count, so the baseline only shrinks. A count of 0 is refused: such a file has no entry. A count is silent about which findings it holds, so a fixed one and a new one cancel; a diff-scoped check is the stricter tool. This repository lints itself with `noComments` under `oxlint.self.baseline.json`.
+
 ## Anti-Slop Rules
 
 The recommended preset also includes these rules from

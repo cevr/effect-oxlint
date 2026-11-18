@@ -11,9 +11,13 @@
 import type { Comment } from "@oxlint/plugins";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
-import { AST, Diagnostic, Rule, RuleContext, Visitor } from "../vendor/effect-oxlint/index.js";
+import { AST, Diagnostic, Rule, Visitor } from "../vendor/effect-oxlint/index.js";
+import { Baseline, baselineJsonSchema, withBaseline } from "./_baseline.js";
 import { isToolDirective } from "./_comment-directives.js";
+
+const Options = Schema.UndefinedOr(Schema.Struct({ baseline: Schema.optionalKey(Baseline) }));
 
 const isBlank = (text: string) => /^[\t ]*$/u.test(text);
 
@@ -89,38 +93,47 @@ export const noComments = Rule.define({
       comment:
         "Comments are not allowed. Say it in a name or a type, give a suppression its reason after ` -- `, put history in the commit message, and turn a rule into a lint rule.",
     },
+    schema: [
+      {
+        type: "object",
+        properties: { baseline: baselineJsonSchema },
+        additionalProperties: false,
+      },
+    ],
   }),
-  create: function* () {
-    const ctx = yield* RuleContext;
-    return yield* Visitor.accumulate(
-      "JSXExpressionContainer",
-      (node) =>
-        Option.flatMap(AST.narrow(node, "JSXExpressionContainer"), (container) =>
-          Option.as(AST.narrow(container.expression, "JSXEmptyExpression"), container.range),
-        ),
-      (emptyJsxContainers) =>
-        Effect.forEach(
-          ctx.sourceCode
-            .getAllComments()
-            .filter(
-              (comment) =>
-                comment.type !== "Shebang" &&
-                !isToolDirective(comment.value) &&
-                !isDocComment(ctx.sourceCode.text, comment) &&
-                !isGeneratedHeader(ctx.sourceCode.text, comment),
-            ),
-          (comment) =>
-            ctx.report(
-              Diagnostic.withFix(
-                Diagnostic.fromId({ node: comment, messageId: "comment" }),
-                (fixer) =>
-                  fixer.removeRange(
-                    removalRange(ctx.sourceCode.text, occupiedSpan(comment, emptyJsxContainers)),
-                  ),
+  options: Options,
+  create: function* (options) {
+    return yield* withBaseline(options?.baseline, (ctx) =>
+      Visitor.accumulate(
+        "JSXExpressionContainer",
+        (node) =>
+          Option.flatMap(AST.narrow(node, "JSXExpressionContainer"), (container) =>
+            Option.as(AST.narrow(container.expression, "JSXEmptyExpression"), container.range),
+          ),
+        (emptyJsxContainers) =>
+          Effect.forEach(
+            ctx.sourceCode
+              .getAllComments()
+              .filter(
+                (comment) =>
+                  comment.type !== "Shebang" &&
+                  !isToolDirective(comment.value) &&
+                  !isDocComment(ctx.sourceCode.text, comment) &&
+                  !isGeneratedHeader(ctx.sourceCode.text, comment),
               ),
-            ),
-          { discard: true },
-        ),
+            (comment) =>
+              ctx.report(
+                Diagnostic.withFix(
+                  Diagnostic.fromId({ node: comment, messageId: "comment" }),
+                  (fixer) =>
+                    fixer.removeRange(
+                      removalRange(ctx.sourceCode.text, occupiedSpan(comment, emptyJsxContainers)),
+                    ),
+                ),
+              ),
+            { discard: true },
+          ),
+      ),
     );
   },
 });
