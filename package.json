@@ -33,6 +33,7 @@
       }
     },
     "./presets/recommended.json": "./presets/recommended.json",
+    "./presets/*.json": "./presets/*.json",
     "./presets/*": {
       "import": {
         "types": "./dist/presets/*.d.ts",

@@ -1,0 +1,10 @@
+{
+  "plugins": [],
+  "jsPlugins": ["oxlint-plugin-effect/plugin"],
+  "rules": {
+    "effect/noDerivedStateEffect": "error",
+    "effect/noEffectEventLogic": "error",
+    "effect/noEffectSyncUp": "error",
+    "effect/noPromiseMirroredState": "error"
+  }
+}
