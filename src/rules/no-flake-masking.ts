@@ -10,8 +10,8 @@
  * - on a call of `test`, `it` or `describe` and their modifiers
  *   (`it.effect`, `it.scoped`, `it.live`, `it.layer`, `test.concurrent`, …,
  *   and the case call of `test.each(table)(…)`): a `retry` or `timeout` key of
- *   an options object, and a number as the last argument after the case's
- *   function (Vitest's and Bun's timeout);
+ *   an options object, and a number as the last argument (Vitest's and
+ *   Bun's timeout);
  * - `testTimeout`, `hookTimeout` or `retry` in the object of a config's
  *   `test:` key, and in `vi.setConfig(…)`;
  * - `it.flakyTest(…)`, @effect/vitest's retry until it passes.
@@ -23,7 +23,6 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
-import { isFunction } from "./_anti-slop-effect.js";
 import { calleeChain } from "./_test-cases.js";
 import { isTestModule, skipFile } from "./_test-files.js";
 
@@ -83,8 +82,7 @@ const caseMasksOf = (
 ): ReadonlyArray<readonly [ESTree.Node, string]> => {
   const options = maskingArguments(call, caseMasks);
   const last = call.arguments.at(-1);
-  const beforeLast = call.arguments.slice(0, -1);
-  if (last?.type === "Literal" && Predicate.isNumber(last.value) && beforeLast.some(isFunction))
+  if (last?.type === "Literal" && Predicate.isNumber(last.value))
     return [...options, [last, "timeout"] as const];
   return options;
 };
