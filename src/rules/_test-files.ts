@@ -57,8 +57,11 @@ const compiledGlob = (glob: string): RegExp => {
   return compiled;
 };
 
+/** Whether a path matches one glob, read like `effect.testFiles`. */
+export const globMatches = (glob: string, path: string): boolean => compiledGlob(glob).test(path);
+
 /** The file's path relative to the lint root, with forward slashes. */
-const lintRootPath = (context: RuleContext["Service"]): string => {
+export const lintRootPath = (context: RuleContext["Service"]): string => {
   const filename = context.filename.replaceAll("\\", "/");
   const root = `${context.cwd.replaceAll("\\", "/").replace(/\/$/u, "")}/`;
   if (filename.startsWith(root)) return filename.slice(root.length);
