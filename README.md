@@ -191,6 +191,18 @@ Opt-in presets of rules distilled from written practice (the react, composition,
 
 Component rules skip test modules: a probe component in a test may sync up on purpose.
 
+### `skills-perf`
+
+Work that grows faster than the data. Each rule has a counted cost in `tests/perf/<rule>.ts`: callback calls or comparisons of the reported form and the remedy at n and 2n.
+
+| Rule                          | Contract                                                                                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `effect/noLinearSearchInLoop` | Reports `find`, `findIndex`, `some` or `filter` that compares its element with the element of an enclosing loop over another collection (n × m): build a `Map` or `Set` once. A loop over an array literal and a collection built inside the loop are left alone |
+| `effect/noSortForExtreme`     | Reports `sort(…)[0]`, `toSorted(…)[0]` and `.at(0)` / `.at(-1)` on a sort (n log n): find the minimum or maximum in one pass                                                                                                    |
+| `effect/noRepeatedPass`       | Reports the second pass (`filter`, `reduce`, `some`, `every`, `find`, `findIndex`) over one unchanged array on one straight path of a block (k × n): one loop. A pass that reads the first one's result is left alone          |
+
+The perf rules skip test modules: test data is small by design.
+
 ## Test Files
 
 Rules that treat tests differently read one definition of a test: a `*.test.*` or `*.spec.*` module. Add a project's other test code, such as helpers in a `tests/` tree or a test harness package, with the shared `effect.testFiles` setting. Each glob matches the file's path relative to the lint root; `**` crosses directories and `*` does not.

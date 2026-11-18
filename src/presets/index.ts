@@ -5,3 +5,4 @@
  */
 export { recommended } from "./recommended.js";
 export { skillsReact } from "./skills-react.js";
+export { skillsPerf } from "./skills-perf.js";

@@ -70,6 +70,10 @@ const optInPresets: ReadonlyArray<readonly [name: string, description: string]> 
     "skills-react",
     "React state, effect and rendering rules distilled from the react and composition skills.",
   ],
+  [
+    "skills-perf",
+    "Rules for work that grows faster than the data, each with a counted cost, distilled from the react skill's performance guide.",
+  ],
 ];
 
 /** `skills-react` → `skillsReact`. */

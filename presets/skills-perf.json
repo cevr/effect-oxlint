@@ -1,0 +1,9 @@
+{
+  "plugins": [],
+  "jsPlugins": ["oxlint-plugin-effect/plugin"],
+  "rules": {
+    "effect/noLinearSearchInLoop": "error",
+    "effect/noRepeatedPass": "error",
+    "effect/noSortForExtreme": "error"
+  }
+}
