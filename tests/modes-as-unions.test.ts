@@ -104,6 +104,21 @@ describe("noModeFieldWithOptionals", () => {
   });
 });
 
+describe("noModeFieldWithOptionals outside the project", () => {
+  test("leaves declaration files alone and reports the same record in a source file", () => {
+    const record =
+      'export interface Job {\n  status: "queued" | "running";\n  attempt?: number;\n  error?: string;\n}\n';
+    const findings = lintFixtures("noModeFieldWithOptionals", {
+      "src/job.ts": record,
+      "types/vendor.d.ts": record,
+      "types/vendor.d.mts": record,
+    });
+    expect(findings.get("src/job.ts")).toHaveLength(1);
+    expect(findings.get("types/vendor.d.ts")).toEqual([]);
+    expect(findings.get("types/vendor.d.mts")).toEqual([]);
+  });
+});
+
 describe("noBooleanStateCluster", () => {
   test("reports a component with three or more boolean states, once, outside tests", () => {
     const seed = 1118;
