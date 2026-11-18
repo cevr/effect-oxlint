@@ -214,6 +214,18 @@ Work that grows faster than the data. Each rule has a counted cost in `tests/per
 
 The perf rules skip test modules: test data is small by design.
 
+### `skills-tests`
+
+Weak tests in their exact forms. These rules read test modules only (`*.test.*`, `*.spec.*` and `effect.testFiles`). A `// contract: <reason>` comment above a case or a statement keeps a value or a snapshot that is pinned on purpose.
+
+| Rule                                | Contract                                                                                                                                                         |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `effect/noConstantRestated`         | Reports a case whose every expectation compares a bare constant (`LIMIT`) or a literal with a literal (`toBe`, `toEqual`, `toStrictEqual`): it passes by construction |
+| `effect/noRepeatedCase`             | Reports a case whose body repeats an earlier case in the same block and reads no variable an enclosing `describe` callback or loop binds                        |
+| `effect/noEmptyTest`                | Reports a case with an empty body: assert its outcome or use `it.todo`                                                                                           |
+| `effect/noExistenceOnlyAssert`      | Reports a case whose every expectation is `toBeDefined` or `toBeTruthy`, unless it checks a lookup by predicate (`find`) or also asserts through a helper (`expectX`, `assert`) |
+| `effect/noSnapshotWithoutContract`  | Reports a snapshot matcher without a `contract:` comment naming the output it pins                                                                              |
+
 ## Test Files
 
 Rules that treat tests differently read one definition of a test: a `*.test.*` or `*.spec.*` module. Add a project's other test code, such as helpers in a `tests/` tree or a test harness package, with the shared `effect.testFiles` setting. Each glob matches the file's path relative to the lint root; `**` crosses directories and `*` does not.

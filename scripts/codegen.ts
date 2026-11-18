@@ -74,6 +74,10 @@ const optInPresets: ReadonlyArray<readonly [name: string, description: string]> 
     "skills-perf",
     "Rules for work that grows faster than the data, each with a counted cost, distilled from the react skill's performance guide.",
   ],
+  [
+    "skills-tests",
+    "Weak-test rules in their exact forms: tests that pass by construction, repeat, cannot fail or assert only existence.",
+  ],
 ];
 
 /** `skills-react` → `skillsReact`. */
