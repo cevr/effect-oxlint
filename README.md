@@ -161,6 +161,7 @@ These rules encode a project policy the preset cannot assume. The plugin registe
 | `effect/tn1Lint`                     | Reports the advisory findings of TN1 networks, run by the installed `@cevr/tn1-lint` package; `nets` names each network's weights file                                                                                                                                     |
 | `effect/requireSchemaTaggedError`    | Declares Effect failures as `Schema.TaggedError`: reports classes extending `Error`, `Data.TaggedError`/`Data.Error` (`allowDataTaggedError` keeps them) and hand-written `_tag` failure classes (named `…Error`/`…Failure`/`…Defect` or with a `message`)                 |
 | `effect/noSchemaClass`               | Models app data with `Schema.Struct` and a same-name `interface`, not `Schema.Class` or `Schema.TaggedClass`                                                                                                                                                               |
+| `effect/noModeFieldWithOptionals`   | Models a mode as a union of one record per mode: reports an interface, type literal or `Schema.Struct` with a required literal-union `status`/`state`/`type`/`kind`/`mode`/`phase`/`stage` field and two or more optional siblings. Skips `…Props` types, parameter type literals and wire formats (snake_case members, an `object: "…"` member) |
 
 ### TN1 networks
 
@@ -189,6 +190,7 @@ Opt-in presets of rules distilled from written practice (the react, composition,
 | `effect/noEffectEventLogic`     | Reports an effect that runs logic when a flag state turns true while a handler sets the flag to `true`: run the logic in that handler. DOM work on a ref (`focus`) is left alone                                                  |
 | `effect/noPromiseMirroredState` | Reports a hand-set loading flag around an `await` (`set(true)`, `await`, `set(false)`) and an effect that copies a promise's result into state: use `useTransition`, a query or a mutation                                        |
 | `effect/preferColocatedState`   | Reports a `useState` pair whose value and setter are used only in JSX under one inner element: move the state into the component for that subtree. A pair passed to one component element is always reported; a pair spread over a subtree, or on one lower-case element, only in a component of at least `minComponentLines` (100) lines whose shared element spans at most `maxSharedSpanRatio` (0.5) of it |
+| `effect/noBooleanStateCluster`  | Reports a component with three or more boolean `useState` pairs, once: name the modes in one state of a union type |
 
 Component rules skip test modules: a probe component in a test may sync up on purpose.
 
