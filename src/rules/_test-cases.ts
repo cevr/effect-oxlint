@@ -20,9 +20,13 @@ export interface TestCase {
 }
 
 /** The runner name and the modifiers of a callee: `it.effect.only` → `it`, [effect, only]. */
-const calleeChain = (callee: ESTree.Node): Option.Option<ReadonlyArray<string>> => {
+export const calleeChain = (callee: ESTree.Node): Option.Option<ReadonlyArray<string>> => {
   if (callee.type === "Identifier") return Option.some([callee.name]);
-  if (callee.type === "MemberExpression" && !callee.computed && callee.property.type === "Identifier") {
+  if (
+    callee.type === "MemberExpression" &&
+    !callee.computed &&
+    callee.property.type === "Identifier"
+  ) {
     const name = callee.property.name;
     return Option.map(calleeChain(callee.object), (chain) => [...chain, name]);
   }
@@ -64,7 +68,11 @@ const expectSubject = (receiver: ESTree.Node): Option.Option<Option.Option<ESTre
 const expectationOf = (node: ESTree.Node): Option.Option<Expectation> => {
   if (node.type !== "CallExpression") return Option.none();
   const callee = node.callee;
-  if (callee.type !== "MemberExpression" || callee.computed || callee.property.type !== "Identifier") {
+  if (
+    callee.type !== "MemberExpression" ||
+    callee.computed ||
+    callee.property.type !== "Identifier"
+  ) {
     return Option.none();
   }
   const matcher = callee.property.name;

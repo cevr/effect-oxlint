@@ -53,6 +53,7 @@
   "tests/effect-program-shapes.test.ts": 15,
   "tests/interruptible-memo-releases.test.ts": 5,
   "tests/no-comments.test.ts": 35,
+  "tests/no-flake-masking.test.ts": 8,
   "tests/platform-rules.test.ts": 2,
   "tests/recommended-rules.test.ts": 1,
   "tests/review-probes.test.ts": 6,
