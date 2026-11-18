@@ -47,7 +47,7 @@ const optInRules = {
 describe("recommended preset", () => {
   test("enables the complete maintained rule set at error severity", () => {
     expect(recommended).toEqual({
-      complexity: ["error", { max: 21 }],
+      complexity: ["error", { max: 21, variant: "modified" }],
       "effect/decodeAfterStatus": "error",
       "effect/maxCognitiveComplexity": ["error", { max: 21 }],
       "effect/maxHalsteadDifficulty": ["error", { max: 79 }],

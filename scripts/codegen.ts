@@ -25,7 +25,9 @@ const check = process.argv.includes("--check");
  * Native oxlint rules the recommended preset enables alongside the plugin.
  *
  * Cyclomatic complexity ships with oxlint, so the preset configures it
- * instead of re-implementing it. Its limit matches the cognitive limit.
+ * instead of re-implementing it. Its limit matches the cognitive limit. The
+ * `modified` variant counts a switch as one branch, not one per case: BL2's
+ * Bite read put its precision at 0.88 against 0.64 for the classic count.
  */
 /** Rule options the preset can carry: a flat object of JSON scalars, such as `{ max: 21 }`. */
 const RuleOptions = Schema.Record(
@@ -38,7 +40,7 @@ type RuleOptions = typeof RuleOptions.Type;
 type RecommendedOptions = Option.Option<RuleOptions>;
 
 const nativeRules: ReadonlyArray<readonly [name: string, options: RecommendedOptions]> = [
-  ["complexity", Option.some({ max: 21 })],
+  ["complexity", Option.some({ max: 21, variant: "modified" })],
 ];
 
 /**
