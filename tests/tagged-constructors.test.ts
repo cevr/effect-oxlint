@@ -41,6 +41,9 @@ describe("tagged value construction", () => {
           "const value = { ...state, revision: 42 };",
           'const _tag = "ready"; function build(_tag: Schema.Schema) { return { _tag }; }',
           'const tag = "ready"; function build(tag: string) { return { _tag: tag }; }',
+          // A partial pattern selects by tag; it builds no value.
+          'expect(result).toMatchObject({ outcome: { _tag: "ready" } });',
+          'expect(calls).toContainEqual(expect.objectContaining({ _tag: "ready" }));',
         ],
         invalid: [
           'const value = { "_tag": "ready" };',
@@ -55,6 +58,8 @@ describe("tagged value construction", () => {
           'const first = "ready"; const second = first; const value = { _tag: second };',
           'const _tag = "ready" as const; const value = { _tag };',
           'const value = { _tag: "" };',
+          // An exact expectation builds the whole value.
+          'expect(result).toEqual({ _tag: "ready", revision: 1 });',
         ],
       }),
     ).toEqual({ reportedValid: [], missedInvalid: [] });
