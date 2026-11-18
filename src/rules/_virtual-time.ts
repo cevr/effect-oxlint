@@ -193,10 +193,14 @@ const containsCall = (node: ESTree.Node): boolean =>
 export const isConditionPollInterval = (sleep: ESTree.Node): boolean => {
   for (const ancestor of ancestors(sleep)) {
     if (isFunctionNode(ancestor)) return false;
-    if (!isLoopStatement(ancestor) || ancestor.type === "ForInStatement" || ancestor.type === "ForOfStatement") continue;
-    const loop = ancestor as ESTree.WhileStatement | ESTree.DoWhileStatement | ESTree.ForStatement;
-    if (loop.test && containsCall(loop.test)) return true;
-    if (exitsEarly(loop.body)) return true;
+    if (
+      ancestor.type !== "WhileStatement" &&
+      ancestor.type !== "DoWhileStatement" &&
+      ancestor.type !== "ForStatement"
+    )
+      continue;
+    if (ancestor.test && containsCall(ancestor.test)) return true;
+    if (exitsEarly(ancestor.body)) return true;
   }
   return false;
 };
