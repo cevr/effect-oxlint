@@ -463,6 +463,9 @@ describe("Effect rules ported from anti-slop", () => {
         `export async function load(url: string) { const res = await fetch(url); if (!res.ok) throw new Error("not ok"); return res.json(); }`,
         // A json field of something that is not a response.
         `export const read = (config: { json: string }) => JSON.parse(config.json);`,
+        // Building or sending a response decodes nothing (8 of 12 sampled findings in a real-repo read).
+        `export const handle = () => Response.json({ ok: true });`,
+        `export const send = (res: { json: (body: unknown) => void }) => res.json({ ok: true });`,
       ],
       invalid: [
         `${imports}export const get = (client: HttpClient.HttpClient) => client.get("/user").pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(User)));`,
