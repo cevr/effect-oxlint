@@ -4,7 +4,13 @@ import { lintFixtures } from "./support/lint-fixtures.js";
 import { seededPick, when } from "./support/seeded.js";
 
 const subjects = ["constant", "member", "literal", "computed", "local", "lookup", "found"] as const;
-const matchers = ["toBe", "toBeDefined", "toBeTruthy", "toMatchSnapshot", "toBeInstanceOf"] as const;
+const matchers = [
+  "toBe",
+  "toBeDefined",
+  "toBeTruthy",
+  "toMatchSnapshot",
+  "toBeInstanceOf",
+] as const;
 const enclosings = ["plain", "local", "loop"] as const;
 
 interface Case {
@@ -19,6 +25,8 @@ interface Case {
   /** A helper call that also asserts (`expectCanonical(…)`, `assert.equal(…)`), or "". */
   readonly helper: string;
   readonly test: boolean;
+  /** A `*.golden.test.ts` file. */
+  readonly golden: boolean;
 }
 
 const subjectText = {
@@ -39,7 +47,10 @@ const expectation = (c: Case): string => {
     toMatchSnapshot: "",
     toBeInstanceOf: "TimedOut",
   }[c.matcher];
-  const lookup = when(c.subject === "found", "const found = ITEMS.find((item) => item.id === 1);\n    ");
+  const lookup = when(
+    c.subject === "found",
+    "const found = ITEMS.find((item) => item.id === 1);\n    ",
+  );
   const helper = when(c.helper !== "", `\n    ${c.helper}`);
   return `${lookup}expect(${subjectText[c.subject]}).${c.matcher}(${argument});${helper}`;
 };
@@ -80,7 +91,13 @@ const perBody = {
     c.subject !== "lookup" &&
     c.subject !== "found" &&
     (c.matcher === "toBeDefined" || c.matcher === "toBeTruthy"),
-  noSnapshotWithoutContract: (c: Case) => !c.empty && !c.contract && c.matcher === "toMatchSnapshot",
+  noSnapshotWithoutContract: (c: Case) =>
+    !c.empty &&
+    !c.contract &&
+    !c.golden &&
+    c.matcher === "toMatchSnapshot" &&
+    c.subject !== "computed" &&
+    c.subject !== "lookup",
 } as const;
 
 const rules = [
@@ -114,8 +131,10 @@ describe("skills-tests rules", () => {
     contract: pick([false, false, false, true]),
     helper: pick(["", "", "", "", "expectCanonical(wait(1));", "assert.equal(wait(1), 1);"]),
     test: pick([true, true, true, false]),
+    golden: pick([false, false, false, true]),
   }));
-  const name = (c: Case, index: number) => `probe-${index}${when(c.test, ".test")}.ts`;
+  const name = (c: Case, index: number) =>
+    `probe-${index}${when(c.golden, ".golden")}${when(c.test, ".test")}.ts`;
   const files = Object.fromEntries(cases.map((c, index) => [name(c, index), source(c)]));
 
   for (const rule of rules) {

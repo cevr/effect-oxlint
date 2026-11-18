@@ -36,7 +36,9 @@ const schemaMembers = (c: RecordCase): ReadonlyArray<string> => {
     single: 'Schema.Literal("queued")',
     string: "Schema.String",
   }[c.mode];
-  const wrapped = { true: `Schema.optional(${modeSchema})`, false: modeSchema }[`${c.modeOptional}`];
+  const wrapped = { true: `Schema.optional(${modeSchema})`, false: modeSchema }[
+    `${c.modeOptional}`
+  ];
   const optional = [
     "attempt: Schema.optional(Schema.Number),",
     "error: Schema.NullOr(Schema.String),",
@@ -117,6 +119,18 @@ describe("noModeFieldWithOptionals outside the project", () => {
     expect(findings.get("types/vendor.d.ts")).toEqual([]);
     expect(findings.get("types/vendor.d.mts")).toEqual([]);
   });
+
+  test("leaves files matching an allow glob alone (a vendor API mirror)", () => {
+    const record =
+      'export interface Charge {\n  status: "pending" | "paid";\n  receipt?: string;\n  refund?: string;\n}\n';
+    const findings = lintFixtures(
+      "noModeFieldWithOptionals",
+      { "src/billing/charge.ts": record, "src/clients/payments/charge.ts": record },
+      { options: [{ allow: ["**/clients/**"] }] },
+    );
+    expect(findings.get("src/billing/charge.ts")).toHaveLength(1);
+    expect(findings.get("src/clients/payments/charge.ts")).toEqual([]);
+  });
 });
 
 describe("noBooleanStateCluster", () => {
@@ -132,7 +146,9 @@ describe("noBooleanStateCluster", () => {
       [
         'import { useState } from "react";',
         "export function Drawer() {",
-        ...c.initials.map((initial, index) => `  const [s${index}, setS${index}] = useState(${initial});`),
+        ...c.initials.map(
+          (initial, index) => `  const [s${index}, setS${index}] = useState(${initial});`,
+        ),
         "  return <div />;",
         "}",
         "",
@@ -153,4 +169,3 @@ describe("noBooleanStateCluster", () => {
     expect(wrong).toEqual([]);
   });
 });
-

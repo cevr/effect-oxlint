@@ -34,7 +34,7 @@ describe("noLinearSearchInLoop", () => {
   const collections = ["orders", '["a", "b"]'] as const;
   const methods = ["find", "some", "filter", "findIndex", "includes", "indexOf", "map"] as const;
   const valueMethods: ReadonlyArray<string> = ["includes", "indexOf"];
-  const searchedForms = ["users", "orders", "built", "text"] as const;
+  const searchedForms = ["users", "orders", "built", "text", "table", "literal"] as const;
   interface Case {
     readonly loop: (typeof loops)[number];
     readonly collection: (typeof collections)[number];
@@ -45,7 +45,14 @@ describe("noLinearSearchInLoop", () => {
   }
   const source = (c: Case): string => {
     const build = when(c.searched === "built", "const users = load(order);");
-    const searched = { users: "users", orders: "orders", built: "users", text: "text" }[c.searched];
+    const searched = {
+      users: "users",
+      orders: "orders",
+      built: "users",
+      text: "text",
+      table: "ROLES",
+      literal: `["admin", "owner"]`,
+    }[c.searched];
     const key = { true: "order.userId", false: '"root"' }[`${c.keyed}`];
     const argument = { true: key, false: `(user) => user.id === ${key}` }[
       `${valueMethods.includes(c.method)}`
@@ -56,9 +63,9 @@ describe("noLinearSearchInLoop", () => {
       map: `return ${c.collection}.map((order) => {\n    ${build}\n    return ${search};\n  });`,
       forEach: `${c.collection}.forEach((order) => {\n    ${build}\n    sink(${search});\n  });`,
     }[c.loop];
-    return `export function join(orders: Order[], users: User[], text: string) {\n  ${loop}\n}\n`;
+    return `const ROLES = ["admin", "owner"];\nexport function join(orders: Order[], users: User[], text: string) {\n  ${loop}\n}\n`;
   };
-  /** The reference: a keyed search over another, outer-built collection in a loop over data; a value search (`includes`) only on a known array, not the string `text`. */
+  /** The reference: a keyed search over another, outer-built collection in a loop over data (not a literal or UPPER_CASE table); a value search (`includes`) only on a known array, not the string `text`. */
   const reported = (c: Case): boolean =>
     !c.test &&
     c.keyed &&

@@ -6,7 +6,10 @@
  * ending in `Snapshot`) unless a `contract: <reason>` comment on the lines
  * before its statement or before the case names the contract the snapshot
  * holds (a wire format, a rendered document). Which output is a contract is a
- * judgement; the comment records it. Source: the owner's weak-test list "a
+ * judgement; the comment records it. Also left alone, as output that is the
+ * contract: a snapshot in a `*.golden.*` file, and a snapshot of a call's
+ * result written in place (`expect(render(receipt)).toMatchSnapshot()`, the
+ * printed or rendered output itself). Source: the owner's weak-test list "a
  * snapshot of implementation shape"; AGENTS.md "No golden of the lowered Go's
  * shape, unless the shape is the spec" (catalog SR-T09).
  */
@@ -20,6 +23,16 @@ import { ancestorsOf } from "./_anti-slop-effect.js";
 import { contractNote, expectationsIn, statementOf, testCaseOf } from "./_test-cases.js";
 import { isTestModule, skipFile } from "./_test-files.js";
 
+const goldenFile = /\.golden\./u;
+
+/** The snapshot of a call's result written in place: `expect(render(x)).toMatchSnapshot()`. */
+const ofCallOutput = (snapshot: ESTree.CallExpression): boolean =>
+  expectationsIn(snapshot).some(
+    (expectation) =>
+      expectation.node === snapshot &&
+      Option.exists(expectation.subject, (subject) => subject.type === "CallExpression"),
+  );
+
 export const noSnapshotWithoutContract = Rule.define({
   name: "no-snapshot-without-contract",
   meta: Rule.meta({
@@ -30,7 +43,7 @@ export const noSnapshotWithoutContract = Rule.define({
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    if (!isTestModule(ctx)) return skipFile;
+    if (!isTestModule(ctx) || goldenFile.test(ctx.filename)) return skipFile;
     const notedBefore = (node: ESTree.Node): boolean =>
       Arr.some(ctx.sourceCode.getCommentsBefore(statementOf(node)), (comment) =>
         contractNote.test(comment.value),
@@ -51,7 +64,7 @@ export const noSnapshotWithoutContract = Rule.define({
           expectationsIn(node).some((expectation) => expectation.node === node);
         const noted =
           notedBefore(node) || Option.exists(enclosingCase(node), (call) => notedBefore(call));
-        if (!snapshot || noted) return Effect.void;
+        if (!snapshot || noted || ofCallOutput(node)) return Effect.void;
         return ctx.report(
           Diagnostic.make({
             node,
