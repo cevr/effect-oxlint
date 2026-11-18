@@ -79,9 +79,15 @@ describe("Effect rules ported from anti-slop", () => {
         "\n        import { Effect } from 'effect'\n        import * as HttpClient from 'effect/unstable/http/HttpClient'\n        const operation = Effect.gen(function* () {\n          const baseClient = yield* HttpClient.HttpClient\n          const tenantClient = configureForTenant(baseClient)\n          return request.pipe(Effect.provideService(HttpClient.HttpClient, tenantClient))\n        })\n      ",
         "\n        import { Effect } from 'effect'\n        const operation = Effect.gen(function* () {\n          const first = yield* FirstService\n          return request.pipe(Effect.provideService(SecondService, first))\n        })\n      ",
         "\n        import { Effect } from 'other-library'\n        const operation = Effect.gen(function* () {\n          const service = yield* Service\n          return request.pipe(Effect.provideService(Service, service))\n        })\n      ",
+        // Local change (upstream: invalid). A method built in a Layer's
+        // construction provides what the construction captured: the Layer
+        // idiom, 29 of BL2's 30 Bite reads.
+        // Mutant: the same-function check removed (this case is reported).
+        "\n        import { Effect } from 'effect'\n        import * as HttpClient from 'effect/unstable/http/HttpClient'\n        const ServiceLive = Layer.effect(Service, Effect.gen(function* () {\n          const httpClient = yield* HttpClient.HttpClient\n          return Service.of({\n            execute: () => request.pipe(\n              Effect.provideService(HttpClient.HttpClient, httpClient),\n            ),\n          })\n        }))\n      ",
       ],
       invalid: [
-        "\n        import { Effect } from 'effect'\n        import * as HttpClient from 'effect/unstable/http/HttpClient'\n        const ServiceLive = Layer.effect(Service, Effect.gen(function* () {\n          const httpClient = yield* HttpClient.HttpClient\n          return Service.of({\n            execute: () => request.pipe(\n              Effect.provideService(HttpClient.HttpClient, httpClient),\n            ),\n          })\n        }))\n      ",
+        // Mutant: the check compares the wrong functions (never equal): this is missed.
+        "\n        import { Effect } from 'effect'\n        const ServiceLive = Layer.effect(Service, Effect.gen(function* () {\n          const store = yield* Store\n          yield* warm.pipe(Effect.provideService(Store, store))\n          return Service.of({})\n        }))\n      ",
         "\n        import * as Fx from 'effect/Effect'\n        import * as HttpClient from 'effect/unstable/http/HttpClient'\n        const operation = Fx.gen(function* () {\n          const httpClient = yield* HttpClient.HttpClient\n          return request.pipe(Fx.provideService(HttpClient.HttpClient, httpClient))\n        })\n      ",
         "\n        import { Effect } from 'effect'\n        import * as HttpClient from 'effect/unstable/http/HttpClient'\n        const operation = Effect.gen(function* () {\n          const httpClient = yield* HttpClient.HttpClient\n          return Effect.provideService(request, HttpClient.HttpClient, httpClient)\n        })\n      ",
       ],
@@ -97,10 +103,20 @@ describe("Effect rules ported from anti-slop", () => {
         '\n\timport * as Context from "effect/Context";\n\timport * as Effect from "effect/Effect";\n\timport * as Layer from "effect/Layer";\n\timport * as ManagedRuntime from "effect/ManagedRuntime";\n\n\t\tconst config = Effect.contextWith((context: Context.Context<never>) => Effect.succeed(context));',
         '\n\timport * as Context from "effect/Context";\n\timport * as Effect from "effect/Effect";\n\timport * as Layer from "effect/Layer";\n\timport * as ManagedRuntime from "effect/ManagedRuntime";\n\n\t\timport { Store } from "./store.ts";\n\t\tconst save = (store: Store) => store;',
         '\n\t\timport * as Context from "other-library";\n\t\tconst run = (context: Context.Context) => context;',
-      ],
-      invalid: [
+        // Local change (upstream: invalid for the first two). A function at
+        // a boundary, not an Effect operation, takes its runtime, context or
+        // layer because providing it is its job (BL2's Bite reads: test
+        // runners, provide helpers, app and runtime construction).
+        // Mutant: isEffectOperation answers true (these are reported).
         '\n\timport * as Context from "effect/Context";\n\timport * as Effect from "effect/Effect";\n\timport * as Layer from "effect/Layer";\n\timport * as ManagedRuntime from "effect/ManagedRuntime";\n\n\t\t\tconst runAllow = <R>(allow: Allow<R>, context: Context.Context<R>) => Effect.runPromiseWith(context)(allow);',
         '\n\timport * as Context from "effect/Context";\n\timport * as Effect from "effect/Effect";\n\timport * as Layer from "effect/Layer";\n\timport * as ManagedRuntime from "effect/ManagedRuntime";\n\n\t\t\tfunction handle(runtime: ManagedRuntime.ManagedRuntime<Store, never>, request: Request) {\n\t\t\t\treturn runtime.runPromise(serve(request));\n\t\t\t}',
+        '\n\timport * as Effect from "effect/Effect";\n\timport * as Layer from "effect/Layer";\n\n\t\t\texport const provideScoped = <R>(layer: Layer.Layer<R>) => <A>(effect: Effect.Effect<A, never, R>) => Effect.scoped(Layer.build(layer).pipe(Effect.flatMap((context) => effect.pipe(Effect.provide(context)))));\n\t\t\texport async function makeApp(pages: Layer.Layer<Pages>): Promise<App> { return build(pages); }',
+      ],
+      invalid: [
+        // Mutant: a block body's `return Effect…` is not read (this is missed).
+        '\n\timport * as Effect from "effect/Effect";\n\timport * as ManagedRuntime from "effect/ManagedRuntime";\n\n\t\t\tfunction handle(runtime: ManagedRuntime.ManagedRuntime<Store, never>) {\n\t\t\t\treturn Effect.promise(() => runtime.runPromise(serve()));\n\t\t\t}',
+        // Mutant: a declared Effect return type is not read (this is missed).
+        '\n\timport * as Effect from "effect/Effect";\n\timport * as Layer from "effect/Layer";\n\n\t\t\tfunction enqueue(job: Job, queue: Layer.Layer<Queue>): Effect.Effect<void> {\n\t\t\t\treturn send(job, queue);\n\t\t\t}',
         '\n\timport * as Context from "effect/Context";\n\timport * as Effect from "effect/Effect";\n\timport * as Layer from "effect/Layer";\n\timport * as ManagedRuntime from "effect/ManagedRuntime";\n\n\t\t\tconst operation = (input: Input, layer: Layer.Layer<Store>) => run(input).pipe(Effect.provide(layer));',
         '\n\timport * as Context from "effect/Context";\n\timport * as Effect from "effect/Effect";\n\timport * as Layer from "effect/Layer";\n\timport * as ManagedRuntime from "effect/ManagedRuntime";\n\n\t\t\texport class Store extends Context.Service<Store, StoreShape>()("@app/Store") {}\n\t\t\tconst save = (store: Store, value: string) => store.save(value);\n\t\t\tclass Worker { run(store: Store) {} }',
         '\n\timport * as Context from "effect/Context";\n\timport * as Effect from "effect/Effect";\n\timport * as Layer from "effect/Layer";\n\timport * as ManagedRuntime from "effect/ManagedRuntime";\n\n\t\t\tinterface Operations {\n\t\t\t\treadonly run: (context: Context.Context<Store>) => Effect.Effect<void>;\n\t\t\t\texecute(runtime: ManagedRuntime.ManagedRuntime<Store, never>): void;\n\t\t\t}',
