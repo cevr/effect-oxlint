@@ -12,7 +12,8 @@
  * Not reported (the four filters of the measured read): a type whose name
  * ends in `Props`; a type literal written in a parameter; a mode field that
  * is itself optional; a record with snake_case members or an
- * `object: "…"` literal member (a vendor's wire format). Test modules are
+ * `object: "…"` literal member (a vendor's wire format). Test modules and
+ * types declared outside the project (`node_modules`, `.d.ts` files) are
  * skipped. Source: effect `ARCHITECTURE.md` "Status strings and booleans
  * encoding modes → a lifecycle machine"; react `state-modeling.md` "Each
  * branch has exactly the fields it needs" (catalog SR-E10).
@@ -101,6 +102,16 @@ const messages = {
     'This struct has a mode field and optional fields that only some modes fill, so a value can hold a field its mode never has and code must re-check the mode before each read. Make it a union of one struct per mode: `Schema.Union([Schema.TaggedStruct("queued", {}), Schema.TaggedStruct("running", { attempt: Schema.Number })])`, each with exactly the fields that mode needs.',
 } as const;
 
+/**
+ * A file that declares types the project does not own: anything under
+ * `node_modules`, and a declaration file (`.d.ts`, `.d.mts`, `.d.cts`), which
+ * describes a dependency's or a host's shapes rather than the project's model.
+ */
+const isExternalDeclaration = (filename: string): boolean => {
+  const path = filename.replaceAll("\\", "/");
+  return path.includes("/node_modules/") || /\.d\.[cm]?ts$/u.test(path);
+};
+
 /** Whether the members make the reported form, after the filters. */
 const isModeRecord = (members: ReadonlyArray<Member>): boolean => {
   const wire = members.some(
@@ -121,7 +132,7 @@ export const noModeFieldWithOptionals = Rule.define({
   }),
   create: function* () {
     const ctx = yield* RuleContext;
-    if (isTestModule(ctx)) return skipFile;
+    if (isTestModule(ctx) || isExternalDeclaration(ctx.filename)) return skipFile;
 
     const schemaMember = (property: ESTree.Node): Option.Option<Member> => {
       if (property.type !== "Property") return Option.none();
