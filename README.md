@@ -174,6 +174,21 @@ These rules encode a project policy the preset cannot assume. The plugin registe
 
 Weights paths are read from the lint root. The `binary` option names another `tn1-lint` binary. A missing package, an unreadable weights file or a failed run is one finding at the file's start, so a configured rule never goes quiet. On Linux, Node starts the binary by `fork`, and under the kernel's heuristic overcommit that fork can fail with `ENOMEM` when oxlint's threads hold more memory than the host has free. Run oxlint with `--threads=4` or fewer there.
 
+## Skill Presets
+
+Opt-in presets of rules distilled from written practice (the react, composition, effect, domain-modeling and writing-tests skills). None is in `recommended`. Enable one by extending its JSON form (`./node_modules/oxlint-plugin-effect/presets/<name>.json`) or spreading its TypeScript form (`import { skillsReact } from "oxlint-plugin-effect/presets"`). Each message names the fault, why it matters and what to write instead.
+
+### `skills-react`
+
+| Rule                            | Contract                                                                                                                                                                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `effect/noDerivedStateEffect`   | Reports an effect (with dependencies) whose body only calls the component's own state setters: compute a derived value during render, or reset with a `key` or in the handler. Narrower than oxlint's `react/set-state-in-effect` |
+| `effect/noEffectSyncUp`         | Reports an effect whose body only passes values to `on…` callback props: lift the state to the parent or a provider. A call with no argument or with a ref's `.current` is a hand-off and is left alone                           |
+| `effect/noEffectEventLogic`     | Reports an effect that runs logic when a flag state turns true while a handler sets the flag to `true`: run the logic in that handler. DOM work on a ref (`focus`) is left alone                                                  |
+| `effect/noPromiseMirroredState` | Reports a hand-set loading flag around an `await` (`set(true)`, `await`, `set(false)`) and an effect that copies a promise's result into state: use `useTransition`, a query or a mutation                                        |
+
+Component rules skip test modules: a probe component in a test may sync up on purpose.
+
 ## Test Files
 
 Rules that treat tests differently read one definition of a test: a `*.test.*` or `*.spec.*` module. Add a project's other test code, such as helpers in a `tests/` tree or a test harness package, with the shared `effect.testFiles` setting. Each glob matches the file's path relative to the lint root; `**` crosses directories and `*` does not.
