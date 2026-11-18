@@ -56,6 +56,10 @@ const isBodyDecode = (node: ESTree.Node): boolean =>
       (property === "json" && responseName.test(object)),
   );
 
+/** `Response.json`: the static constructor of a response, not a read of one. */
+const isResponseConstructor = (node: ESTree.Node): boolean =>
+  Option.exists(namedMember(node), ([object]) => object === "Response");
+
 /** A status check: a `.status` or `.ok` read, or a `filterStatusOk`/`filterStatus`/`matchStatus` reference. */
 const isStatusCheck = (node: ESTree.Node): boolean => {
   if (node.type === "Identifier") return statusChecks.has(node.name);
@@ -84,6 +88,8 @@ export const decodeAfterStatus = Rule.define({
     const ctx = yield* RuleContext;
     const decodes: Array<ESTree.Node> = [];
     const checks: Array<ESTree.Node> = [];
+    /** Callees of calls with arguments: `res.json(body)` sends a body, it decodes nothing. */
+    const sends = new Set<ESTree.Node>();
     let clientFiltered = false;
 
     /** The innermost function holding `node`, or the program. */
@@ -107,7 +113,14 @@ export const decodeAfterStatus = Rule.define({
         Effect.sync(() =>
           walk(program, (node) => {
             if (isClientStatusFilter(node)) clientFiltered = true;
-            if (isBodyDecode(node)) decodes.push(node);
+            if (
+              node.type === "CallExpression" &&
+              node.arguments.length > 0 &&
+              Option.contains(propertyName(node.callee), "json")
+            )
+              sends.add(node.callee);
+            if (isBodyDecode(node) && !sends.has(node) && !isResponseConstructor(node))
+              decodes.push(node);
             else if (isStatusCheck(node)) checks.push(node);
             return true;
           }),

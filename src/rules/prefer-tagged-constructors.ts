@@ -12,6 +12,35 @@ const isStringTag = (node: ESTree.Expression): boolean =>
   (node.type === "Literal" && Predicate.isString(node.value)) ||
   (node.type === "TemplateLiteral" && node.expressions.length === 0);
 
+/** Matchers that compare a partial pattern: a `_tag` there selects, it builds no value. */
+const partialMatchers: ReadonlySet<string> = new Set(["toMatchObject", "objectContaining"]);
+
+/** Whether the literal sits, through nested literals, in an argument of a partial matcher. */
+const isPartialPattern = (node: ESTree.Node): boolean => {
+  let child: ESTree.Node = node;
+  for (let parent = child.parent; parent; child = parent, parent = parent.parent) {
+    if (parent.type === "CallExpression") {
+      if (child === parent.callee) return false;
+      const callee = parent.callee;
+      const name =
+        callee.type === "Identifier"
+          ? callee.name
+          : callee.type === "MemberExpression" && !callee.computed && callee.property.type === "Identifier"
+            ? callee.property.name
+            : "";
+      return partialMatchers.has(name);
+    }
+    if (
+      parent.type !== "ObjectExpression" &&
+      parent.type !== "ArrayExpression" &&
+      parent.type !== "Property" &&
+      parent.type !== "SpreadElement"
+    )
+      return false;
+  }
+  return false;
+};
+
 export const preferTaggedConstructors = Rule.define({
   name: "prefer-tagged-constructors",
   meta: Rule.meta({
@@ -27,7 +56,7 @@ export const preferTaggedConstructors = Rule.define({
         const hasTag = staticProperties(node, "_tag").some(
           (property) => property.kind === "init" && isStringTag(resolve(property.value)),
         );
-        if (!hasTag) return Effect.void;
+        if (!hasTag || isPartialPattern(node)) return Effect.void;
         return context.report(
           Diagnostic.make({
             node,

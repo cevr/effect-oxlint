@@ -78,18 +78,66 @@ describe("BL1's seeded misses (0/10 each)", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
+  // Mutant: inFinalizer answers false (a finalizer's best-effort cleanup is reported).
+  // Mutant: inFinalizer reads any argument, not the last (ensuring's own effect is let off).
+  // Mutant: dropsCleanup answers false (an ignored remove or rm is reported).
+  // Mutant: dropsCleanup answers true for any call (an ignored save is let off).
+  // Mutant: explainedAbove answers false (a commented drop is reported).
+  // Mutant: explainedAbove reads any earlier comment (a comment two lines up with code between lets the drop off).
+  test("Effect.ignore of best-effort cleanup, or under a comment, is not silent (BL2's read)", () => {
+    const results = lintCases("noSilentCatchAll", {
+      valid: [
+        withImports(
+          "export const run = (work) => work.pipe(Effect.ensuring(cleanup.pipe(Effect.ignore)));",
+        ),
+        withImports("export const run = Effect.addFinalizer(() => Effect.ignore(close()));"),
+        withImports(
+          "export const run = Effect.acquireRelease(open(), (handle) => handle.close.pipe(Effect.ignore));",
+        ),
+        withImports("export const run = (fs, path) => fs.remove(path).pipe(Effect.ignore);"),
+        withImports("export const run = (path) => Effect.ignore(rm(path, { force: true }));"),
+        withImports(
+          "export const run = (work) =>\n  work.pipe(\n    // the cache is a hint: a failed write is retried on the next read\n    Effect.ignore,\n  );",
+        ),
+      ],
+      invalid: [
+        withImports(
+          "export const run = (work) => Effect.ensuring(work.pipe(Effect.ignore), cleanup);",
+        ),
+        withImports(
+          "export const run = Effect.acquireRelease(open().pipe(Effect.ignore), (handle) => handle.close);",
+        ),
+        withImports("export const run = (store, x) => store.save(x).pipe(Effect.ignore);"),
+        withImports(
+          "// a note about run\nexport const step = 1;\nexport const run = (work) => work.pipe(Effect.ignore);",
+        ),
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
   // Mutant: runsSerially reads only a literal `concurrency: 1` (the default is missed).
   // Mutant: yieldedAsStatement answers false.
   test("Effect.all is serial by default, and a yield* statement discards its result", () => {
     const results = lintCases("noSequentialEffectAll", {
       valid: [
-        withImports("export const both = Effect.gen(function* () {\n  const [x, y] = yield* Effect.all([a, b]);\n  return x + y;\n});"),
-        withImports('export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b], { concurrency: "unbounded" });\n});'),
-        withImports("export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b], { concurrency: 2 });\n});"),
+        withImports(
+          "export const both = Effect.gen(function* () {\n  const [x, y] = yield* Effect.all([a, b]);\n  return x + y;\n});",
+        ),
+        withImports(
+          'export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b], { concurrency: "unbounded" });\n});',
+        ),
+        withImports(
+          "export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b], { concurrency: 2 });\n});",
+        ),
       ],
       invalid: [
-        withImports("export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b]);\n});"),
-        withImports("export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b], { mode: \"default\" });\n});"),
+        withImports(
+          "export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b]);\n});",
+        ),
+        withImports(
+          'export const both = Effect.gen(function* () {\n  yield* Effect.all([a, b], { mode: "default" });\n});',
+        ),
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });

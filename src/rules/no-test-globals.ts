@@ -41,6 +41,46 @@ const runnerGlobals = new Set([
   "xtest",
 ]);
 
+/** Calls whose function arguments run as cleanup, and the first argument index that does. */
+const cleanupCalls: ReadonlyMap<string, number> = new Map([
+  ["afterEach", 0],
+  ["afterAll", 0],
+  ["addFinalizer", 0],
+  ["ensuring", 0],
+  ["onExit", 0],
+  ["acquireRelease", 1],
+  ["acquireUseRelease", 2],
+]);
+
+const calleeName = (call: ESTree.CallExpression): Option.Option<string> => {
+  const callee = call.callee;
+  if (callee.type === "Identifier") return Option.some(callee.name);
+  if (callee.type === "MemberExpression" && !callee.computed && callee.property.type === "Identifier")
+    return Option.some(callee.property.name);
+  return Option.none();
+};
+
+/**
+ * Whether `node` runs as cleanup: in a `finally` block, or in a function passed as
+ * the cleanup of `afterEach`, `afterAll`, `addFinalizer`, `ensuring`, `onExit` or
+ * the release of `acquireRelease`. Such a write restores what the test saved; the
+ * write that changed the global is the one reported.
+ */
+const isCleanup = (node: ESTree.Node): boolean => {
+  let child: ESTree.Node = node;
+  for (let parent = child.parent; parent; child = parent, parent = parent.parent) {
+    if (parent.type === "TryStatement" && parent.finalizer === child) return true;
+    if (parent.type === "CallExpression" && child !== parent.callee) {
+      const index = parent.arguments.indexOf(child as ESTree.Expression);
+      const from = Option.flatMap(calleeName(parent), (name) =>
+        Option.fromUndefinedOr(cleanupCalls.get(name)),
+      );
+      if (index >= 0 && Option.exists(from, (first) => index >= first)) return true;
+    }
+  }
+  return false;
+};
+
 const capabilityHint = "Provide the capability through an Effect service or runtime input.";
 
 const innermostMember = (node: ESTree.MemberExpression): ESTree.MemberExpression => {
@@ -106,7 +146,8 @@ export const noTestGlobals = Rule.define({
     };
 
     const reportWrite = (target: ESTree.Node) => {
-      if (target.type !== "MemberExpression" || !isGlobalState(target)) return Effect.void;
+      if (target.type !== "MemberExpression" || !isGlobalState(target) || isCleanup(target))
+        return Effect.void;
       return ctx.report(
         Diagnostic.make({
           node: target,
@@ -152,7 +193,10 @@ export const noTestGlobals = Rule.define({
 
     const reportCall = (call: ESTree.CallExpression) =>
       Option.match(
-        Option.orElse(mutatedGlobal(call), () => stubbingCall(call)),
+        Option.filter(
+          Option.orElse(mutatedGlobal(call), () => stubbingCall(call)),
+          () => !isCleanup(call),
+        ),
         {
           onNone: () => Effect.void,
           onSome: (used) =>
