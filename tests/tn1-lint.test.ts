@@ -6,6 +6,26 @@ import { tn1Stub } from "./support/tn1-stub.js";
 const stub = tn1Stub();
 
 describe("tn1Lint", () => {
+  // LM-RATCHET. Mutant: the baseline option not wired into tn1Lint (two
+  // findings against an entry of two are reported).
+  test("a file at its baseline count is silent", () => {
+    const findings = lintFixtures(
+      "tn1Lint",
+      { "k.ts": ["export const one = 1;", "// NARRATE", ""].join("\n") },
+      {
+        options: [
+          {
+            binary: stub.binary,
+            nets: { narration: stub.weights, steps: stub.weights },
+            baseline: { "k.ts": 2 },
+          },
+        ],
+        threads: 1,
+      },
+    );
+    expect(findings.get("k.ts")).toEqual([]);
+  });
+
   // Mutant: the byte offsets the binary reports used as UTF-16 indices. The
   // first line's twelve two-byte letters put byte offset of NARRATE twelve
   // units past it, which is on line 3 when not converted.

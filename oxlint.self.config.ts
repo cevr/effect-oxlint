@@ -1,6 +1,7 @@
 // Lints this repo with its own built plugin (`bun run build` first).
 // Every recommended rule is on.
 import { recommended } from "./dist/presets/recommended.js";
+import baseline from "./oxlint.self.baseline.json" with { type: "json" };
 
 export default {
   jsPlugins: ["./dist/plugin.js"],
@@ -15,8 +16,10 @@ export default {
   rules: {
     ...recommended,
     // This repo predates effect/noComments and documents each rule's contract
-    // in comments; like most existing codebases, it opts out.
-    "effect/noComments": "off",
+    // and each test's mutant in comments. It adopts the rule with a baseline
+    // of each file's count (oxlint.self.baseline.json), which only shrinks: a
+    // new file has no entry, and a file over its count reports every comment.
+    "effect/noComments": ["error", { baseline }],
   },
   overrides: [
     {

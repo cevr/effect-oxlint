@@ -28,12 +28,14 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
-import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { Diagnostic, Rule, RuleContext, Visitor } from "../vendor/effect-oxlint/index.js";
+import { Baseline, baselineJsonSchema, withBaseline } from "./_baseline.js";
 
 const Options = Schema.UndefinedOr(
   Schema.Struct({
     nets: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
     binary: Schema.optionalKey(Schema.String),
+    baseline: Schema.optionalKey(Baseline),
   }),
 );
 
@@ -239,6 +241,7 @@ export const tn1Lint = Rule.define({
         properties: {
           nets: { type: "object", additionalProperties: { type: "string" } },
           binary: { type: "string" },
+          baseline: baselineJsonSchema,
         },
         additionalProperties: false,
       },
@@ -247,54 +250,68 @@ export const tn1Lint = Rule.define({
   }),
   options: Options,
   create: function* (options) {
-    const ctx = yield* RuleContext;
-    const nets = Object.entries(options?.nets ?? {});
-    const report = (message: string, [start, end]: readonly [number, number]) =>
-      ctx.report(Diagnostic.make({ node: { range: [start, end] }, message }));
-    const atStart = [0, 0] satisfies readonly [number, number];
-    const failRun = (down: SidecarDown) =>
-      Effect.suspend(() => {
-        if (runState.sidecarDownReported) return Effect.void;
-        runState.sidecarDownReported = true;
-        process.exitCode = 1;
-        return report(
-          `tn1-lint: the sidecar cannot start, so this run lints no file with its networks and exits 1: ${down.reason}`,
-          atStart,
-        );
-      });
-    return {
-      Program: () => {
-        if (nets.length === 0 || runState.sidecarDownReported) return Effect.void;
-        return Option.match(runnerOf(ctx.cwd, Option.fromUndefinedOr(options?.binary)), {
-          onNone: () =>
-            report(
-              "tn1-lint: the package @cevr/tn1-lint is not installed here; add it beside oxlint-plugin-effect, or set the rule's binary option.",
-              atStart,
-            ),
-          onSome: (runner) =>
-            Effect.forEach(
-              nets,
-              ([name, weights]) =>
-                runner({
-                  rule: name,
-                  weights: resolve(ctx.cwd, weights),
-                  path: ctx.filename,
-                  text: ctx.sourceCode.text,
-                }).pipe(
-                  Effect.flatMap((findings) =>
-                    Effect.forEach(findings, (finding) => report(finding.message, finding.range), {
-                      discard: true,
-                    }),
-                  ),
-                  Effect.catch((failure) => {
-                    if (Predicate.isString(failure)) return report(`tn1-lint: ${failure}`, atStart);
-                    return failRun(failure);
-                  }),
+    // The run's failure goes through the rule's own context: a baseline
+    // counts findings, and must not hold or cancel the one report that a
+    // whole run linted nothing.
+    const run = yield* RuleContext;
+    return yield* withBaseline(options?.baseline, (ctx) =>
+      Effect.sync((): Visitor.EffectVisitor => {
+        const nets = Object.entries(options?.nets ?? {});
+        const report = (message: string, [start, end]: readonly [number, number]) =>
+          ctx.report(Diagnostic.make({ node: { range: [start, end] }, message }));
+        const atStart = [0, 0] satisfies readonly [number, number];
+        const failRun = (down: SidecarDown) =>
+          Effect.suspend(() => {
+            if (runState.sidecarDownReported) return Effect.void;
+            runState.sidecarDownReported = true;
+            process.exitCode = 1;
+            return run.report(
+              Diagnostic.make({
+                node: { range: atStart },
+                message: `tn1-lint: the sidecar cannot start, so this run lints no file with its networks and exits 1: ${down.reason}`,
+              }),
+            );
+          });
+        return {
+          Program: () => {
+            if (nets.length === 0 || runState.sidecarDownReported) return Effect.void;
+            return Option.match(runnerOf(ctx.cwd, Option.fromUndefinedOr(options?.binary)), {
+              onNone: () =>
+                report(
+                  "tn1-lint: the package @cevr/tn1-lint is not installed here; add it beside oxlint-plugin-effect, or set the rule's binary option.",
+                  atStart,
                 ),
-              { discard: true },
-            ),
-        });
-      },
-    };
+              onSome: (runner) =>
+                Effect.forEach(
+                  nets,
+                  ([name, weights]) =>
+                    runner({
+                      rule: name,
+                      weights: resolve(ctx.cwd, weights),
+                      path: ctx.filename,
+                      text: ctx.sourceCode.text,
+                    }).pipe(
+                      Effect.flatMap((findings) =>
+                        Effect.forEach(
+                          findings,
+                          (finding) => report(finding.message, finding.range),
+                          {
+                            discard: true,
+                          },
+                        ),
+                      ),
+                      Effect.catch((failure) => {
+                        if (Predicate.isString(failure))
+                          return report(`tn1-lint: ${failure}`, atStart);
+                        return failRun(failure);
+                      }),
+                    ),
+                  { discard: true },
+                ),
+            });
+          },
+        };
+      }),
+    );
   },
 });
