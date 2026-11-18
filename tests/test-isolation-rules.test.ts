@@ -97,6 +97,10 @@ describe("noTestGlobals", () => {
         'document.body.innerHTML = "<p></p>";',
         "const state = { count: 0 }; state.count += 1;",
         "process.exitCode = 1;",
+        // A restore in cleanup: the write that changed the global is the one reported.
+        'import { afterEach } from "vitest"; afterEach(() => { process.env.FOO = saved; });',
+        "try { run(); } finally { delete globalThis.app; }",
+        'Effect.acquireRelease(acquire, () => Effect.sync(() => Reflect.deleteProperty(globalThis, "app")));',
       ],
       invalid: [
         "globalThis.fetch = () => 1;",
@@ -111,6 +115,9 @@ describe("noTestGlobals", () => {
         "delete process.env.FOO;",
         'process.env["API_URL"] = url;',
         "process.env = {};",
+        // The acquire side of a resource and the body of a try still write.
+        'Effect.acquireRelease(Effect.sync(() => { process.env.FOO = "x"; }), restore);',
+        'try { process.env.FOO = "x"; } finally { restore(); }',
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
