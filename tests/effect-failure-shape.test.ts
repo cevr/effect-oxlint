@@ -110,4 +110,23 @@ describe("noInlineProvide chained form", () => {
     expect(findings.get("main.test.ts")).toEqual([]);
     expect(findings.get("merged.ts")).toEqual([]);
   });
+
+  // Mutant: inMainEntry answers false (the two entries are reported).
+  // Mutant: inMainEntry follows no const by name (runMain(main)'s provide is reported).
+  // Mutant: inMainEntry answers true (the per-call helper is missed).
+  test("leaves a program's or script's main entry alone, the boundary itself", () => {
+    const findings = lintFixtures("noInlineProvide", {
+      "script.ts":
+        'import { Effect, Layer } from "effect";\nconst main = Effect.scoped(Effect.gen(function* () {\n  const context = yield* Layer.build(AppLive);\n  yield* program.pipe(Effect.provide(context));\n}));\nBunRuntime.runMain(main);\n',
+      "process.ts":
+        'import { Effect } from "effect";\nProcess.run("archive", async () => {\n  await Effect.runPromise(program.pipe(Effect.provide(StoreLive), Effect.provide(LogLive)));\n});\n',
+      "helper.ts":
+        'import { Effect } from "effect";\nexport function runCall(call) {\n  return Effect.runPromise(call.pipe(Effect.provide(StoreLive), Effect.provide(LogLive)));\n}\nProcess.run("x", () => runCall(work));\n',
+    });
+    expect(findings.get("script.ts")).toEqual([]);
+    expect(findings.get("process.ts")).toEqual([]);
+    expect(findings.get("helper.ts")).toEqual([
+      { line: 3, message: expect.stringContaining("provide it once") },
+    ]);
+  });
 });
