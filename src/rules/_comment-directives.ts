@@ -10,11 +10,14 @@ export const directivePattern =
 /**
  * Comments that instruct a tool rather than a reader: suppressions and
  * type-check switches, triple-slash references, bundler annotations and
- * magic comments, JSX pragmas, and formatter and coverage ignores. Matched against the whole
- * comment with its JSDoc gutter removed.
+ * magic comments, JSX pragmas, and formatter and coverage ignores; and the
+ * comments a tool keeps or reads that are no prose: a licence (`/*!`,
+ * `@license`, `SPDX-License-Identifier:`), a `nosemgrep` suppression and a
+ * source map URL (LANDMINES 4.4). Matched against the whole comment with its
+ * JSDoc gutter removed, at its start: prose that names one is still prose.
  */
 const toolDirective =
-  /^(?:(?:oxlint|eslint)-(?:disable|enable)(?:-next-line|-line)?|@effect-diagnostics(?:-next-line)?|@ts-(?:expect-error|ignore|nocheck|check)|\/\s*<(?:reference|amd-module|amd-dependency)\b|[#@]__(?:PURE|NO_SIDE_EFFECTS|KEY)__$|@vite-ignore$|(?:webpack[A-Z]\w*|turbopackIgnore)\s*:|@jsx(?:ImportSource|Frag|Runtime)?\s|(?:prettier|oxfmt)-ignore|(?:c8|v8|istanbul)\s+ignore\b)/u;
+  /^(?:(?:oxlint|eslint)-(?:disable|enable)(?:-next-line|-line)?|@effect-diagnostics(?:-next-line)?|@ts-(?:expect-error|ignore|nocheck|check)|\/\s*<(?:reference|amd-module|amd-dependency)\b|[#@]__(?:PURE|NO_SIDE_EFFECTS|KEY|INLINE|NOINLINE)__$|!|@license\b|SPDX-License-Identifier:|nosemgrep\b|[#@]\s?source(?:Mapping)?URL=|@vite-ignore$|(?:webpack[A-Z]\w*|turbopackIgnore)\s*:|@jsx(?:ImportSource|Frag|Runtime)?\s|(?:prettier|oxfmt)-ignore|(?:c8|v8|istanbul)\s+ignore\b)/u;
 
 /** The comment's text with its JSDoc gutter removed and its lines joined. */
 const unwrap = (value: string): string =>

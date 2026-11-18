@@ -173,6 +173,35 @@ describe("noComments autofix", () => {
     expect(fix("export const a = { /* empty */ };\n")).toBe("export const a = { };\n");
   });
 
+  // LANDMINES 4.4: the fix deleted a licence header, a nosemgrep directive and a
+  // source map line. Mutants: each new pattern dropped in turn (its line is
+  // deleted again); a pattern not anchored at the comment's start (the prose
+  // line that mentions a licence and nosemgrep is kept).
+  test("keeps licence headers, nosemgrep, source map and inlining annotations, and still removes prose that names them", () => {
+    const source = [
+      "/*!", // 1
+      " * @license MIT",
+      " * SPDX-License-Identifier: MIT",
+      " */",
+      "/** @license Apache-2.0 */", // 5
+      "// SPDX-License-Identifier: MIT", // 6
+      "// this mentions the @license and nosemgrep in passing", // 7
+      "export const run = (code: string) => eval(code); // nosemgrep: c14", // 8
+      "export const once = /* @__INLINE__ */ (n: number) => n;", // 9
+      "export const kept = /* #__NOINLINE__ */ (n: number) => n;", // 10
+      "// explains the next line", // 11
+      "export const two = 2;",
+      "//# sourceMappingURL=comments.js.map", // 13
+      "",
+    ].join("\n");
+    const fixed = fix(source) ?? "";
+    for (const line of [1, 2, 3, 4, 5, 6, 8, 9, 10, 13]) {
+      expect(fixed).toContain(source.split("\n")[line - 1] ?? "");
+    }
+    expect(fixed).not.toContain("in passing");
+    expect(fixed).not.toContain("explains the next line");
+  });
+
   test("keeps tool directives", () => {
     const kept = [
       "// oxlint-disable-next-line no-shadow -- fixture shadows an import",
