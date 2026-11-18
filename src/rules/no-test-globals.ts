@@ -71,7 +71,7 @@ const isCleanup = (node: ESTree.Node): boolean => {
   for (let parent = child.parent; parent; child = parent, parent = parent.parent) {
     if (parent.type === "TryStatement" && parent.finalizer === child) return true;
     if (parent.type === "CallExpression" && child !== parent.callee) {
-      const index = parent.arguments.indexOf(child as ESTree.Expression);
+      const index = parent.arguments.findIndex((argument) => argument === child);
       const from = Option.flatMap(calleeName(parent), (name) =>
         Option.fromUndefinedOr(cleanupCalls.get(name)),
       );

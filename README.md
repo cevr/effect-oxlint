@@ -35,7 +35,7 @@ A JSON configuration extends the generated preset file. It loads the plugin and 
 }
 ```
 
-Every recommended rule has `error` severity. The complexity rules carry their limit as an option, `["error", { "max": 21 }]`.
+Every recommended rule has `error` severity. The complexity rules carry their limit as an option, `["error", { "max": 21 }]`; native `complexity` also counts a `switch` as one branch (`"variant": "modified"`).
 
 ## Recommended Rules
 
@@ -283,7 +283,7 @@ The recommended preset caps three complexity metrics for every function. Each ne
 
 | Rule                            | Metric                                     | Limit |
 | ------------------------------- | ------------------------------------------ | ----- |
-| `complexity` (native oxlint)    | Cyclomatic complexity                      | 21    |
+| `complexity` (native oxlint)    | Cyclomatic complexity, `modified` variant  | 21    |
 | `effect/maxCognitiveComplexity` | Cognitive complexity (SonarSource)         | 21    |
 | `effect/maxHalsteadDifficulty`  | Halstead difficulty `(η1 / 2) × (N2 / η2)` | 79    |
 

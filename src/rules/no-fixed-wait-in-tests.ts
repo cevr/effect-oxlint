@@ -33,7 +33,13 @@ import { childNodesAt, isAstNode } from "./_ast-children.js";
 import { constResolver } from "./_const-bindings.js";
 import { importedNamespaces, isStaticCall, visibleNamespaces } from "./_effect-namespaces.js";
 import { isTestModule, skipFile } from "./_test-files.js";
-import { enclosingFunction, flushName, isFlushAmount, isRepeated } from "./_virtual-time.js";
+import {
+  enclosingFunction,
+  flushName,
+  isConditionPollInterval,
+  isFlushAmount,
+  isRepeated,
+} from "./_virtual-time.js";
 
 type VisitorKeys = Readonly<Record<string, ReadonlyArray<string>>>;
 
@@ -217,7 +223,10 @@ export const noFixedWaitInTests = Rule.define({
 
     const reportSleep = (node: ESTree.Node) =>
       Option.match(
-        Option.filter(sleepWait(node), () => !reported.has(node)),
+        Option.filter(
+          sleepWait(node),
+          () => !reported.has(node) && !isConditionPollInterval(node),
+        ),
         {
           onNone: () => Effect.void,
           onSome: (wait) => {

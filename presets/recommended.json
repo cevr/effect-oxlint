@@ -2,7 +2,7 @@
   "plugins": [],
   "jsPlugins": ["oxlint-plugin-effect/plugin"],
   "rules": {
-    "complexity": ["error", { "max": 21 }],
+    "complexity": ["error", { "max": 21, "variant": "modified" }],
     "effect/decodeAfterStatus": "error",
     "effect/maxCognitiveComplexity": ["error", { "max": 21 }],
     "effect/maxHalsteadDifficulty": ["error", { "max": 79 }],

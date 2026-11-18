@@ -179,6 +179,32 @@ export const isRepeated = (advance: ESTree.Node): boolean => {
   return false;
 };
 
+const containsCall = (node: ESTree.Node): boolean =>
+  node.type === "CallExpression" ||
+  node.type === "AwaitExpression" ||
+  node.type === "YieldExpression" ||
+  (!isFunctionNode(node) && childNodes(node).some(containsCall));
+
+/**
+ * Whether a real-clock sleep is the interval of a loop that polls a condition,
+ * within its own function: a loop whose test reads state through a call, or
+ * whose body leaves early. That is a hand-written `expect.poll`.
+ */
+export const isConditionPollInterval = (sleep: ESTree.Node): boolean => {
+  for (const ancestor of ancestors(sleep)) {
+    if (isFunctionNode(ancestor)) return false;
+    if (
+      ancestor.type !== "WhileStatement" &&
+      ancestor.type !== "DoWhileStatement" &&
+      ancestor.type !== "ForStatement"
+    )
+      continue;
+    if (ancestor.test && containsCall(ancestor.test)) return true;
+    if (exitsEarly(ancestor.body)) return true;
+  }
+  return false;
+};
+
 /** The function an advance runs in (the Program at top level): the scope of a boundary pair. */
 export const enclosingFunction = (advance: ESTree.Node): ESTree.Node => {
   let last: ESTree.Node = advance;

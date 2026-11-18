@@ -341,6 +341,9 @@ describe("noFixedWaitInTests", () => {
         "const later = () => setTimeout(done, 10);",
         "new Promise((resolve) => emitter.once('ready', resolve));",
         'import { setTimeout } from "./fake-timers.js"; await setTimeout(10);',
+        // The interval of a loop that polls a condition: a hand-written expect.poll.
+        "async function t() { while (Date.now() < deadline) { if (await ready()) return; await Bun.sleep(50); } }",
+        "async function t() { while (!(await ready())) { await Bun.sleep(50); } }",
       ],
       invalid: [
         'import { Effect } from "effect"; function* t() { yield* Effect.sleep("200 millis"); }',
@@ -352,6 +355,8 @@ describe("noFixedWaitInTests", () => {
         "const settle = () => new Promise((r) => setTimeout(r, 0));",
         "await new Promise(function (resolve) { setTimeout(resolve, 50); });",
         'import { setTimeout as sleep } from "node:timers/promises"; await sleep(10);',
+        // A counted loop that never checks state repeats a fixed wait.
+        "async function t() { for (let i = 0; i < 3; i++) { await Bun.sleep(50); } }",
       ],
     });
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });

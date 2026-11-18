@@ -22,13 +22,13 @@ const isPartialPattern = (node: ESTree.Node): boolean => {
     if (parent.type === "CallExpression") {
       if (child === parent.callee) return false;
       const callee = parent.callee;
-      const name =
-        callee.type === "Identifier"
-          ? callee.name
-          : callee.type === "MemberExpression" && !callee.computed && callee.property.type === "Identifier"
-            ? callee.property.name
-            : "";
-      return partialMatchers.has(name);
+      if (callee.type === "Identifier") return partialMatchers.has(callee.name);
+      return (
+        callee.type === "MemberExpression" &&
+        !callee.computed &&
+        callee.property.type === "Identifier" &&
+        partialMatchers.has(callee.property.name)
+      );
     }
     if (
       parent.type !== "ObjectExpression" &&
