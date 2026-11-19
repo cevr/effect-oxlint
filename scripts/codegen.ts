@@ -80,6 +80,10 @@ const optInPresets: ReadonlyArray<readonly [name: string, description: string]> 
     "skills-tests",
     "Weak-test rules in their exact forms: tests that pass by construction, repeat, cannot fail or assert only existence.",
   ],
+  [
+    "skills-domain",
+    "Rules for @alchemy.run/domain models, distilled from the alchemy-domain skill: a pure decide, a total evolve, events named as facts.",
+  ],
 ];
 
 /** `skills-react` → `skillsReact`. */
