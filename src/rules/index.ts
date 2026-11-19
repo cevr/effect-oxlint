@@ -55,6 +55,7 @@ export * from "./no-mode-field-with-optionals.js";
 export * from "./no-module-level-mutable-state.js";
 export * from "./no-module-mocks.js";
 export * from "./no-module-path-facts.js";
+export * from "./no-native-capability-patch.js";
 export * from "./no-nested-effect-gen.js";
 export * from "./no-new-error.js";
 export * from "./no-new-promise.js";
