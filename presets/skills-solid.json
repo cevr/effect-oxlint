@@ -1,0 +1,9 @@
+{
+  "plugins": [],
+  "jsPlugins": ["oxlint-plugin-effect/plugin"],
+  "rules": {
+    "effect/noBooleanSignalCluster": "error",
+    "effect/noDerivedSignalEffect": "error",
+    "effect/noPromiseMirroredSignal": "error"
+  }
+}
