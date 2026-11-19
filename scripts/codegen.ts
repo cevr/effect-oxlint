@@ -81,6 +81,10 @@ const optInPresets: ReadonlyArray<readonly [name: string, description: string]> 
     "Weak-test rules in their exact forms: tests that pass by construction, repeat, cannot fail or assert only existence.",
   ],
   [
+    "skills-solid",
+    "Solid state, effect and composition rules: the react and composition skills translated to Solid's signals, memos and effects.",
+  ],
+  [
     "skills-domain",
     "Rules for @alchemy.run/domain models, distilled from the alchemy-domain skill: a pure decide, a total evolve, events named as facts.",
   ],

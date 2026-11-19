@@ -7,4 +7,5 @@ export { recommended } from "./recommended.js";
 export { skillsReact } from "./skills-react.js";
 export { skillsPerf } from "./skills-perf.js";
 export { skillsTests } from "./skills-tests.js";
+export { skillsSolid } from "./skills-solid.js";
 export { skillsDomain } from "./skills-domain.js";
