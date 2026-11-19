@@ -2,12 +2,15 @@
  * Tests wait on the event they depend on, never on time passing, real or virtual.
  *
  * Reported in test modules: a sleep (`Effect.sleep`, `Bun.sleep`,
- * `Bun.sleepSync`, `setTimeout` from `timers/promises`) a statement runs, and
+ * `Bun.sleepSync`, `scheduler.wait`, `setTimeout` from `timers/promises`) a statement runs, and
  * each sleep anywhere inside the argument of a `yield*` or an `await` (piped,
  * raced, sequenced, or bound to a result); a sleep stored under a name, in a
  * variable's initializer or an object field, since a later `yield* pause`
  * waits on it where no wait shows the sleep; `waitForTimeout`; and a Promise
- * only a timer settles. A sleep inside a nested function is a value the callee
+ * only a timer settles (`setTimeout`, or it through `globalThis`/`window`,
+ * whose handler is the resolver or a function that only calls it), unless it
+ * is an arm of `Promise.race`/`Promise.any` or a network route handler's
+ * delay (LANDMINES LM-WAIT). A sleep inside a nested function is a value the callee
  * may never run, such as a mock's `read: () => Effect.sleep(...)`, and stays
  * allowed. A real-clock fence the subject needs takes a line-local
  * suppression with its reason.
@@ -29,6 +32,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import { ancestors } from "./_ast-ancestors.js";
 import { childNodesAt, isAstNode } from "./_ast-children.js";
 import { constResolver } from "./_const-bindings.js";
 import { importedNamespaces, isStaticCall, visibleNamespaces } from "./_effect-namespaces.js";
@@ -68,7 +72,7 @@ const descendants = (
 ];
 
 const guidance =
-  "A fixed wait guesses when state changes, so it flakes under load and slows the suite. Wait on the event itself: a Deferred, Latch, Queue, or Fiber.join in Effect code, a condition or locator assertion (expect.poll, waitForFunction) in a browser. Advance TestClock only to the time under test.";
+  "A fixed wait guesses when state changes, so it flakes under load and slows the suite. Wait on the event itself: a Deferred, Latch, Queue, or Fiber.join in Effect code, a locator assertion (`await expect(locator).toBeVisible()`) in a browser, or a promise the code under test settles. Advance TestClock only to the time under test.";
 
 /** Unwrap `yield* x`, `await x`, and `void x` to the waited expression. */
 const waited = (node: ESTree.Expression): ESTree.Expression => {
@@ -110,11 +114,63 @@ const soleExpression = (
   return Option.some(only.expression);
 };
 
-/** Whether `node` is `setTimeout(<name>, ...)`. */
-const isTimerSettling = (node: ESTree.Node, name: string): boolean => {
-  if (node.type !== "CallExpression" || node.callee.type !== "Identifier") return false;
-  const [first] = node.arguments;
-  return node.callee.name === "setTimeout" && first?.type === "Identifier" && first.name === name;
+/** The global objects a timer is reached through: `globalThis.setTimeout`, `window.setTimeout`. */
+const timerHosts: ReadonlySet<string> = new Set(["globalThis", "window", "self", "global"]);
+
+/** Whether a callee names the timer: `setTimeout`, or it through a global object. */
+const isSetTimeout = (callee: ESTree.Node): boolean => {
+  if (callee.type === "Identifier") return callee.name === "setTimeout";
+  return (
+    callee.type === "MemberExpression" &&
+    !callee.computed &&
+    callee.object.type === "Identifier" &&
+    timerHosts.has(callee.object.name) &&
+    callee.property.type === "Identifier" &&
+    callee.property.name === "setTimeout"
+  );
+};
+
+/** Whether a timer's handler only settles the promise: `resolve`, or a function that only calls it. */
+const onlyResolves = (handler: ESTree.Node, name: string): boolean => {
+  if (handler.type === "Identifier") return handler.name === name;
+  if (handler.type !== "ArrowFunctionExpression" && handler.type !== "FunctionExpression")
+    return false;
+  if (handler.params.length > 0) return false;
+  const body = Option.flatMap(Option.fromNullOr(handler.body), soleExpression);
+  return Option.exists(
+    body,
+    (call) =>
+      call.type === "CallExpression" &&
+      call.arguments.length === 0 &&
+      call.callee.type === "Identifier" &&
+      call.callee.name === name,
+  );
+};
+
+/** Whether `node` is `setTimeout(<name>, ...)`, through a global or with a handler that only calls it. */
+const isTimerSettling = (node: ESTree.Node, name: string): boolean =>
+  node.type === "CallExpression" &&
+  isSetTimeout(node.callee) &&
+  Option.exists(Option.fromUndefinedOr(node.arguments[0]), (handler) =>
+    onlyResolves(handler, name),
+  );
+
+/**
+ * Whether a timer promise is a signal of its own rather than a wait: an arm
+ * of `Promise.race`/`Promise.any` (a deadline beside the event), or a delay
+ * a network route handler adds to the response it serves (`page.route`).
+ */
+const isTimerSignal = (node: ESTree.Node): boolean => {
+  for (const ancestor of ancestors(node)) {
+    if (ancestor.type !== "CallExpression" || ancestor.callee.type !== "MemberExpression") continue;
+    const property = ancestor.callee.property;
+    if (property.type !== "Identifier") continue;
+    const promise =
+      ancestor.callee.object.type === "Identifier" && ancestor.callee.object.name === "Promise";
+    if (promise && (property.name === "race" || property.name === "any")) return true;
+    if (property.name === "route" || property.name === "routeFromHAR") return true;
+  }
+  return false;
 };
 
 /** `new Promise((resolve) => setTimeout(resolve, n))`: a promise that only a timer settles. */
@@ -183,6 +239,7 @@ export const noFixedWaitInTests = Rule.define({
       if (isMemberCall(node, "Bun", "sleep") || isMemberCall(node, "Bun", "sleepSync")) {
         return Option.some("Bun.sleep");
       }
+      if (isMemberCall(node, "scheduler", "wait")) return Option.some("scheduler.wait");
       if (isIdentifierCall(node, timerPromiseNames))
         return Option.some("setTimeout from timers/promises");
       return Option.none();
@@ -223,10 +280,7 @@ export const noFixedWaitInTests = Rule.define({
 
     const reportSleep = (node: ESTree.Node) =>
       Option.match(
-        Option.filter(
-          sleepWait(node),
-          () => !reported.has(node) && !isConditionPollInterval(node),
-        ),
+        Option.filter(sleepWait(node), () => !reported.has(node) && !isConditionPollInterval(node)),
         {
           onNone: () => Effect.void,
           onSome: (wait) => {
@@ -286,7 +340,7 @@ export const noFixedWaitInTests = Rule.define({
         return report(node, "waitForTimeout");
       },
       NewExpression: (node: ESTree.NewExpression) => {
-        if (!isTimerPromise(node)) return Effect.void;
+        if (!isTimerPromise(node) || isTimerSignal(node)) return Effect.void;
         return report(node, "a Promise settled by setTimeout");
       },
     };

@@ -362,6 +362,33 @@ describe("noFixedWaitInTests", () => {
     expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
   });
 
+  // LANDMINES LM-WAIT (a), probe/cases/sleep.test.ts lines 9, 10, 12 and 15.
+  // Mutants, one per spelling: scheduler.wait unread; a timer through
+  // globalThis or window unread; a handler that only calls the resolver
+  // unread. And the signals landmines keeps: a Promise.race arm, a promise
+  // two things settle, a route handler's delay; a handler that does more
+  // than resolve.
+  test("reports scheduler.wait, a global timer and a handler that only resolves; keeps timer signals", () => {
+    const results = lintCases("noFixedWaitInTests", {
+      extension: "test.ts",
+      valid: [
+        "const result = await Promise.race([work(), new Promise((r) => setTimeout(r, 1000))]);",
+        "await new Promise((resolve) => { emitter.once('ready', resolve); setTimeout(resolve, 100); });",
+        "await page.route('**/api', async (route) => { await new Promise((r) => setTimeout(r, 300)); await route.continue(); });",
+        "await new Promise((resolve) => setTimeout(() => resolve(read()), 10));",
+      ],
+      invalid: [
+        "await scheduler.wait(10);",
+        "await new Promise<void>((done) => globalThis.setTimeout(() => done(), 31_000));",
+        "await new Promise((resolve) => window.setTimeout(resolve, 50));",
+        "await new Promise<void>((resolve) => setTimeout(() => { resolve(); }, 100));",
+        "await new Promise((resolve) => setTimeout(function () { resolve(); }, 100));",
+        "await waitFor(async () => { await scheduler.wait(1); expect(ready).toBe(true); });",
+      ],
+    });
+    expect(results).toEqual({ reportedValid: [], missedInvalid: [] });
+  });
+
   // Mutants, one per case group: S1 (a flush amount: literal, string, const,
   // Duration.zero, Duration.millis) dropped; S2 (a flush name) dropped; S3
   // (a polling loop, a repeater) dropped, or every loop counted as polling; the boundary step B dropped (999 then 1
@@ -408,7 +435,7 @@ describe("noFixedWaitInTests", () => {
       {
         line: 2,
         message:
-          "Avoid a fixed wait in tests (Bun.sleep). A fixed wait guesses when state changes, so it flakes under load and slows the suite. Wait on the event itself: a Deferred, Latch, Queue, or Fiber.join in Effect code, a condition or locator assertion (expect.poll, waitForFunction) in a browser. Advance TestClock only to the time under test.",
+          "Avoid a fixed wait in tests (Bun.sleep). A fixed wait guesses when state changes, so it flakes under load and slows the suite. Wait on the event itself: a Deferred, Latch, Queue, or Fiber.join in Effect code, a locator assertion (`await expect(locator).toBeVisible()`) in a browser, or a promise the code under test settles. Advance TestClock only to the time under test.",
       },
     ]);
   });

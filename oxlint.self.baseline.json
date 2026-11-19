@@ -54,6 +54,7 @@
   "tests/interruptible-memo-releases.test.ts": 5,
   "tests/no-comments.test.ts": 35,
   "tests/no-flake-masking.test.ts": 8,
+  "tests/no-unsignaled-poll.test.ts": 7,
   "tests/platform-rules.test.ts": 2,
   "tests/recommended-rules.test.ts": 1,
   "tests/review-probes.test.ts": 6,
@@ -64,7 +65,7 @@
   "tests/suppression-rules.test.ts": 12,
   "tests/tagged-constructors.test.ts": 2,
   "tests/tagged-control-flow.test.ts": 6,
-  "tests/test-isolation-rules.test.ts": 45,
+  "tests/test-isolation-rules.test.ts": 51,
   "tests/tn1-lint.test.ts": 17,
   "tests/widen-then-assert.test.ts": 2
 }
