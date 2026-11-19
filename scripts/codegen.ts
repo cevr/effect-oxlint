@@ -50,7 +50,7 @@ const nativeRules: ReadonlyArray<readonly [name: string, options: RecommendedOpt
 const PresetDocs = Schema.Struct({
   recommended: Schema.optionalKey(Schema.Boolean),
   recommendedOptions: Schema.optionalKey(RuleOptions),
-  preset: Schema.optionalKey(Schema.String),
+  preset: Schema.optionalKey(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
 });
 
 interface RuleEntry {
@@ -59,8 +59,8 @@ interface RuleEntry {
   category: string;
   recommended: boolean;
   recommendedOptions: RecommendedOptions;
-  /** The opt-in preset that enables the rule (`meta.docs.preset`), such as `skills-react`. */
-  preset: Option.Option<string>;
+  /** The opt-in presets that enable the rule (`meta.docs.preset`: one name, such as `skills-react`, or a list for a rule two presets share). */
+  presets: ReadonlyArray<string>;
 }
 
 /**
@@ -160,7 +160,7 @@ const loadEntry = (file: string) => {
             category: detectCategory(content, file),
             recommended: docs.recommended !== false,
             recommendedOptions: Option.fromUndefinedOr(docs.recommendedOptions),
-            preset: Option.fromUndefinedOr(docs.preset),
+            presets: [docs.preset ?? []].flat(),
           },
         ]),
       ),
@@ -267,13 +267,10 @@ const main = Effect.gen(function* () {
 
   const presetNames = new Set(optInPresets.map(([name]) => name));
   const misplaced = entries.flatMap((entry) =>
-    Option.match(entry.preset, {
-      onNone: () => [],
-      onSome: (name) => {
-        if (!presetNames.has(name)) return [`${entry.fileName}: unknown preset ${name}`];
-        if (entry.recommended) return [`${entry.fileName}: a ${name} rule sets recommended: false`];
-        return [];
-      },
+    entry.presets.flatMap((name) => {
+      if (!presetNames.has(name)) return [`${entry.fileName}: unknown preset ${name}`];
+      if (entry.recommended) return [`${entry.fileName}: a ${name} rule sets recommended: false`];
+      return [];
     }),
   );
   if (misplaced.length > 0) {
@@ -282,7 +279,7 @@ const main = Effect.gen(function* () {
   }
 
   const optInFiles = optInPresets.flatMap(([name, description]) => {
-    const members = entries.filter((entry) => Option.contains(entry.preset, name));
+    const members = entries.filter((entry) => entry.presets.includes(name));
     const tsOutput = [
       "/**",
       ` * ${description}`,

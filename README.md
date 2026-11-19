@@ -231,13 +231,15 @@ Weak tests in their exact forms. These rules read test modules only (`*.test.*`,
 
 ### `skills-solid`
 
-The react skill's state rules translated to Solid (`ui/platforms/web/solid.md`). They read files that import `solid-js` (or `solid-js/…`, `@solidjs/…`): a component is a capitalized function that returns JSX, its signals are `createSignal` pairs, and an effect writes in its last function (Solid 2's `apply`, Solid 1's only function). The React rules are unchanged and do not read Solid files. `effect/noParameterlessRenderProp` (in `skills-react`) reads JSX alone and applies to Solid as written.
+The react skill's state rules translated to Solid (`ui/platforms/web/solid.md`). They read files that import `solid-js` (or `solid-js/…`, `@solidjs/…`): a component is a capitalized function that returns JSX, its signals are `createSignal` pairs, and an effect writes in its last function (Solid 2's `apply`, Solid 1's only function). The React rules are unchanged and do not read Solid files. `effect/noParameterlessRenderProp` reads JSX alone, so it is in both `skills-react` and `skills-solid`.
 
-| Rule                             | Contract                                                                                                                                                                            |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `effect/noBooleanSignalCluster`  | Reports a Solid component with three or more boolean `createSignal`s: one signal of a union type names the modes                                                                    |
-| `effect/noDerivedSignalEffect`   | Reports a `createEffect` whose writer only calls the component's signal setters: derive with `createMemo` or a function                                                             |
-| `effect/noPromiseMirroredSignal` | Reports a loading signal set around an `await`, and an effect that sets a signal from a promise's result: use an async computation (`createResource`, Solid 2's async `createMemo`) |
+| Rule                               | Contract                                                                                                                                                                                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `effect/noBooleanSignalCluster`    | Reports a Solid component with three or more boolean `createSignal`s: one signal of a union type names the modes                                                                                                                                             |
+| `effect/noDerivedSignalEffect`     | Reports a `createEffect` whose writer only calls the component's signal setters: derive with `createMemo` or a function                                                                                                                                      |
+| `effect/noPromiseMirroredSignal`   | Reports a loading signal set around an `await`, and an effect that sets a signal from a promise's result: use an async computation (`createResource`, Solid 2's async `createMemo`)                                                                          |
+| `effect/noAccessorProp`            | Reports a member of a component's props type typed as a getter (`routes: () => Route[]`, `routes(): Route[]`, `Accessor<Route[]>`): Solid props are live, type the value. `on…`, `get…`, `render…`, `children` and functions returning `void` are left alone |
+| `effect/noParameterlessRenderProp` | As in `skills-react`: a `render…` prop whose inline function takes nothing                                                                                                                                                                                   |
 
 ### `skills-domain`
 
