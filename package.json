@@ -67,7 +67,6 @@
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
-    "@cvr/tn1-lint": "^0.1.0",
     "@effect/tsgo": "latest",
     "@effect/vitest": "4.1.4",
     "@types/bun": "latest",
@@ -84,11 +83,11 @@
     "vitest": "latest"
   },
   "peerDependencies": {
-    "@cvr/tn1-lint": ">=0.1.0",
+    "@cevr/tn1-lint": ">=0.1.0",
     "effect": ">=4.1.0 <5"
   },
   "peerDependenciesMeta": {
-    "@cvr/tn1-lint": {
+    "@cevr/tn1-lint": {
       "optional": true
     }
   },
