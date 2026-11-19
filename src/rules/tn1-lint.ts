@@ -28,7 +28,8 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
-import { Diagnostic, Rule, RuleContext, Visitor } from "../vendor/effect-oxlint/index.js";
+import { Diagnostic, Rule, RuleContext } from "../vendor/effect-oxlint/index.js";
+import type { Visitor } from "../vendor/effect-oxlint/index.js";
 import { Baseline, baselineJsonSchema, withBaseline } from "./_baseline.js";
 
 const Options = Schema.UndefinedOr(

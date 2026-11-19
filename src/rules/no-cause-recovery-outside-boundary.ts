@@ -15,7 +15,8 @@ import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { Diagnostic, Rule, Visitor } from "../vendor/effect-oxlint/index.js";
+import { Diagnostic, Rule } from "../vendor/effect-oxlint/index.js";
+import type { Visitor } from "../vendor/effect-oxlint/index.js";
 import { ancestorsOf } from "./_anti-slop-effect.js";
 import { Baseline, baselineJsonSchema, withBaseline } from "./_baseline.js";
 import { isTestModule, matchesFileGlobs, skipFile } from "./_test-files.js";

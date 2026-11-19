@@ -16,7 +16,8 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { Diagnostic, Rule, Visitor } from "../vendor/effect-oxlint/index.js";
+import { Diagnostic, Rule } from "../vendor/effect-oxlint/index.js";
+import type { Visitor } from "../vendor/effect-oxlint/index.js";
 import { Baseline, baselineJsonSchema, withBaseline } from "./_baseline.js";
 import { isTestModule, lintRootPath, matchesFileGlobs, skipFile } from "./_test-files.js";
 
