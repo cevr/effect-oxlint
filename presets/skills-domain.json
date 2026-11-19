@@ -1,0 +1,9 @@
+{
+  "plugins": [],
+  "jsPlugins": ["oxlint-plugin-effect/plugin"],
+  "rules": {
+    "effect/eventNameIsAFact": "error",
+    "effect/pureDecide": "error",
+    "effect/totalEvolve": "error"
+  }
+}

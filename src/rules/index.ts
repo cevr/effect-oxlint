@@ -10,6 +10,7 @@ export * from "./no-effect-do.js";
 
 // --- AST pattern rules ---
 export * from "./decode-after-status.js";
+export * from "./event-name-is-a-fact.js";
 export * from "./import-boundary.js";
 export * from "./max-cognitive-complexity.js";
 export * from "./max-halstead-difficulty.js";
@@ -110,6 +111,7 @@ export * from "./prefer-service-of.js";
 export * from "./prefer-tagged-constructors.js";
 export * from "./prefer-use.js";
 export * from "./prefer-yield-service.js";
+export * from "./pure-decide.js";
 export * from "./repeated-switches.js";
 export * from "./require-cause-when-narrowing.js";
 export * from "./require-force-kill-after.js";
@@ -119,3 +121,4 @@ export * from "./require-service-make-layer.js";
 export * from "./require-spawn-budget.js";
 export * from "./require-suppression-reason.js";
 export * from "./tn1-lint.js";
+export * from "./total-evolve.js";
