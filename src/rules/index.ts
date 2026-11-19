@@ -16,6 +16,7 @@ export * from "./import-boundary.js";
 export * from "./max-cognitive-complexity.js";
 export * from "./max-halstead-difficulty.js";
 export * from "./mysterious-name.js";
+export * from "./no-accessor-prop.js";
 export * from "./no-alias-test-layer.js";
 export * from "./no-array-filter-map.js";
 export * from "./no-as.js";

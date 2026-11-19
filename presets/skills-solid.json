@@ -2,8 +2,10 @@
   "plugins": [],
   "jsPlugins": ["oxlint-plugin-effect/plugin"],
   "rules": {
+    "effect/noAccessorProp": "error",
     "effect/noBooleanSignalCluster": "error",
     "effect/noDerivedSignalEffect": "error",
+    "effect/noParameterlessRenderProp": "error",
     "effect/noPromiseMirroredSignal": "error"
   }
 }

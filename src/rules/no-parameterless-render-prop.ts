@@ -23,7 +23,7 @@ export const noParameterlessRenderProp = Rule.define({
     type: "suggestion",
     description:
       "Pass content as children or a compound sub-component instead of a render prop that receives nothing.",
-    docs: { recommended: false, preset: "skills-react" },
+    docs: { recommended: false, preset: ["skills-react", "skills-solid"] },
   }),
   create: function* () {
     const ctx = yield* RuleContext;
