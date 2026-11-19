@@ -9,7 +9,7 @@ describe("noNativeCapabilityPatch", () => {
   // defineProperty or Reflect.set unread; save-replace-restore unread; a
   // restore in afterEach exempted (it must stay reported); an event handler
   // reported (navigator.serviceWorker.onmessage is valid); a member saved but
-  // never restored reported; an object's own field written.
+  // never restored reported; a local variable swapped and restored reported.
   test("reports native patches and saved-replaced-restored members, with the service to use", () => {
     const results = lintCases("noNativeCapabilityPatch", {
       extension: "test.ts",
@@ -18,6 +18,7 @@ describe("noNativeCapabilityPatch", () => {
         "window.onerror = () => {};",
         "const now = Date.now();",
         "const state = { now: 0 }; state.now = 1;",
+        "let current = 1; const saved = current; current = 2; current = saved;",
         "const saved = api.load; api.load = () => 2;",
         "Object.defineProperty(result, 'value', { value: 1 });",
         "localStorage.getItem('k');",
