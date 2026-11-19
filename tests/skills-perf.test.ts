@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import * as formatting from "./perf/no-formatter-per-call.js";
 import * as linear from "./perf/no-linear-search-in-loop.js";
 import * as repeated from "./perf/no-repeated-pass.js";
 import * as sorting from "./perf/no-sort-for-extreme.js";
@@ -200,6 +201,65 @@ describe("noRepeatedPass", () => {
       const [bad, good] = [repeated.threePasses(n), repeated.onePass(n)];
       expect(good.sizes).toEqual(bad.sizes);
       expect({ bad: bad.calls, good: good.calls }).toEqual({ bad: 3 * n, good: n });
+    }
+  });
+});
+
+describe("noFormatterPerCall", () => {
+  const forms = [
+    "new Intl.NumberFormat",
+    "Intl.DateTimeFormat",
+    "new globalThis.Intl.PluralRules",
+    "value.toLocaleString",
+    "when.toLocaleDateString",
+    "new Intl.Collator",
+    "new Fmt.NumberFormat",
+  ] as const;
+  const argForms = ["", '"en-US"', "LOCALE", "locale", '"en-US", { currency: CURRENCY }', '"en-US", { currency }', "locale()"] as const;
+  const places = ["module", "function", "arrow", "nested"] as const;
+  interface Case {
+    readonly form: (typeof forms)[number];
+    readonly args: (typeof argForms)[number];
+    readonly place: (typeof places)[number];
+    readonly test: boolean;
+  }
+  const source = (c: Case): string => {
+    const built = `${c.form}(${c.args})`;
+    const body = {
+      module: `export const built = ${built};\nexport function show(locale: string, value: number, when: Date) { const currency = "EUR"; return [locale, value, when, currency]; }`,
+      function: `export function show(locale: string, value: number, when: Date) {\n  const currency = "EUR";\n  return [${built}, currency];\n}`,
+      arrow: `export const show = (locale: string, value: number, when: Date) => {\n  const currency = "EUR";\n  return [${built}, currency];\n};`,
+      nested: `export function outer(locale: string) {\n  const currency = "EUR";\n  return (value: number, when: Date) => [${built}, currency, locale];\n}`,
+    }[c.place];
+    return `const LOCALE = "en-US";\nconst CURRENCY = "USD";\nconst value = 1;\nconst when = new Date(0);\ndeclare const Fmt: { NumberFormat: new (...a: unknown[]) => unknown };\n${body}\n`;
+  };
+  /** The reference: an Intl formatter (not Collator), or a toLocale… call given arguments, built inside a function from arguments that read no parameter, local or call. */
+  const reported = (c: Case): boolean => {
+    const formatter = !["new Intl.Collator", "new Fmt.NumberFormat"].includes(c.form);
+    const constant = !["locale", '"en-US", { currency }', "locale()"].includes(c.args);
+    const needsArgs = c.form.includes(".toLocale");
+    return !c.test && c.place !== "module" && formatter && constant && !(needsArgs && c.args === "");
+  };
+
+  test("reports a generated formatter build iff the reference does", () => {
+    const seed = 1119;
+    const pick = seededPick(seed);
+    const cases: ReadonlyArray<Case> = Array.from({ length: 160 }, () => ({
+      form: pick(forms),
+      args: pick(argForms),
+      place: pick(places),
+      test: pick([false, false, false, true]),
+    }));
+    expect(mismatches("noFormatterPerCall", seed, cases, source, (c) => c.test, reported)).toEqual(
+      [],
+    );
+  });
+
+  test("counted cost: a formatter per call builds n, the remedy one", () => {
+    for (const n of [200, 400]) {
+      const [bad, good] = [formatting.perCall(n), formatting.once(n)];
+      expect(good.text).toEqual(bad.text);
+      expect({ bad: bad.built, good: good.built }).toEqual({ bad: n, good: 1 });
     }
   });
 });
