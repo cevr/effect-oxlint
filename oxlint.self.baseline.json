@@ -54,6 +54,7 @@
   "tests/interruptible-memo-releases.test.ts": 5,
   "tests/no-comments.test.ts": 35,
   "tests/no-flake-masking.test.ts": 8,
+  "tests/no-native-capability-patch.test.ts": 8,
   "tests/no-unsignaled-poll.test.ts": 7,
   "tests/platform-rules.test.ts": 2,
   "tests/recommended-rules.test.ts": 1,
