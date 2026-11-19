@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { lintFixtures, lintRun } from "./support/lint-fixtures.js";
-import { tn1Stub } from "./support/tn1-stub.js";
+import { tn1LintJs, tn1Package, tn1Stub } from "./support/tn1-stub.js";
 
 const stub = tn1Stub();
 
@@ -33,6 +33,7 @@ describe("tn1Lint", () => {
     const findings = lintFixtures(
       "tn1Lint",
       {
+        ...tn1Package(),
         "a.ts": ['export const name = "éééééééééééé";', "// NARRATE", "x;", "y;", ""].join("\n"),
       },
       { options: [{ binary: stub.binary, nets: { narration: stub.weights } }], threads: 1 },
@@ -46,7 +47,7 @@ describe("tn1Lint", () => {
   test("runs each configured network on the file's text", () => {
     const findings = lintFixtures(
       "tn1Lint",
-      { "b.ts": ["export const one = 1;", "// NARRATE", ""].join("\n") },
+      { ...tn1Package(), "b.ts": ["export const one = 1;", "// NARRATE", ""].join("\n") },
       {
         options: [{ binary: stub.binary, nets: { narration: stub.weights, steps: stub.weights } }],
         threads: 1,
@@ -63,17 +64,19 @@ describe("tn1Lint", () => {
   // lintSync that throws ignored, so the rule goes quiet on a failed network.
   test("runs the networks through the package's lintSync when it exports one", () => {
     const sidecar = {
-      "node_modules/@cevr/tn1-lint/package.json": '{ "name": "@cevr/tn1-lint", "main": "lint.js" }',
-      "node_modules/@cevr/tn1-lint/lint.js": [
-        "exports.lintSync = ({ rule, weights, path, text }) => {",
-        '  if (weights.endsWith("missing.tn1")) throw new Error(`tn1-lint: cannot read ${weights}`);',
-        '  if (weights.endsWith("nomem.tn1")) throw new Error("tn1-lint: cannot start tn1-lint: spawn ENOMEM");',
-        '  const at = text.indexOf("NARRATE");',
-        "  if (at < 0) return [];",
-        "  const span = { offset: Buffer.byteLength(text.slice(0, at)), length: 7 };",
-        '  return [{ message: `${rule}: by lintSync`, code: `ergo-tn1(${rule})`, severity: "advice", filename: path, labels: [{ span }] }];',
-        "};",
-      ].join("\n"),
+      ...tn1Package(),
+      ...tn1LintJs(
+        [
+          "exports.lintSync = ({ rule, weights, path, text }) => {",
+          '  if (weights.endsWith("missing.tn1")) throw new Error(`tn1-lint: cannot read ${weights}`);',
+          '  if (weights.endsWith("nomem.tn1")) throw new Error("tn1-lint: cannot start tn1-lint: spawn ENOMEM");',
+          '  const at = text.indexOf("NARRATE");',
+          "  if (at < 0) return [];",
+          "  const span = { offset: Buffer.byteLength(text.slice(0, at)), length: 7, line: 0, column: 0 };",
+          '  return [{ message: `${rule}: by lintSync`, code: `ergo-tn1(${rule})`, severity: "advice", filename: path, labels: [{ span }] }];',
+          "};",
+        ].join("\n"),
+      ),
     };
     const found = lintFixtures(
       "tn1Lint",
@@ -113,14 +116,16 @@ describe("tn1Lint", () => {
   // Mutant: the run's exit code left alone (a warning exits 0).
   test("a sidecar that cannot start fails the run once, at warning severity too", () => {
     const down = {
-      "node_modules/@cevr/tn1-lint/package.json": '{ "name": "@cevr/tn1-lint", "main": "lint.js" }',
-      "node_modules/@cevr/tn1-lint/lint.js": [
-        "exports.lintSync = () => {",
-        '  const error = new Error("tn1-lint: cannot start tn1-lint: spawn ENOMEM");',
-        '  error.code = "TN1_SIDECAR_DOWN";',
-        "  throw error;",
-        "};",
-      ].join("\n"),
+      ...tn1Package(),
+      ...tn1LintJs(
+        [
+          "exports.lintSync = () => {",
+          '  const error = new Error("tn1-lint: cannot start tn1-lint: spawn ENOMEM");',
+          '  error.code = "TN1_SIDECAR_DOWN";',
+          "  throw error;",
+          "};",
+        ].join("\n"),
+      ),
     };
     const files = {
       "h.ts": "export const one = 1;\n",
@@ -149,7 +154,7 @@ describe("tn1Lint", () => {
   test("reports a failed run and a missing package once, at the file's start", () => {
     const failed = lintFixtures(
       "tn1Lint",
-      { "c.ts": "export const one = 1;\n" },
+      { ...tn1Package(), "c.ts": "export const one = 1;\n" },
       { options: [{ binary: stub.binary, nets: { narration: "missing.tn1" } }], threads: 1 },
     );
     expect(failed.get("c.ts")).toEqual([
@@ -166,7 +171,55 @@ describe("tn1Lint", () => {
       { options: [{ nets: { narration: stub.weights } }], threads: 1 },
     );
     expect(missing.get("d.ts")).toEqual([
-      { line: 1, message: expect.stringContaining("@cevr/tn1-lint is not installed") },
+      { line: 1, message: expect.stringContaining("@cvr/tn1-lint is not installed") },
+    ]);
+  });
+
+  // T3: the rule restated the report as a 2-field span, so a report that is
+  // not tn1-lint's Report (a span with no line or column: this stub's shape
+  // before T3) was read as findings. Mutant: the rule's own looser decode
+  // instead of the package's wire module.
+  test("a report that is not tn1-lint's Report is a failed run, not findings", () => {
+    const old = tn1Stub('"offset":%s,"length":7');
+    const found = lintFixtures(
+      "tn1Lint",
+      { ...tn1Package(), "k.ts": ["export const one = 1;", "// NARRATE", ""].join("\n") },
+      { options: [{ binary: old.binary, nets: { narration: old.weights } }], threads: 1 },
+    );
+    expect(found.get("k.ts")).toEqual([
+      {
+        line: 1,
+        message: expect.stringContaining(
+          "tn1-lint: network narration: tn1-lint: report.diagnostics[0].labels[0].span has no line",
+        ),
+      },
+    ]);
+  });
+
+  // Mutant: a package with no wire module (older than the rule) read without
+  // one, or the binary option run with no package to read its report.
+  test("a package with no wire module, and the binary option with no package, are failures", () => {
+    const old = lintFixtures(
+      "tn1Lint",
+      {
+        "node_modules/@cvr/tn1-lint/package.json": '{ "name": "@cvr/tn1-lint", "main": "lint.js" }',
+        "l.ts": "export const one = 1;\n",
+      },
+      { options: [{ binary: stub.binary, nets: { narration: stub.weights } }], threads: 1 },
+    );
+    expect(old.get("l.ts")).toEqual([
+      {
+        line: 1,
+        message: expect.stringContaining("has no wire module (@cvr/tn1-lint/wire); update it"),
+      },
+    ]);
+    const bare = lintFixtures(
+      "tn1Lint",
+      { "m.ts": "export const one = 1;\n" },
+      { options: [{ binary: stub.binary, nets: { narration: stub.weights } }], threads: 1 },
+    );
+    expect(bare.get("m.ts")).toEqual([
+      { line: 1, message: expect.stringContaining("@cvr/tn1-lint is not installed") },
     ]);
   });
 });
