@@ -44,6 +44,12 @@ export default {
       },
     },
     {
+      // glossaryTerms reads the project's GLOSSARY.md, a file the lint run
+      // configures: a host adapter, like tn1Lint's binary.
+      files: ["src/rules/glossary-terms.ts"],
+      rules: { "effect/noNodeBuiltinImport": "off" },
+    },
+    {
       // The rules walk oxlint's ESTree, whose `node.type` union is the host's:
       // this repo cannot remodel it as a tagged enum with one exhaustive match,
       // which is repeatedSwitches' remedy.

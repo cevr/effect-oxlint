@@ -11,6 +11,7 @@ export * from "./no-effect-do.js";
 // --- AST pattern rules ---
 export * from "./decode-after-status.js";
 export * from "./event-name-is-a-fact.js";
+export * from "./glossary-terms.js";
 export * from "./import-boundary.js";
 export * from "./max-cognitive-complexity.js";
 export * from "./max-halstead-difficulty.js";

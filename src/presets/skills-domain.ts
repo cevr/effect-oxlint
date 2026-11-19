@@ -7,6 +7,7 @@
  */
 export const skillsDomain = {
   "effect/eventNameIsAFact": "error",
+  "effect/glossaryTerms": "error",
   "effect/pureDecide": "error",
   "effect/totalEvolve": "error",
 } as const;
