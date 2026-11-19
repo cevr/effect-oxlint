@@ -46,6 +46,7 @@ export * from "./no-forward-ref.js";
 export * from "./no-globals.js";
 export * from "./no-inline-provide.js";
 export * from "./no-interruptible-memo.js";
+export * from "./no-invariant-build-per-call.js";
 export * from "./no-kind-named-files.js";
 export * from "./no-known-value-widening.js";
 export * from "./no-linear-search-in-loop.js";
