@@ -1,5 +1,5 @@
 /**
- * Counted cost of `noFormatterPerCall`: the formatters built to format n
+ * Counted cost of `noInvariantBuildPerCall`: the formatters built to format n
  * prices, per call against once. Counts work, never time. Measured (bite-lab
  * BL-PERF bench, instructions per call under bun 1.4.4 and node 24.11.1):
  * see the rule's README row.

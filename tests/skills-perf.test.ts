@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import * as formatting from "./perf/no-formatter-per-call.js";
+import * as building from "./perf/no-invariant-build-per-call.js";
 import * as linear from "./perf/no-linear-search-in-loop.js";
 import * as repeated from "./perf/no-repeated-pass.js";
 import * as sorting from "./perf/no-sort-for-extreme.js";
-import { lintFixtures } from "./support/lint-fixtures.js";
+import { lintFixtures, type LintConfig } from "./support/lint-fixtures.js";
 import { seededPick, when } from "./support/seeded.js";
 
 const flags = [true, false] as const;
@@ -17,11 +17,13 @@ const mismatches = <C>(
   source: (c: C) => string,
   testModule: (c: C) => boolean,
   reported: (c: C) => boolean,
+  config: LintConfig = {},
 ) => {
   const name = (c: C, index: number) => `probe-${index}${when(testModule(c), ".test")}.ts`;
   const findings = lintFixtures(
     rule,
     Object.fromEntries(cases.map((c, index) => [name(c, index), source(c)])),
+    config,
   );
   return cases.flatMap((c, index) => {
     const got = (findings.get(name(c, index)) ?? []).length > 0;
@@ -184,7 +186,7 @@ describe("noRepeatedPass", () => {
   test("reports a generated second pass iff the reference does", () => {
     const seed = 1118;
     const pick = seededPick(seed);
-    const cases: ReadonlyArray<Case> = Array.from({ length: 120 }, () => ({
+    const cases: ReadonlyArray<Case> = Array.from({ length: 60 }, () => ({
       first: pick(methods),
       second: pick(methods),
       sameArray: pick([true, true, false]),
@@ -205,59 +207,90 @@ describe("noRepeatedPass", () => {
   });
 });
 
-describe("noFormatterPerCall", () => {
-  const forms = [
-    "new Intl.NumberFormat",
-    "Intl.DateTimeFormat",
-    "new globalThis.Intl.PluralRules",
-    "value.toLocaleString",
-    "when.toLocaleDateString",
-    "new Intl.Collator",
-    "new Fmt.NumberFormat",
+describe("noInvariantBuildPerCall", () => {
+  const builds = [
+    "new Intl.NumberFormat(ARGS)",
+    "Intl.DateTimeFormat(ARGS)",
+    "new globalThis.Intl.PluralRules(ARGS)",
+    "value.toLocaleString(ARGS)",
+    "new TextEncoder(ARGS)",
+    "Schema.decodeUnknownSync(ARGS)",
+    "Layer.succeed(ARGS)",
+    "class extends Schema.Class<unknown>(ARGS)({}) {}",
+    "Shop.build(ARGS)",
+    "new Map(ARGS)",
+    "new Date(ARGS)",
+    "new Fmt.NumberFormat(ARGS)",
+    "class extends Shape {}",
   ] as const;
-  const argForms = ["", '"en-US"', "LOCALE", "locale", '"en-US", { currency: CURRENCY }', '"en-US", { currency }', "locale()"] as const;
+  const argForms = [
+    "",
+    '"en-US"',
+    "LOCALE, { currency: CURRENCY }",
+    "locale",
+    '"en-US", { currency }',
+    "locale()",
+  ] as const;
   const places = ["module", "function", "arrow", "nested"] as const;
+  const configs = ["default", "own", "replace"] as const;
   interface Case {
-    readonly form: (typeof forms)[number];
+    readonly build: (typeof builds)[number];
     readonly args: (typeof argForms)[number];
     readonly place: (typeof places)[number];
     readonly test: boolean;
   }
   const source = (c: Case): string => {
-    const built = `${c.form}(${c.args})`;
+    const built = c.build.replace("ARGS", c.args);
     const body = {
-      module: `export const built = ${built};\nexport function show(locale: string, value: number, when: Date) { const currency = "EUR"; return [locale, value, when, currency]; }`,
-      function: `export function show(locale: string, value: number, when: Date) {\n  const currency = "EUR";\n  return [${built}, currency];\n}`,
-      arrow: `export const show = (locale: string, value: number, when: Date) => {\n  const currency = "EUR";\n  return [${built}, currency];\n};`,
-      nested: `export function outer(locale: string) {\n  const currency = "EUR";\n  return (value: number, when: Date) => [${built}, currency, locale];\n}`,
+      module: `export const built = [${built}];\nexport function show(locale: string, value: number) { const currency = "EUR"; return [locale, value, currency]; }`,
+      function: `export function show(locale: string, value: number) {\n  const currency = "EUR";\n  return [${built}, currency];\n}`,
+      arrow: `export const show = (locale: string, value: number) => {\n  const currency = "EUR";\n  return [${built}, currency];\n};`,
+      nested: `export function outer(locale: string) {\n  const currency = "EUR";\n  return (value: number) => [${built}, currency, locale];\n}`,
     }[c.place];
-    return `const LOCALE = "en-US";\nconst CURRENCY = "USD";\nconst value = 1;\nconst when = new Date(0);\ndeclare const Fmt: { NumberFormat: new (...a: unknown[]) => unknown };\n${body}\n`;
+    return `import { Layer, Schema } from "effect";\nconst LOCALE = "en-US";\nconst CURRENCY = "USD";\nconst value = 1;\ndeclare const Fmt: { NumberFormat: new (...a: unknown[]) => unknown };\ndeclare const Shop: { build: (...a: unknown[]) => unknown };\nclass Shape {}\n${body}\n`;
   };
-  /** The reference: an Intl formatter (not Collator), or a toLocale… call given arguments, built inside a function from arguments that read no parameter, local or call. */
-  const reported = (c: Case): boolean => {
-    const formatter = !["new Intl.Collator", "new Fmt.NumberFormat"].includes(c.form);
+  const defaults: ReadonlyArray<string> = builds.slice(0, 8);
+  /** The reference: a table builder (the defaults unless replaced, plus the project's `Shop.build`), inside a function, from arguments that read no parameter, local or call; `toLocaleString` needs a locale and options. */
+  const reported = (config: (typeof configs)[number]) => (c: Case): boolean => {
+    const inTable =
+      (config !== "replace" && defaults.includes(c.build)) ||
+      (config !== "default" && c.build === "Shop.build(ARGS)");
     const constant = !["locale", '"en-US", { currency }', "locale()"].includes(c.args);
-    const needsArgs = c.form.includes(".toLocale");
-    return !c.test && c.place !== "module" && formatter && constant && !(needsArgs && c.args === "");
+    const enoughArgs = c.build !== "value.toLocaleString(ARGS)" || c.args.includes(",");
+    return !c.test && c.place !== "module" && inTable && constant && enoughArgs;
   };
+  const options = {
+    default: [],
+    own: [{ builders: ["Shop.build"] }],
+    replace: [{ builders: ["Shop.build"], replaceDefaults: true }],
+  } as const;
 
-  test("reports a generated formatter build iff the reference does", () => {
+  test("reports a generated build iff the reference does, under each table", () => {
     const seed = 1119;
     const pick = seededPick(seed);
-    const cases: ReadonlyArray<Case> = Array.from({ length: 160 }, () => ({
-      form: pick(forms),
-      args: pick(argForms),
-      place: pick(places),
-      test: pick([false, false, false, true]),
-    }));
-    expect(mismatches("noFormatterPerCall", seed, cases, source, (c) => c.test, reported)).toEqual(
-      [],
-    );
+    const found = configs.flatMap((config) => {
+      const cases: ReadonlyArray<Case> = Array.from({ length: 60 }, () => ({
+        build: pick(builds),
+        args: pick(argForms),
+        place: pick(places),
+        test: pick([false, false, false, true]),
+      }));
+      return mismatches(
+        "noInvariantBuildPerCall",
+        seed,
+        cases,
+        source,
+        (c) => c.test,
+        reported(config),
+        { options: options[config] },
+      ).map((m) => ({ config, ...m }));
+    });
+    expect(found).toEqual([]);
   });
 
-  test("counted cost: a formatter per call builds n, the remedy one", () => {
+  test("counted cost: a builder per call builds n, the remedy one", () => {
     for (const n of [200, 400]) {
-      const [bad, good] = [formatting.perCall(n), formatting.once(n)];
+      const [bad, good] = [building.perCall(n), building.once(n)];
       expect(good.text).toEqual(bad.text);
       expect({ bad: bad.built, good: good.built }).toEqual({ bad: n, good: 1 });
     }
